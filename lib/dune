@@ -1,2 +1,3 @@
 (library
+ (public_name pq_lang.lib)
  (name pq_lang))
