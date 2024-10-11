@@ -1,17 +1,7 @@
 open OUnit2
 open Pq_lang
 open Parser
-
-let string_of_token = function
-  | INT i -> string_of_int i
-  | PLUS -> "+"
-  | TIMES -> "*"
-  | LPAREN -> "("
-  | RPAREN -> ")"
-  | EOF -> "EOF"
-
-let token_printer tokens =
-  String.concat ", " (List.map string_of_token tokens)
+open Test_utils
 
 let test_cases_arithmetic : (string * string * token list) list = List.map (fun (x,y) -> (x,x,y)) [
   ("1 + 2", [INT 1; PLUS; INT 2]);
