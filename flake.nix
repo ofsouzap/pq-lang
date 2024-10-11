@@ -13,7 +13,7 @@
           inherit system;
           config = {
             allowUnfreePredicate = pkg: builtins.elem (pkg.pname or (builtins.parseDrvName pkg.name).name)
-              [ "vscode" "vscode-with-extensions" ];
+              [ "vscode" "vscode-with-extensions" "vscode-extension-github-copilot" "vscode-extension-github-copilot-chat" ];
           };
         };
       in
@@ -25,6 +25,10 @@
               vscodeExtensions = with vscode-extensions; [
                 ocamllabs.ocaml-platform
                 vscodevim.vim
+                github.vscode-pull-request-github
+                github.vscode-github-actions
+                github.copilot
+                github.copilot-chat
               ];
             })
 
