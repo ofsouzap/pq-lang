@@ -1,4 +1,4 @@
-(lang dune 3.16)
+(lang dune 3.11)
 
 (name pq_lang)
 
