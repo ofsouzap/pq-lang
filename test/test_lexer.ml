@@ -19,6 +19,7 @@ let test_cases_arithmetic : (string * string * token list) list = List.map (fun 
   ("1    + 4 * (1+2 )", [INT 1; PLUS; INT 4; TIMES; LPAREN; INT 1; PLUS; INT 2; RPAREN]);
   ("(1 + 2) * 3", [LPAREN; INT 1; PLUS; INT 2; RPAREN; TIMES; INT 3]);
   ("(1 + 2) * (3 + 4)", [LPAREN; INT 1; PLUS; INT 2; RPAREN; TIMES; LPAREN; INT 3; PLUS; INT 4; RPAREN]);
+  ("+**+", [PLUS; TIMES; TIMES; PLUS])
 ]
 
 let create_test (name, inp, exp) =
