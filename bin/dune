@@ -1,0 +1,4 @@
+(executable
+ (public_name pq_lang)
+ (name main)
+ (libraries pq_lang))
