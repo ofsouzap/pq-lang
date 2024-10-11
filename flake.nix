@@ -29,6 +29,7 @@
                 github.vscode-github-actions
                 github.copilot
                 github.copilot-chat
+                eamodio.gitlens
               ];
             })
 
