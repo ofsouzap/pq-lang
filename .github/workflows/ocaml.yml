@@ -1,0 +1,38 @@
+name: OCaml Dune Build and Test
+
+on:
+  push:
+    branches: [ "main", "create-github-workflow" ]
+  pull_request:
+    branches: [ "main", "create-github-workflow" ]
+
+permissions:
+  contents:
+    read
+
+jobs:
+  build:
+
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+        ocaml-compiler:
+          - "4.13"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout tree
+      uses: actions/checkout@v4
+
+    - name: Set-up OCaml ${{ matrix.ocaml-compiler }}
+      uses: ocaml/setup-ocaml@v2
+      with:
+        ocaml-compiler: ${{ matrix.ocaml-compiler }}
+
+    - run: opam install . --deps-only --with-test
+
+    - run: opam exec -- dune build
+
+    - run: opam exec -- dune runtest
