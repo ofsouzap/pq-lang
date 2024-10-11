@@ -1,7 +1,7 @@
 (library
  (public_name pq_lang.lib)
  (name pq_lang)
- (modules ast lexer parser))
+ (modules ast lexer parser ast_executor))
 
 (ocamllex lexer)
 

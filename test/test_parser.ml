@@ -1,6 +1,7 @@
 open OUnit2
 open Pq_lang
 open Ast
+open Test_utils
 
 let test_cases_arithmetic : (string * string * Ast.expr option) list = List.map (fun (x,y) -> (x,x,y)) [
   ("1 + 2", Some (Add (IntLit 1, IntLit 2)));
@@ -20,7 +21,7 @@ let create_test ((name : string), (inp : string), (exp : Ast.expr option)) =
       with
         _ -> Printf.printf "FAILURE\n"; None
     in
-    assert_equal exp out ~printer:(fun x -> match x with | Some x -> Ast.show x | None -> "None")
+    assert_equal exp out ~printer:(fun x -> match x with | Some x -> ast_printer x | None -> "None")
 
 let suite =
   "Parser" >::: [
