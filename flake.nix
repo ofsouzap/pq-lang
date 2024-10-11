@@ -40,6 +40,9 @@
             ocamlPackages.dune_3
             ocamlPackages.ocaml-lsp
             ocamlPackages.ocamlformat
+            ocamlPackages.ounit
+            ocamlPackages.qcheck
+            ocamlPackages.qcheck-ounit
             
             # Development tools
             neovim
