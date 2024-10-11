@@ -9,6 +9,8 @@
 
 (authors "Ofsouzap")
 
+(maintainers "Ofsouzap")
+
 (license MIT)
 
 (using menhir 2.0)
@@ -16,4 +18,4 @@
 (package
  (name pq_lang)
  (synopsis "ML-like language with quotient types")
- (depends ocaml dune menhir))
+ (depends ocaml dune menhir ounit2))
