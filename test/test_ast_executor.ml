@@ -1,25 +1,85 @@
 open OUnit2
 open Pq_lang
+open Ast_executor
 
 (* TODO - once the language becomes more than just arithmetic evaluation, need to change the signatures for the testing stuff *)
 
-let test_cases_arithmetic : (string * Ast.expr * int) list =
+let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
   let open Ast in
-  List.map (fun (x,y) -> (show x, x, y)) [
-    (Add (IntLit 1, IntLit 2), 3);
-    (Mult (IntLit 1, IntLit 2), 2);
-    (Add (IntLit 1, Mult (IntLit 4, Add (IntLit 1, IntLit 2))), 13);
-    (Mult (Add (IntLit 1, IntLit 2), IntLit 3), 9);
-    (Mult (Add (IntLit 1, IntLit 2), Add (IntLit 3, IntLit 4)), 21);
-    (Add (Add (Add (IntLit 0, IntLit 0), IntLit 0), IntLit 0), 0)
-  ]
+  let mapf ((x : expr), (y : int)) = (show x, x, Value (Int y)) in
+  List.map mapf
+    [
+      (IntLit 0, 0);
+      (IntLit 5, 5);
+      (IntLit (-5), -5);
+      (Add (IntLit 1, IntLit 2), 3);
+      (Mult (IntLit 1, IntLit 2), 2);
+      (Add (IntLit 1, Mult (IntLit 4, Add (IntLit 1, IntLit 2))), 13);
+      (Mult (Add (IntLit 1, IntLit 2), IntLit 3), 9);
+      (Mult (Add (IntLit 1, IntLit 2), Add (IntLit 3, IntLit 4)), 21);
+      (Add (Add (Add (IntLit 0, IntLit 0), IntLit 0), IntLit 0), 0);
+    ]
 
-let create_test ((name : string), (inp : Ast.expr), (exp : int)) =
+let test_cases_booleans : (string * Ast.expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : expr), (y : bool)) = (show x, x, Value (Bool y)) in
+  List.map mapf
+    [
+      (BoolLit true, true);
+      (BoolLit false, false);
+      (BNot (BoolLit true), false);
+      (BNot (BoolLit false), true);
+      (BOr (BoolLit true, BoolLit true), true);
+      (BOr (BoolLit true, BoolLit false), true);
+      (BOr (BoolLit false, BoolLit true), true);
+      (BOr (BoolLit false, BoolLit false), false);
+      (BAnd (BoolLit true, BoolLit true), true);
+      (BAnd (BoolLit true, BoolLit false), false);
+      (BAnd (BoolLit false, BoolLit true), false);
+      (BAnd (BoolLit false, BoolLit false), false);
+      (Eq (BoolLit true, BoolLit true), true);
+      (Eq (BoolLit true, BoolLit false), false);
+      (Eq (BoolLit false, BoolLit true), false);
+      (Eq (BoolLit false, BoolLit false), true);
+    ]
+
+let test_cases_integer_comparisons : (string * Ast.expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : expr), (y : bool)) = (show x, x, Value (Bool y)) in
+  List.map mapf
+    [
+      (Eq (IntLit 0, IntLit 0), true);
+      (Eq (IntLit 0, IntLit 1), false);
+      (Eq (IntLit 1, IntLit 0), false);
+      (Eq (IntLit 1, IntLit 1), true);
+      (Gt (IntLit 0, IntLit 0), false);
+      (Gt (IntLit 0, IntLit 1), false);
+      (Gt (IntLit 1, IntLit 0), true);
+      (Gt (IntLit 1, IntLit 1), false);
+      (GtEq (IntLit 0, IntLit 0), true);
+      (GtEq (IntLit 0, IntLit 1), false);
+      (GtEq (IntLit 1, IntLit 0), true);
+      (GtEq (IntLit 1, IntLit 1), true);
+      (Lt (IntLit 0, IntLit 0), false);
+      (Lt (IntLit 0, IntLit 1), true);
+      (Lt (IntLit 1, IntLit 0), false);
+      (Lt (IntLit 1, IntLit 1), false);
+      (LtEq (IntLit 0, IntLit 0), true);
+      (LtEq (IntLit 0, IntLit 1), true);
+      (LtEq (IntLit 1, IntLit 0), false);
+      (LtEq (IntLit 1, IntLit 1), true);
+    ]
+
+let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
   name >:: fun _ ->
-    let out = Ast_executor.execute inp in
-    assert_equal exp out ~printer:string_of_int
+  let out = Ast_executor.execute inp in
+  assert_equal exp out ~printer:Ast_executor.show_exec_res
 
 let suite =
-  "AST Executor" >::: [
-    "Arithmetic" >::: List.map create_test test_cases_arithmetic
-  ]
+  "AST Executor"
+  >::: [
+         "Arithmetic" >::: List.map create_test test_cases_arithmetic;
+         "Booleans" >::: List.map create_test test_cases_booleans;
+         "Integer Comparisons"
+         >::: List.map create_test test_cases_integer_comparisons;
+       ]
