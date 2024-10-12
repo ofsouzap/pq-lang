@@ -1,1 +1,2 @@
-profile = default
+profile=default
+doc-comments=before
