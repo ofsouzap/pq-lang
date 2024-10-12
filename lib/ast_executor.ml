@@ -72,5 +72,8 @@ and eval (e : Ast.expr) : exec_res =
   | LtEq (e1, e2) ->
       eval_apply_to_int e1 (fun i1 ->
           eval_apply_to_int e2 (fun i2 -> Value (Bool (i1 <= i2))))
+  | If (e_cond, e_then, e_else) ->
+      eval_apply_to_bool e_cond (fun b ->
+          if b then eval e_then else eval e_else)
 
 let execute = eval

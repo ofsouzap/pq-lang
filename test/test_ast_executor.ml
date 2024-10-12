@@ -70,6 +70,18 @@ let test_cases_integer_comparisons : (string * Ast.expr * exec_res) list =
       (LtEq (IntLit 1, IntLit 1), true);
     ]
 
+let test_cases_control_flow : (string * Ast.expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
+  List.map mapf
+    [
+      (If (BoolLit true, IntLit 1, IntLit 2), Value (Int 1));
+      (If (BoolLit false, IntLit 1, IntLit 2), Value (Int 2));
+      (If (BoolLit true, IntLit 1, Add (IntLit 1, IntLit 2)), Value (Int 1));
+      (If (BoolLit false, IntLit 1, Add (IntLit 1, IntLit 2)), Value (Int 3));
+      (If (IntLit 2, IntLit 1, IntLit 2), TypingError);
+    ]
+
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
   name >:: fun _ ->
   let out = Ast_executor.execute inp in
@@ -82,4 +94,5 @@ let suite =
          "Booleans" >::: List.map create_test test_cases_booleans;
          "Integer Comparisons"
          >::: List.map create_test test_cases_integer_comparisons;
+         "Control Flow" >::: List.map create_test test_cases_control_flow;
        ]

@@ -15,6 +15,8 @@ type expr =
   | GtEq of expr * expr
   | Lt of expr * expr
   | LtEq of expr * expr
+  (* Control flow *)
+  | If of expr * expr * expr
 
 let rec show e =
   match e with
@@ -31,3 +33,5 @@ let rec show e =
   | GtEq (e1, e2) -> Printf.sprintf "(%s) >= (%s)" (show e1) (show e2)
   | Lt (e1, e2) -> Printf.sprintf "(%s) < (%s)" (show e1) (show e2)
   | LtEq (e1, e2) -> Printf.sprintf "(%s) <= (%s)" (show e1) (show e2)
+  | If (e1, e2, e3) ->
+      Printf.sprintf "if %s then %s else %s" (show e1) (show e2) (show e3)
