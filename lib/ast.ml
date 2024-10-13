@@ -17,6 +17,9 @@ type expr =
   | LtEq of expr * expr
   (* Control flow *)
   | If of expr * expr * expr
+  (* Variables *)
+  | Var of string
+  | Let of string * expr * expr
 
 let rec show e =
   match e with
@@ -35,3 +38,5 @@ let rec show e =
   | LtEq (e1, e2) -> Printf.sprintf "(%s) <= (%s)" (show e1) (show e2)
   | If (e1, e2, e3) ->
       Printf.sprintf "if %s then %s else %s" (show e1) (show e2) (show e3)
+  | Var x -> x
+  | Let (x, e1, e2) -> Printf.sprintf "let %s = %s in %s" x (show e1) (show e2)
