@@ -2,24 +2,26 @@
 
 type value = Int of int | Bool of bool
 type varname = string
-type store = (string * value) list
 
-(* TODO - change stores to be represented as search trees, indexed by the variable names. Then also can implement equality between stores more easily *)
+module Varname = struct
+  type t = varname
+
+  let compare = String.compare
+end
+
+module VarnameMap = Map.Make (Varname)
+
+type store = value VarnameMap.t
 
 type exec_res =
   | Res of store * value
   | TypingError
   | UndefinedVarError of string
 
-(* N.B. I am storing the store as a list and I am rewriting values just by overwriting them, not by overwriting their entries.
-   Therefore, keys may appear twice, and only the first occurences should be used. *)
-let store_empty : store = []
-
-let store_get (vname : varname) (s : store) : value option =
-  List.assoc_opt vname s
-
-let store_set (vname : varname) (v : value) (s : store) : store =
-  (vname, v) :: s
+let store_empty : store = VarnameMap.empty
+let store_get = VarnameMap.find_opt
+let store_set = VarnameMap.add
+let store_compare = VarnameMap.equal ( = )
 
 let show_value = function
   | Int i -> string_of_int i

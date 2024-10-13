@@ -30,6 +30,9 @@ val store_get : varname -> store -> value option
 (** Set a named variable's value to the provided value in the provided store and return the resulting store *)
 val store_set : varname -> value -> store -> store
 
+(** Check if two stores are equal. This is, they have the exact same set of keys, and each key maps to the same value in both stores *)
+val store_compare : store -> store -> bool
+
 (** String representation of a value *)
 val show_value : value -> string
 
