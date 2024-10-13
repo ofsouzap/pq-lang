@@ -1,23 +1,18 @@
 type expr =
-  (* Integer arithmetic *)
   | IntLit of int
   | Add of expr * expr
   | Subtr of expr * expr
   | Mult of expr * expr
-  (* Boolean algebra *)
   | BoolLit of bool
   | BNot of expr
   | BOr of expr * expr
   | BAnd of expr * expr
-  (* Comparisons *)
   | Eq of expr * expr
   | Gt of expr * expr
   | GtEq of expr * expr
   | Lt of expr * expr
   | LtEq of expr * expr
-  (* Control flow *)
   | If of expr * expr * expr
-  (* Variables *)
   | Var of string
   | Let of string * expr * expr
 
