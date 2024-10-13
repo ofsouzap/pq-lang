@@ -28,8 +28,7 @@ val store_traverse : store -> (varname * value) list
 
 (** The result of executing an AST *)
 type exec_res =
-  | Res of store * value
-      (** The execution terminated with the provided value *)
+  | Res of value  (** The execution terminated with the provided value *)
   | TypingError  (** Execution was halted due to a typing error *)
   | UndefinedVarError of string
       (** Execution was halted due to usage of an undefined variable of the provided name *)
