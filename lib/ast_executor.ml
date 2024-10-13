@@ -13,22 +13,36 @@ module VarnameMap = Map.Make (Varname)
 
 type store = value VarnameMap.t
 
+let store_empty : store = VarnameMap.empty
+let store_get = VarnameMap.find_opt
+let store_set = VarnameMap.add
+let store_compare = VarnameMap.equal ( = )
+let store_traverse = VarnameMap.to_list
+
 type exec_res =
   | Res of store * value
   | TypingError
   | UndefinedVarError of string
 
-let store_empty : store = VarnameMap.empty
-let store_get = VarnameMap.find_opt
-let store_set = VarnameMap.add
-let store_compare = VarnameMap.equal ( = )
+let exec_res_compare a b =
+  match (a, b) with
+  | Res (store1, v1), Res (store2, v2) -> store_compare store1 store2 && v1 = v2
+  | TypingError, TypingError -> true
+  | UndefinedVarError x, UndefinedVarError y -> x = y
+  | _ -> false
 
 let show_value = function
-  | Int i -> string_of_int i
-  | Bool b -> string_of_bool b
+  | Int i -> "Int " ^ string_of_int i
+  | Bool b -> "Bool " ^ string_of_bool b
 
 let show_exec_res = function
-  | Res (_, v) -> show_value v
+  | Res (store, v) ->
+      Printf.sprintf "{store: %s} %s"
+        (String.concat ", "
+           (List.map
+              (fun (k, v) -> Printf.sprintf "(%s, %s)" k (show_value v))
+              (store_traverse store)))
+        (show_value v)
   | TypingError -> "[TYPING ERROR]"
   | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
 

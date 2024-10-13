@@ -2,6 +2,8 @@
   Abstract syntax tree for the language.
 *)
 
+(* TODO - add function definitions and application *)
+
 (**
   Expressions in the language.
 *)

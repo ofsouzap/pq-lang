@@ -2,6 +2,12 @@ open OUnit2
 open Pq_lang
 open Ast_executor
 
+let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
+    =
+  List.fold_left
+    (fun store (name, value) -> Ast_executor.store_set name value store)
+    Ast_executor.store_empty vars
+
 let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : int)) = (show x, x, Res (store_empty, Int y)) in
@@ -82,12 +88,25 @@ let test_cases_control_flow : (string * Ast.expr * exec_res) list =
       (If (IntLit 2, IntLit 1, IntLit 2), TypingError);
     ]
 
-(* TODO - tests with variable assignment and references *)
+let test_cases_variables : (string * Ast.expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
+  List.map mapf
+    [
+      (Var "x", UndefinedVarError "x");
+      (Let ("x", IntLit 1, Var "x"), Res (make_store [ ("x", Int 1) ], Int 1));
+      ( Let ("x", IntLit 1, Add (Var "x", IntLit 2)),
+        Res (make_store [ ("x", Int 1) ], Int 3) );
+      ( Let ("x", IntLit 1, Let ("y", IntLit 2, Add (Var "x", Var "y"))),
+        Res (make_store [ ("y", Int 2); ("x", Int 1) ], Int 3) );
+      ( Let ("x", IntLit 1, Let ("x", IntLit 2, Var "x")),
+        Res (make_store [ ("x", Int 2) ], Int 2) );
+    ]
 
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
   name >:: fun _ ->
   let out = Ast_executor.execute inp in
-  assert_equal exp out ~printer:Ast_executor.show_exec_res
+  assert_equal exp out ~cmp:exec_res_compare ~printer:Ast_executor.show_exec_res
 
 let suite =
   "AST Executor"
@@ -97,4 +116,5 @@ let suite =
          "Integer Comparisons"
          >::: List.map create_test test_cases_integer_comparisons;
          "Control Flow" >::: List.map create_test test_cases_control_flow;
+         "Variables" >::: List.map create_test test_cases_variables;
        ]
