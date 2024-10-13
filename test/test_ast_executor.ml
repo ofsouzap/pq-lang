@@ -10,7 +10,7 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
 
 let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : int)) = (show x, x, Res (store_empty, Int y)) in
+  let mapf ((x : expr), (y : int)) = (show x, x, Res (Int y)) in
   List.map mapf
     [
       (IntLit 0, 0);
@@ -26,7 +26,7 @@ let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
 
 let test_cases_booleans : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : bool)) = (show x, x, Res (store_empty, Bool y)) in
+  let mapf ((x : expr), (y : bool)) = (show x, x, Res (Bool y)) in
   List.map mapf
     [
       (BoolLit true, true);
@@ -49,7 +49,7 @@ let test_cases_booleans : (string * Ast.expr * exec_res) list =
 
 let test_cases_integer_comparisons : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : bool)) = (show x, x, Res (store_empty, Bool y)) in
+  let mapf ((x : expr), (y : bool)) = (show x, x, Res (Bool y)) in
   List.map mapf
     [
       (Eq (IntLit 0, IntLit 0), true);
@@ -79,12 +79,10 @@ let test_cases_control_flow : (string * Ast.expr * exec_res) list =
   let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
   List.map mapf
     [
-      (If (BoolLit true, IntLit 1, IntLit 2), Res (store_empty, Int 1));
-      (If (BoolLit false, IntLit 1, IntLit 2), Res (store_empty, Int 2));
-      ( If (BoolLit true, IntLit 1, Add (IntLit 1, IntLit 2)),
-        Res (store_empty, Int 1) );
-      ( If (BoolLit false, IntLit 1, Add (IntLit 1, IntLit 2)),
-        Res (store_empty, Int 3) );
+      (If (BoolLit true, IntLit 1, IntLit 2), Res (Int 1));
+      (If (BoolLit false, IntLit 1, IntLit 2), Res (Int 2));
+      (If (BoolLit true, IntLit 1, Add (IntLit 1, IntLit 2)), Res (Int 1));
+      (If (BoolLit false, IntLit 1, Add (IntLit 1, IntLit 2)), Res (Int 3));
       (If (IntLit 2, IntLit 1, IntLit 2), TypingError);
     ]
 
@@ -94,13 +92,12 @@ let test_cases_variables : (string * Ast.expr * exec_res) list =
   List.map mapf
     [
       (Var "x", UndefinedVarError "x");
-      (Let ("x", IntLit 1, Var "x"), Res (make_store [ ("x", Int 1) ], Int 1));
-      ( Let ("x", IntLit 1, Add (Var "x", IntLit 2)),
-        Res (make_store [ ("x", Int 1) ], Int 3) );
+      (Let ("x", IntLit 1, Var "x"), Res (Int 1));
+      (Let ("x", IntLit 1, Add (Var "x", IntLit 2)), Res (Int 3));
       ( Let ("x", IntLit 1, Let ("y", IntLit 2, Add (Var "x", Var "y"))),
-        Res (make_store [ ("y", Int 2); ("x", Int 1) ], Int 3) );
-      ( Let ("x", IntLit 1, Let ("x", IntLit 2, Var "x")),
-        Res (make_store [ ("x", Int 2) ], Int 2) );
+        Res (Int 3) );
+      (Let ("x", IntLit 1, Let ("x", IntLit 2, Var "x")), Res (Int 2));
+      (Let ("x", Let ("y", IntLit 1, Var "y"), Var "y"), UndefinedVarError "y");
     ]
 
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
