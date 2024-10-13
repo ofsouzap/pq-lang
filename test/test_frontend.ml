@@ -11,8 +11,11 @@ let test_cases_arithmetic : test_case list =
     (fun (x, y, z) -> (x, x, y, z))
     [
       ("1", [ INT 1 ], Some (IntLit 1));
-      (* ("-3", [ MINUS, INT 3 ], Some (Neg (IntLit 3))); (* TODO - change parser to allow negation with unary minus sign *) *)
+      ("-3", [ MINUS; INT 3 ], Some (Neg (IntLit 3)));
       ("1 + 2", [ INT 1; PLUS; INT 2 ], Some (Add (IntLit 1, IntLit 2)));
+      ( "1 + - 2",
+        [ INT 1; PLUS; MINUS; INT 2 ],
+        Some (Add (IntLit 1, Neg (IntLit 2))) );
       ("1 * 2", [ INT 1; TIMES; INT 2 ], Some (Mult (IntLit 1, IntLit 2)));
       ( "1    + 4 * (1+2 )",
         [ INT 1; PLUS; INT 4; TIMES; LPAREN; INT 1; PLUS; INT 2; RPAREN ],
