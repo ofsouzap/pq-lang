@@ -10,31 +10,41 @@ let test_cases_arithmetic : test_case list =
   List.map
     (fun (x, y, z) -> (x, x, y, z))
     [
-      ("1", [ INT 1 ], Some (IntLit 1));
-      ("-3", [ MINUS; INT 3 ], Some (Neg (IntLit 3)));
-      ("1 + 2", [ INT 1; PLUS; INT 2 ], Some (Add (IntLit 1, IntLit 2)));
+      ("1", [ INTLIT 1 ], Some (IntLit 1));
+      ("-3", [ MINUS; INTLIT 3 ], Some (Neg (IntLit 3)));
+      ("1 + 2", [ INTLIT 1; PLUS; INTLIT 2 ], Some (Add (IntLit 1, IntLit 2)));
       ( "1 + - 2",
-        [ INT 1; PLUS; MINUS; INT 2 ],
+        [ INTLIT 1; PLUS; MINUS; INTLIT 2 ],
         Some (Add (IntLit 1, Neg (IntLit 2))) );
-      ("1 * 2", [ INT 1; TIMES; INT 2 ], Some (Mult (IntLit 1, IntLit 2)));
+      ("1 * 2", [ INTLIT 1; TIMES; INTLIT 2 ], Some (Mult (IntLit 1, IntLit 2)));
       ( "1    + 4 * (1+2 )",
-        [ INT 1; PLUS; INT 4; TIMES; LPAREN; INT 1; PLUS; INT 2; RPAREN ],
+        [
+          INTLIT 1;
+          PLUS;
+          INTLIT 4;
+          TIMES;
+          LPAREN;
+          INTLIT 1;
+          PLUS;
+          INTLIT 2;
+          RPAREN;
+        ],
         Some (Add (IntLit 1, Mult (IntLit 4, Add (IntLit 1, IntLit 2)))) );
       ( "(1 + 2) * 3",
-        [ LPAREN; INT 1; PLUS; INT 2; RPAREN; TIMES; INT 3 ],
+        [ LPAREN; INTLIT 1; PLUS; INTLIT 2; RPAREN; TIMES; INTLIT 3 ],
         Some (Mult (Add (IntLit 1, IntLit 2), IntLit 3)) );
       ( "(1 + 2) * (3 + 4)",
         [
           LPAREN;
-          INT 1;
+          INTLIT 1;
           PLUS;
-          INT 2;
+          INTLIT 2;
           RPAREN;
           TIMES;
           LPAREN;
-          INT 3;
+          INTLIT 3;
           PLUS;
-          INT 4;
+          INTLIT 4;
           RPAREN;
         ],
         Some (Mult (Add (IntLit 1, IntLit 2), Add (IntLit 3, IntLit 4))) );
@@ -45,20 +55,20 @@ let test_cases_booleans : test_case list =
   List.map
     (fun (x, y, z) -> (x, x, y, z))
     [
-      ("true", [ BOOL true ], Some (BoolLit true));
-      ("false", [ BOOL false ], Some (BoolLit false));
-      ("~true", [ BNOT; BOOL true ], Some (BNot (BoolLit true)));
+      ("true", [ TRUE ], Some (BoolLit true));
+      ("false", [ FALSE ], Some (BoolLit false));
+      ("~true", [ BNOT; TRUE ], Some (BNot (BoolLit true)));
       ( "true && false",
-        [ BOOL true; BAND; BOOL false ],
+        [ TRUE; BAND; FALSE ],
         Some (BAnd (BoolLit true, BoolLit false)) );
       ( "true || false",
-        [ BOOL true; BOR; BOOL false ],
+        [ TRUE; BOR; FALSE ],
         Some (BOr (BoolLit true, BoolLit false)) );
       ( "true == false",
-        [ BOOL true; EQ; BOOL false ],
+        [ TRUE; EQ; FALSE ],
         Some (Eq (BoolLit true, BoolLit false)) );
       ( "true == false || true",
-        [ BOOL true; EQ; BOOL false; BOR; BOOL true ],
+        [ TRUE; EQ; FALSE; BOR; TRUE ],
         Some (BOr (Eq (BoolLit true, BoolLit false), BoolLit true)) );
     ]
 
@@ -66,11 +76,11 @@ let test_cases_integer_comparisons : test_case list =
   List.map
     (fun (x, y, z) -> (x, x, y, z))
     [
-      ("0 == 0", [ INT 0; EQ; INT 0 ], Some (Eq (IntLit 0, IntLit 0)));
-      ("1 > 0", [ INT 1; GT; INT 0 ], Some (Gt (IntLit 1, IntLit 0)));
-      ("0 >= 0", [ INT 0; GTEQ; INT 0 ], Some (GtEq (IntLit 0, IntLit 0)));
-      ("0 < 0", [ INT 0; LT; INT 0 ], Some (Lt (IntLit 0, IntLit 0)));
-      ("0 <= 1", [ INT 0; LTEQ; INT 1 ], Some (LtEq (IntLit 0, IntLit 1)));
+      ("0 == 0", [ INTLIT 0; EQ; INTLIT 0 ], Some (Eq (IntLit 0, IntLit 0)));
+      ("1 > 0", [ INTLIT 1; GT; INTLIT 0 ], Some (Gt (IntLit 1, IntLit 0)));
+      ("0 >= 0", [ INTLIT 0; GTEQ; INTLIT 0 ], Some (GtEq (IntLit 0, IntLit 0)));
+      ("0 < 0", [ INTLIT 0; LT; INTLIT 0 ], Some (Lt (IntLit 0, IntLit 0)));
+      ("0 <= 1", [ INTLIT 0; LTEQ; INTLIT 1 ], Some (LtEq (IntLit 0, IntLit 1)));
       ("== <=", [ EQ; LTEQ ], None);
     ]
 
@@ -79,21 +89,21 @@ let test_cases_if_then_else : test_case list =
     (fun (x, y, z) -> (x, x, y, z))
     [
       ( "if true then 1 else 2 end",
-        [ IF; BOOL true; THEN; INT 1; ELSE; INT 2; END ],
+        [ IF; TRUE; THEN; INTLIT 1; ELSE; INTLIT 2; END ],
         Some (If (BoolLit true, IntLit 1, IntLit 2)) );
       ( "if true then 1 else if false then 2 else 3 end end",
         [
           IF;
-          BOOL true;
+          TRUE;
           THEN;
-          INT 1;
+          INTLIT 1;
           ELSE;
           IF;
-          BOOL false;
+          FALSE;
           THEN;
-          INT 2;
+          INTLIT 2;
           ELSE;
-          INT 3;
+          INTLIT 3;
           END;
           END;
         ],
@@ -107,11 +117,58 @@ let test_cases_variables : test_case list =
     (fun (x, y, z) -> (x, x, y, z))
     [
       ("x", [ NAME "x" ], Some (Var "x"));
-      ( "let x = 1 in x end",
-        [ LET; NAME "x"; ASSIGN; INT 1; IN; NAME "x"; END ],
-        Some (Let ("x", IntLit 1, Var "x")) );
+      ( "let (x : int) = 1 in x end",
+        [
+          LET;
+          LPAREN;
+          NAME "x";
+          COLON;
+          INT;
+          RPAREN;
+          ASSIGN;
+          INTLIT 1;
+          IN;
+          NAME "x";
+          END;
+        ],
+        Some (Let (("x", VTypeInt), IntLit 1, Var "x")) );
+      ( "let (x : bool) = 1 in x end",
+        [
+          LET;
+          LPAREN;
+          NAME "x";
+          COLON;
+          BOOL;
+          RPAREN;
+          ASSIGN;
+          INTLIT 1;
+          IN;
+          NAME "x";
+          END;
+        ],
+        Some (Let (("x", VTypeBool), IntLit 1, Var "x")) );
+      ( "let (x : int) = 1 in let y in x end",
+        [
+          LET;
+          LPAREN;
+          NAME "x";
+          COLON;
+          INT;
+          RPAREN;
+          ASSIGN;
+          INTLIT 1;
+          IN;
+          LET;
+          NAME "y";
+          IN;
+          NAME "x";
+          END;
+        ],
+        None );
       ( "let x = 1 in let y in x end",
-        [ LET; NAME "x"; ASSIGN; INT 1; IN; LET; NAME "y"; IN; NAME "x"; END ],
+        [
+          LET; NAME "x"; ASSIGN; INTLIT 1; IN; LET; NAME "y"; IN; NAME "x"; END;
+        ],
         None );
     ]
 

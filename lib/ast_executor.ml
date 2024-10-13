@@ -46,6 +46,12 @@ let show_exec_res = function
 let ( >>= ) (x : exec_res) (f : value -> exec_res) : exec_res =
   match x with Res v -> f v | _ -> x
 
+let check_value_vtype (v : value) (vtype : Ast.vtype) : bool =
+  match (v, vtype) with
+  | Int _, VTypeInt -> true
+  | Bool _, VTypeBool -> true
+  | _, _ -> false
+
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
   match x with Int i -> cnt i | _ -> Err TypingError
@@ -113,6 +119,9 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       match store_get x store with
       | Some v -> Res v
       | None -> Err (UndefinedVarError x))
-  | Let (x, e1, e2) -> eval store e1 >>= fun v -> eval (store_set x v store) e2
+  | Let ((xname, xtype), e1, e2) ->
+      eval store e1 >>= fun v ->
+      if check_value_vtype v xtype then eval (store_set xname v store) e2
+      else Err TypingError
 
 let execute = eval store_empty
