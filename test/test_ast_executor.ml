@@ -83,7 +83,7 @@ let test_cases_control_flow : (string * Ast.expr * exec_res) list =
       (If (BoolLit false, IntLit 1, IntLit 2), Res (Int 2));
       (If (BoolLit true, IntLit 1, Add (IntLit 1, IntLit 2)), Res (Int 1));
       (If (BoolLit false, IntLit 1, Add (IntLit 1, IntLit 2)), Res (Int 3));
-      (If (IntLit 2, IntLit 1, IntLit 2), TypingError);
+      (If (IntLit 2, IntLit 1, IntLit 2), Err TypingError);
     ]
 
 let test_cases_variables : (string * Ast.expr * exec_res) list =
@@ -91,13 +91,14 @@ let test_cases_variables : (string * Ast.expr * exec_res) list =
   let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
   List.map mapf
     [
-      (Var "x", UndefinedVarError "x");
+      (Var "x", Err (UndefinedVarError "x"));
       (Let ("x", IntLit 1, Var "x"), Res (Int 1));
       (Let ("x", IntLit 1, Add (Var "x", IntLit 2)), Res (Int 3));
       ( Let ("x", IntLit 1, Let ("y", IntLit 2, Add (Var "x", Var "y"))),
         Res (Int 3) );
       (Let ("x", IntLit 1, Let ("x", IntLit 2, Var "x")), Res (Int 2));
-      (Let ("x", Let ("y", IntLit 1, Var "y"), Var "y"), UndefinedVarError "y");
+      ( Let ("x", Let ("y", IntLit 1, Var "y"), Var "y"),
+        Err (UndefinedVarError "y") );
     ]
 
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =

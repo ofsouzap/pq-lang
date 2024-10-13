@@ -26,17 +26,18 @@ val store_compare : store -> store -> bool
 (** Traverse the entire store's variable names and values in arbitrary order into a list *)
 val store_traverse : store -> (varname * value) list
 
-(** The result of executing an AST *)
-type exec_res =
-  | Res of value  (** The execution terminated with the provided value *)
+type exec_err =
   | TypingError  (** Execution was halted due to a typing error *)
   | UndefinedVarError of string
       (** Execution was halted due to usage of an undefined variable of the provided name *)
 
+(** The result of executing an AST *)
+type exec_res =
+  | Res of value  (** The execution terminated with the provided value *)
+  | Err of exec_err  (** The execution terminated with an error *)
+
 (** Check if two execution results are equal *)
 val exec_res_compare : exec_res -> exec_res -> bool
-
-(* TODO - have exec_res just have two options, result or error, then error case can have an attached error, instead of the error type being part of exec_res *)
 
 (** String representation of a value *)
 val show_value : value -> string
