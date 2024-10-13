@@ -28,6 +28,7 @@ expr:
   | LPAREN e = expr RPAREN { e }
   | i = INT { IntLit i }
   | e1 = expr PLUS e2 = expr { Add (e1, e2) }
+  | MINUS e = expr { Neg e }
   | e1 = expr MINUS e2 = expr { Subtr (e1, e2) }
   | e1 = expr TIMES e2 = expr { Mult (e1, e2) }
   | b = BOOL { BoolLit b }

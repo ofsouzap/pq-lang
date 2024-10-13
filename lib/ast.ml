@@ -1,6 +1,7 @@
 type expr =
   | IntLit of int
   | Add of expr * expr
+  | Neg of expr
   | Subtr of expr * expr
   | Mult of expr * expr
   | BoolLit of bool
@@ -20,6 +21,7 @@ let rec show e =
   match e with
   | IntLit i -> string_of_int i
   | Add (e1, e2) -> Printf.sprintf "(%s) + (%s)" (show e1) (show e2)
+  | Neg e -> Printf.sprintf "-(%s)" (show e)
   | Subtr (e1, e2) -> Printf.sprintf "(%s) - (%s)" (show e1) (show e2)
   | Mult (e1, e2) -> Printf.sprintf "(%s) * (%s)" (show e1) (show e2)
   | BoolLit b -> string_of_bool b

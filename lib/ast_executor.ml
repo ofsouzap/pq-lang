@@ -77,12 +77,15 @@ and eval_apply_to_bool (store : store) (x : Ast.expr)
 
 (** Evaluate an AST subtree *)
 and eval (store : store) (e : Ast.expr) : exec_res =
+  (* TODO - change the subexpression cases, they shouldn't be modifying the store of the caller!!! *)
   match e with
   | IntLit i -> Res (store, Int i)
   | Add (e1, e2) ->
       eval_apply_to_int store e1 (fun (store', i1) ->
           eval_apply_to_int store' e2 (fun (store'', i2) ->
               Res (store'', Int (i1 + i2))))
+  | Neg e ->
+      eval_apply_to_int store e (fun (store', i) -> Res (store', Int (-i)))
   | Subtr (e1, e2) ->
       eval_apply_to_int store e1 (fun (store', i1) ->
           eval_apply_to_int store' e2 (fun (store'', i2) ->
@@ -125,7 +128,6 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       eval_apply_to_int store e1 (fun (store', i1) ->
           eval_apply_to_int store' e2 (fun (store'', i2) ->
               Res (store'', Bool (i1 <= i2))))
-  (* TODO - replace the cases below with store functionality stuff *)
   | If (e_cond, e_then, e_else) ->
       eval_apply_to_bool store e_cond (fun (store', b) ->
           let next_e = if b then e_then else e_else in
