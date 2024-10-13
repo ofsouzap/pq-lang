@@ -10,6 +10,7 @@
 type expr =
   (* Integer arithmetic *)
   | IntLit of int  (** An integer literal *)
+  (* TODO - unary negation *)
   | Add of expr * expr  (** Addition *)
   | Subtr of expr * expr  (** Subtraction *)
   | Mult of expr * expr  (** Multiplication *)

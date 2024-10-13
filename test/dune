@@ -4,7 +4,6 @@
  (modules
   test_pq_lang
   test_utils
-  test_lexer
-  test_parser
+  test_frontend
   test_ast_executor
   test_ast_executor_store))
