@@ -12,9 +12,12 @@ rule token = parse
   | "else" { ELSE }
   | "let" { LET }
   | "in" { IN }
-  | "true" { BOOL true }
-  | "false" { BOOL false }
-  (* Operators *)
+  | "true" { TRUE }
+  | "false" { FALSE }
+  | "int" { INT }
+  | "bool" { BOOL }
+  (* Operators and symbols *)
+  | ':' { COLON }
   | '+' { PLUS }
   | '-' { MINUS }
   | '*' { TIMES }
@@ -30,7 +33,7 @@ rule token = parse
   | "<" { LT }
   | "<=" { LTEQ }
   (* Literals and names *)
-  | ['0'-'9']+ as n { INT (int_of_string n) }
+  | ['0'-'9']+ as n { INTLIT (int_of_string n) }
   | ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9']* as name { NAME name }
   (* Misc *)
   | eof { EOF }

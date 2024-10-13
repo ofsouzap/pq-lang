@@ -92,13 +92,20 @@ let test_cases_variables : (string * Ast.expr * exec_res) list =
   List.map mapf
     [
       (Var "x", Err (UndefinedVarError "x"));
-      (Let ("x", IntLit 1, Var "x"), Res (Int 1));
-      (Let ("x", IntLit 1, Add (Var "x", IntLit 2)), Res (Int 3));
-      ( Let ("x", IntLit 1, Let ("y", IntLit 2, Add (Var "x", Var "y"))),
+      (Let (("x", VTypeInt), IntLit 1, Var "x"), Res (Int 1));
+      (Let (("x", VTypeInt), IntLit 1, Add (Var "x", IntLit 2)), Res (Int 3));
+      ( Let
+          ( ("x", VTypeInt),
+            IntLit 1,
+            Let (("y", VTypeInt), IntLit 2, Add (Var "x", Var "y")) ),
         Res (Int 3) );
-      (Let ("x", IntLit 1, Let ("x", IntLit 2, Var "x")), Res (Int 2));
-      ( Let ("x", Let ("y", IntLit 1, Var "y"), Var "y"),
+      ( Let (("x", VTypeInt), IntLit 1, Let (("x", VTypeInt), IntLit 2, Var "x")),
+        Res (Int 2) );
+      ( Let (("x", VTypeInt), Let (("y", VTypeInt), IntLit 1, Var "y"), Var "y"),
         Err (UndefinedVarError "y") );
+      (Let (("x", VTypeBool), BoolLit true, Var "x"), Res (Bool true));
+      ( Let (("x", VTypeBool), BoolLit false, BOr (Var "x", Var "x")),
+        Res (Bool false) );
     ]
 
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =

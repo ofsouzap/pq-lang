@@ -4,6 +4,16 @@
 
 (* TODO - add function definitions and application *)
 
+(** Types in the language. *)
+type vtype = VTypeInt | VTypeBool
+
+(**
+  Converts value type to its string representation.
+  @param vtype The value type to convert.
+  @return A string representing the expression.
+*)
+val show_vtype : vtype -> string
+
 (**
   Expressions in the language.
 *)
@@ -29,7 +39,7 @@ type expr =
   | If of expr * expr * expr  (** If-then-else *)
   (* Variables *)
   | Var of string  (** Variable references *)
-  | Let of string * expr * expr  (** Let binding *)
+  | Let of (string * vtype) * expr * expr  (** Let binding *)
 
 (**
   Recursively converts an expression to its string representation.
