@@ -1,4 +1,10 @@
 (test
  (name test_pq_lang)
- (libraries pq_lang.lib ounit2)
- (modules test_pq_lang test_utils test_lexer test_parser test_ast_executor))
+ (libraries pq_lang.lib ounit2 qcheck)
+ (modules
+  test_pq_lang
+  test_utils
+  test_lexer
+  test_parser
+  test_ast_executor
+  test_ast_executor_store))
