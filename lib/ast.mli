@@ -20,6 +20,8 @@ type expr =
   | Lt of expr * expr  (** Less than *)
   | LtEq of expr * expr  (** Less than or equal to *)
   | If of expr * expr * expr  (** If-then-else *)
+  | Var of string  (** Variable references *)
+  | Let of string * expr * expr  (** Let binding *)
 
 (**
   Recursively converts an expression to its string representation.

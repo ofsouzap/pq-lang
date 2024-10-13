@@ -2,11 +2,11 @@ open OUnit2
 open Pq_lang
 open Ast_executor
 
-(* TODO - once the language becomes more than just arithmetic evaluation, need to change the signatures for the testing stuff *)
+(* TODO - properly implement comparing final stores. At the moment it passes only because the stores are always empty or I've made sure the ordering is correct. This isn't good testing, though *)
 
 let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : int)) = (show x, x, Value (Int y)) in
+  let mapf ((x : expr), (y : int)) = (show x, x, Res (store_empty, Int y)) in
   List.map mapf
     [
       (IntLit 0, 0);
@@ -22,7 +22,7 @@ let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
 
 let test_cases_booleans : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : bool)) = (show x, x, Value (Bool y)) in
+  let mapf ((x : expr), (y : bool)) = (show x, x, Res (store_empty, Bool y)) in
   List.map mapf
     [
       (BoolLit true, true);
@@ -45,7 +45,7 @@ let test_cases_booleans : (string * Ast.expr * exec_res) list =
 
 let test_cases_integer_comparisons : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : bool)) = (show x, x, Value (Bool y)) in
+  let mapf ((x : expr), (y : bool)) = (show x, x, Res (store_empty, Bool y)) in
   List.map mapf
     [
       (Eq (IntLit 0, IntLit 0), true);
@@ -75,12 +75,16 @@ let test_cases_control_flow : (string * Ast.expr * exec_res) list =
   let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
   List.map mapf
     [
-      (If (BoolLit true, IntLit 1, IntLit 2), Value (Int 1));
-      (If (BoolLit false, IntLit 1, IntLit 2), Value (Int 2));
-      (If (BoolLit true, IntLit 1, Add (IntLit 1, IntLit 2)), Value (Int 1));
-      (If (BoolLit false, IntLit 1, Add (IntLit 1, IntLit 2)), Value (Int 3));
+      (If (BoolLit true, IntLit 1, IntLit 2), Res (store_empty, Int 1));
+      (If (BoolLit false, IntLit 1, IntLit 2), Res (store_empty, Int 2));
+      ( If (BoolLit true, IntLit 1, Add (IntLit 1, IntLit 2)),
+        Res (store_empty, Int 1) );
+      ( If (BoolLit false, IntLit 1, Add (IntLit 1, IntLit 2)),
+        Res (store_empty, Int 3) );
       (If (IntLit 2, IntLit 1, IntLit 2), TypingError);
     ]
+
+(* TODO - tests with variable assignment and references *)
 
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
   name >:: fun _ ->
