@@ -2,8 +2,6 @@ open OUnit2
 open Pq_lang
 open Ast_executor
 
-(* TODO - properly implement comparing final stores. At the moment it passes only because the stores are always empty or I've made sure the ordering is correct. This isn't good testing, though *)
-
 let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : int)) = (show x, x, Res (store_empty, Int y)) in
