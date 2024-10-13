@@ -23,7 +23,7 @@ let rec show e =
   | Subtr (e1, e2) -> Printf.sprintf "(%s) - (%s)" (show e1) (show e2)
   | Mult (e1, e2) -> Printf.sprintf "(%s) * (%s)" (show e1) (show e2)
   | BoolLit b -> string_of_bool b
-  | BNot e -> Printf.sprintf "!(%s)" (show e)
+  | BNot e -> Printf.sprintf "~(%s)" (show e)
   | BOr (e1, e2) -> Printf.sprintf "(%s) || (%s)" (show e1) (show e2)
   | BAnd (e1, e2) -> Printf.sprintf "(%s) || (%s)" (show e1) (show e2)
   | Eq (e1, e2) -> Printf.sprintf "(%s) == (%s)" (show e1) (show e2)
