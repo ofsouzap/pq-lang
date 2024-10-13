@@ -19,13 +19,17 @@ let store_set = VarnameMap.add
 let store_compare = VarnameMap.equal ( = )
 let store_traverse = VarnameMap.to_list
 
-type exec_res = Res of value | TypingError | UndefinedVarError of string
+type exec_err = TypingError | UndefinedVarError of string
+type exec_res = Res of value | Err of exec_err
 
 let exec_res_compare a b =
   match (a, b) with
   | Res v1, Res v2 -> v1 = v2
-  | TypingError, TypingError -> true
-  | UndefinedVarError x, UndefinedVarError y -> x = y
+  | Err e1, Err e2 -> (
+      match (e1, e2) with
+      | TypingError, TypingError -> true
+      | UndefinedVarError x, UndefinedVarError y -> x = y
+      | _ -> false)
   | _ -> false
 
 let show_value = function
@@ -34,19 +38,21 @@ let show_value = function
 
 let show_exec_res = function
   | Res v -> show_value v
-  | TypingError -> "[TYPING ERROR]"
-  | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
+  | Err e -> (
+      match e with
+      | TypingError -> "[TYPING ERROR]"
+      | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]")
 
 let ( >>= ) (x : exec_res) (f : value -> exec_res) : exec_res =
   match x with Res v -> f v | _ -> x
 
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
-  match x with Int i -> cnt i | _ -> TypingError
+  match x with Int i -> cnt i | _ -> Err TypingError
 
 (** Apply a function to the execution value if it is a boolean, otherwise return a typing error *)
 let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
-  match x with Bool b -> cnt b | _ -> TypingError
+  match x with Bool b -> cnt b | _ -> Err TypingError
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an integer and give a typing error otherwise *)
 let rec eval_apply_to_int (store : store) (x : Ast.expr) (cnt : int -> exec_res)
@@ -86,7 +92,7 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       match (v1, v2) with
       | Int i1, Int i2 -> Res (Bool (i1 = i2))
       | Bool b1, Bool b2 -> Res (Bool (b1 = b2))
-      | _ -> TypingError)
+      | _ -> Err TypingError)
   | Gt (e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 > i2))))
@@ -106,7 +112,7 @@ and eval (store : store) (e : Ast.expr) : exec_res =
   | Var x -> (
       match store_get x store with
       | Some v -> Res v
-      | None -> UndefinedVarError x)
+      | None -> Err (UndefinedVarError x))
   | Let (x, e1, e2) -> eval store e1 >>= fun v -> eval (store_set x v store) e2
 
 let execute = eval store_empty
