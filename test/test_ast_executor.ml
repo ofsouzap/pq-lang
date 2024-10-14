@@ -108,6 +108,29 @@ let test_cases_variables : (string * Ast.expr * exec_res) list =
         Res (Bool false) );
     ]
 
+let test_cases_functions : (string * Ast.expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
+  List.map mapf
+    [
+      ( Fun (("x", VTypeInt), Var "x"),
+        Res (Closure ("x", VTypeInt, Var "x", store_empty)) );
+      ( Fun (("x", VTypeBool), BOr (Var "x", BoolLit true)),
+        Res (Closure ("x", VTypeBool, BOr (Var "x", BoolLit true), store_empty))
+      );
+      ( App
+          ( App
+              ( Fun
+                  ( ("a", VTypeInt),
+                    Fun (("b", VTypeInt), Add (Var "a", Var "b")) ),
+                IntLit 3 ),
+            IntLit 5 ),
+        Res (Int 8) );
+      ( App (Fun (("x", VTypeInt), Var "y"), IntLit 3),
+        Err (UndefinedVarError "y") );
+      (App (Fun (("x", VTypeInt), Var "x"), BoolLit false), Err TypingError);
+    ]
+
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
   name >:: fun _ ->
   let out = Ast_executor.execute inp in
@@ -122,4 +145,5 @@ let suite =
          >::: List.map create_test test_cases_integer_comparisons;
          "Control Flow" >::: List.map create_test test_cases_control_flow;
          "Variables" >::: List.map create_test test_cases_variables;
+         "Functions" >::: List.map create_test test_cases_functions;
        ]

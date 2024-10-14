@@ -172,6 +172,75 @@ let test_cases_variables : test_case list =
         None );
     ]
 
+let test_cases_functions : test_case list =
+  List.map
+    (fun (x, y, z) -> (x, x, y, z))
+    [
+      ( "fun (x : int) -> x end",
+        [ FUN; LPAREN; NAME "x"; COLON; INT; RPAREN; ARROW; NAME "x"; END ],
+        Some (Fun (("x", VTypeInt), Var "x")) );
+      ( "fun (x : int) -> x + 1 end",
+        [
+          FUN;
+          LPAREN;
+          NAME "x";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "x";
+          PLUS;
+          INTLIT 1;
+          END;
+        ],
+        Some (Fun (("x", VTypeInt), Add (Var "x", IntLit 1))) );
+      ( "fun (x : int) -> fun (y : int) -> x + y end end",
+        [
+          FUN;
+          LPAREN;
+          NAME "x";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          FUN;
+          LPAREN;
+          NAME "y";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "x";
+          PLUS;
+          NAME "y";
+          END;
+          END;
+        ],
+        Some
+          (Fun (("x", VTypeInt), Fun (("y", VTypeInt), Add (Var "x", Var "y"))))
+      );
+      ( "(fun (x : int) -> x + 1 end) 4",
+        [
+          LPAREN;
+          FUN;
+          LPAREN;
+          NAME "x";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "x";
+          PLUS;
+          INTLIT 1;
+          END;
+          RPAREN;
+          INTLIT 4;
+        ],
+        Some (App (Fun (("x", VTypeInt), Add (Var "x", IntLit 1)), IntLit 4)) );
+      ("x 5", [ NAME "x"; INTLIT 5 ], Some (App (Var "x", IntLit 5)));
+      ("x y", [ NAME "x"; NAME "y" ], Some (App (Var "x", Var "y")));
+    ]
+
 let create_lexer_test ((name, inp, exp, _) : test_case) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in

@@ -1,4 +1,4 @@
-type vtype = VTypeInt | VTypeBool
+type vtype = VTypeInt | VTypeBool | VTypeFun of vtype * vtype
 
 type expr =
   | IntLit of int
@@ -18,9 +18,15 @@ type expr =
   | If of expr * expr * expr
   | Var of string
   | Let of (string * vtype) * expr * expr
+  | Fun of (string * vtype) * expr
+  | App of expr * expr
 
-let show_vtype vtype =
-  match vtype with VTypeInt -> "int" | VTypeBool -> "bool"
+let rec show_vtype vtype =
+  match vtype with
+  | VTypeInt -> "int"
+  | VTypeBool -> "bool"
+  | VTypeFun (x, y) ->
+      Printf.sprintf "(%s) -> (%s)" (show_vtype x) (show_vtype y)
 
 let rec show e =
   match e with
@@ -42,5 +48,9 @@ let rec show e =
       Printf.sprintf "if %s then %s else %s" (show e1) (show e2) (show e3)
   | Var x -> x
   | Let ((xname, xtype), e1, e2) ->
-      Printf.sprintf "let (%s : %s) = (%s) in (%s)" xname (show_vtype xtype)
+      Printf.sprintf "let ((%s) : (%s)) = (%s) in (%s)" xname (show_vtype xtype)
         (show e1) (show e2)
+  | Fun ((xname, xtype), e) ->
+      Printf.sprintf "fun ((%s) : (%s)) -> (%s)" xname (show_vtype xtype)
+        (show e)
+  | App (e1, e2) -> Printf.sprintf "(%s) (%s)" (show e1) (show e2)

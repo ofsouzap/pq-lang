@@ -2,9 +2,9 @@
 open Ast
 %}
 
-%token END IF THEN ELSE LET IN TRUE FALSE INT BOOL
+%token END IF THEN ELSE LET IN TRUE FALSE INT BOOL FUN
 %token COLON
-%token PLUS MINUS TIMES LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ
+%token PLUS MINUS TIMES LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW
 %token <int> INTLIT
 %token <string> NAME
 %token EOF
@@ -28,6 +28,7 @@ prog:
 ;
 
 vtype:
+  | LPAREN t = vtype RPAREN { t }
   | INT { VTypeInt }
   | BOOL { VTypeBool }
 ;
@@ -52,12 +53,16 @@ expr:
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If (e1, e2, e3) }
   | n = NAME { Var n }
   | LET l = assign_l ASSIGN r = expr IN subexpr = expr END { Let (l, r, subexpr) }
+  | FUN fdefn = var_defn ARROW e = expr { Fun (fdefn, e) }
+  | e1 = expr e2 = expr { App (e1, e2) }
 ;
 
 assign_l:
+  | LPAREN x = assign_l RPAREN { x }
   | vdef = var_defn { vdef }
 ;
 
 var_defn:
-  | LPAREN n = NAME COLON t = vtype RPAREN { (n, t) }
+  | LPAREN x = var_defn RPAREN { x }
+  | n = NAME COLON t = vtype { (n, t) }
 ;
