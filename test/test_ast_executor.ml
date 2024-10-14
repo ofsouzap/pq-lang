@@ -1,6 +1,7 @@
 open OUnit2
 open Pq_lang
 open Ast_executor
+open Test_utils
 
 let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     =
@@ -83,7 +84,7 @@ let test_cases_control_flow : (string * Ast.expr * exec_res) list =
       (If (BoolLit false, IntLit 1, IntLit 2), Res (Int 2));
       (If (BoolLit true, IntLit 1, Add (IntLit 1, IntLit 2)), Res (Int 1));
       (If (BoolLit false, IntLit 1, Add (IntLit 1, IntLit 2)), Res (Int 3));
-      (If (IntLit 2, IntLit 1, IntLit 2), Err TypingError);
+      (If (IntLit 2, IntLit 1, IntLit 2), Err (TypingError empty_typing_error));
     ]
 
 let test_cases_variables : (string * Ast.expr * exec_res) list =
@@ -128,13 +129,28 @@ let test_cases_functions : (string * Ast.expr * exec_res) list =
         Res (Int 8) );
       ( App (Fun (("x", VTypeInt), Var "y"), IntLit 3),
         Err (UndefinedVarError "y") );
-      (App (Fun (("x", VTypeInt), Var "x"), BoolLit false), Err TypingError);
+      ( App (Fun (("x", VTypeInt), Var "x"), BoolLit false),
+        Err (TypingError empty_typing_error) );
+      ( App
+          ( App
+              ( App
+                  ( Fun
+                      ( ("b", VTypeBool),
+                        Fun
+                          ( ("x", VTypeInt),
+                            Fun (("y", VTypeInt), If (Var "b", Var "x", Var "y"))
+                          ) ),
+                    BoolLit true ),
+                IntLit 1 ),
+            IntLit 2 ),
+        Res (Int 1) );
     ]
 
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
   name >:: fun _ ->
   let out = Ast_executor.execute inp in
-  assert_equal exp out ~cmp:exec_res_compare ~printer:Ast_executor.show_exec_res
+  assert_equal exp out ~cmp:override_compare_exec_res
+    ~printer:Ast_executor.show_exec_res
 
 let suite =
   "AST Executor"

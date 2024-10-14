@@ -6,4 +6,5 @@
   test_utils
   test_frontend
   test_ast_executor
-  test_ast_executor_store))
+  test_ast_executor_store
+  test_lexer_parser_ast_executor))

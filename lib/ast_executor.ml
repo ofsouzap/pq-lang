@@ -20,9 +20,45 @@ let store_set = VarnameMap.add
 let store_compare = VarnameMap.equal ( = )
 let store_traverse = VarnameMap.to_list
 
-(* TODO - add params to TypingError to give more descriptive errors. probably try use optional args *)
+type typing_error = {
+  expected_type : (Ast.vtype, string) Either.t option;
+  actual_type : (Ast.vtype, string) Either.t option;
+  variable_name : varname option;
+  custom_message : string option;
+}
 
-type exec_err = TypingError | UndefinedVarError of string
+let typing_error_show_type = function
+  | Either.Left t -> Ast.show_vtype t
+  | Either.Right s -> s
+
+let empty_typing_error =
+  {
+    expected_type = None;
+    actual_type = None;
+    variable_name = None;
+    custom_message = None;
+  }
+
+let show_typing_error (terr : typing_error) : string =
+  String.concat ", "
+    ((match terr.variable_name with
+     | Some vname -> [ "Variable name: " ^ vname ]
+     | None -> [])
+    @ (match terr.expected_type with
+      | Some t -> [ "Expected type: " ^ typing_error_show_type t ]
+      | None -> [])
+    @ (match terr.actual_type with
+      | Some t -> [ "Actual type: " ^ typing_error_show_type t ]
+      | None -> [])
+    @ (match terr.custom_message with Some msg -> [ msg ] | None -> [])
+    @ [])
+
+let typing_error_compare (a : typing_error) (b : typing_error) : bool =
+  a.expected_type = b.expected_type
+  && a.actual_type = b.actual_type
+  && a.variable_name = b.variable_name
+
+type exec_err = TypingError of typing_error | UndefinedVarError of string
 type exec_res = Res of value | Err of exec_err
 
 let exec_res_compare a b =
@@ -30,7 +66,7 @@ let exec_res_compare a b =
   | Res v1, Res v2 -> v1 = v2
   | Err e1, Err e2 -> (
       match (e1, e2) with
-      | TypingError, TypingError -> true
+      | TypingError terr1, TypingError terr2 -> typing_error_compare terr1 terr2
       | UndefinedVarError x, UndefinedVarError y -> x = y
       | _ -> false)
   | _ -> false
@@ -54,7 +90,7 @@ let show_exec_res = function
   | Res v -> show_value v
   | Err e -> (
       match e with
-      | TypingError -> "[TYPING ERROR]"
+      | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
       | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]")
 
 let ( >>= ) (x : exec_res) (f : value -> exec_res) : exec_res =
@@ -68,15 +104,30 @@ let check_value_vtype (v : value) (vtype : Ast.vtype) : bool =
 
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
-  match x with Int i -> cnt i | _ -> Err TypingError
+  match x with
+  | Int i -> cnt i
+  | _ ->
+      Err
+        (TypingError
+           { empty_typing_error with expected_type = Some (Left VTypeInt) })
 
 (** Apply a function to the execution value if it is a boolean, otherwise return a typing error *)
 let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
-  match x with Bool b -> cnt b | _ -> Err TypingError
+  match x with
+  | Bool b -> cnt b
+  | _ ->
+      Err
+        (TypingError
+           { empty_typing_error with expected_type = Some (Left VTypeBool) })
 
 (** Apply a function to the execution value if it is a function, otherwise return a typing error *)
 let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
-  match x with Closure x -> cnt x | _ -> Err TypingError
+  match x with
+  | Closure x -> cnt x
+  | _ ->
+      Err
+        (TypingError
+           { empty_typing_error with expected_type = Some (Right "Closure") })
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an integer and give a typing error otherwise *)
 let rec eval_apply_to_int (store : store) (x : Ast.expr) (cnt : int -> exec_res)
@@ -121,7 +172,16 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       match (v1, v2) with
       | Int i1, Int i2 -> Res (Bool (i1 = i2))
       | Bool b1, Bool b2 -> Res (Bool (b1 = b2))
-      | _ -> Err TypingError)
+      | _ ->
+          Err
+            (TypingError
+               {
+                 empty_typing_error with
+                 custom_message =
+                   Some
+                     "Left and right sides of equality must be of the same, \
+                      compatible type";
+               }))
   | Gt (e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 > i2))))
@@ -145,13 +205,23 @@ and eval (store : store) (e : Ast.expr) : exec_res =
   | Let ((xname, xtype), e1, e2) ->
       eval store e1 >>= fun v ->
       if check_value_vtype v xtype then eval (store_set xname v store) e2
-      else Err TypingError
+      else
+        Err
+          (TypingError
+             {
+               empty_typing_error with
+               expected_type = Some (Left xtype);
+               variable_name = Some xname;
+             })
   | Fun ((xname, xtype), e) -> Res (Closure (xname, xtype, e, store))
   | App (e1, e2) ->
       (* This uses call-by-value semantics *)
       eval_apply_to_closure store e1 (fun (argname, argtype, fe, fs) ->
           eval store e2 >>= fun v2 ->
           if check_value_vtype v2 argtype then eval (store_set argname v2 fs) fe
-          else Err TypingError)
+          else
+            Err
+              (TypingError
+                 { empty_typing_error with expected_type = Some (Left argtype) }))
 
 let execute = eval store_empty
