@@ -1,15 +1,19 @@
 (** This module provides functionality for directly executing an AST of a program. *)
 
-(** A resulting value from executing an AST *)
-type value =
-  | Int of int  (** An integer values *)
-  | Bool of bool  (** A boolean value *)
-
 (** The type of a variable's name in the store *)
 type varname = string
 
+(** Properties of a closure *)
+type closure_props = varname * Ast.vtype * Ast.expr * store
+
+(** A resulting value from executing an AST *)
+and value =
+  | Int of int  (** An integer values *)
+  | Bool of bool  (** A boolean value *)
+  | Closure of closure_props  (** A function closure *)
+
 (** A store, containing the values of variables under the current context *)
-type store
+and store
 
 (** The empty store *)
 val store_empty : store
@@ -25,6 +29,9 @@ val store_compare : store -> store -> bool
 
 (** Traverse the entire store's variable names and values in arbitrary order into a list *)
 val store_traverse : store -> (varname * value) list
+
+(** String representation of a store, for debugging purposes *)
+val show_store : store -> string
 
 type exec_err =
   | TypingError  (** Execution was halted due to a typing error *)

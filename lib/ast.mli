@@ -2,10 +2,8 @@
   Abstract syntax tree for the language.
 *)
 
-(* TODO - add function definitions and application *)
-
 (** Types in the language. *)
-type vtype = VTypeInt | VTypeBool
+type vtype = VTypeInt | VTypeBool | VTypeFun of vtype * vtype
 
 (**
   Converts value type to its string representation.
@@ -37,9 +35,11 @@ type expr =
   | LtEq of expr * expr  (** Less than or equal to *)
   (* Control flow *)
   | If of expr * expr * expr  (** If-then-else *)
-  (* Variables *)
+  (* Variables and functions *)
   | Var of string  (** Variable references *)
   | Let of (string * vtype) * expr * expr  (** Let binding *)
+  | Fun of (string * vtype) * expr  (** Function definition *)
+  | App of expr * expr  (** Function application *)
 
 (**
   Recursively converts an expression to its string representation.

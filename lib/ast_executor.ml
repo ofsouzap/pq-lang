@@ -1,6 +1,5 @@
 (* TODO - have backends as a module thing, so that they can more easily be swapped in *)
 
-type value = Int of int | Bool of bool
 type varname = string
 
 module Varname = struct
@@ -11,13 +10,17 @@ end
 
 module VarnameMap = Map.Make (Varname)
 
-type store = value VarnameMap.t
+type closure_props = varname * Ast.vtype * Ast.expr * store
+and value = Int of int | Bool of bool | Closure of closure_props
+and store = value VarnameMap.t
 
 let store_empty : store = VarnameMap.empty
 let store_get = VarnameMap.find_opt
 let store_set = VarnameMap.add
 let store_compare = VarnameMap.equal ( = )
 let store_traverse = VarnameMap.to_list
+
+(* TODO - add params to TypingError to give more descriptive errors. probably try use optional args *)
 
 type exec_err = TypingError | UndefinedVarError of string
 type exec_res = Res of value | Err of exec_err
@@ -32,9 +35,20 @@ let exec_res_compare a b =
       | _ -> false)
   | _ -> false
 
-let show_value = function
+let rec show_store store =
+  "["
+  ^ String.concat ", "
+      (List.map
+         (fun (k, v) -> Printf.sprintf "(%s, %s)" k (show_value v))
+         (store_traverse store))
+  ^ "]"
+
+and show_value = function
   | Int i -> "Int " ^ string_of_int i
   | Bool b -> "Bool " ^ string_of_bool b
+  | Closure (xname, xtype, e, store) ->
+      Printf.sprintf "Closure (%s : %s, %s, %s)" xname (Ast.show_vtype xtype)
+        (Ast.show e) (show_store store)
 
 let show_exec_res = function
   | Res v -> show_value v
@@ -60,15 +74,24 @@ let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
 let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
   match x with Bool b -> cnt b | _ -> Err TypingError
 
+(** Apply a function to the execution value if it is a function, otherwise return a typing error *)
+let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
+  match x with Closure x -> cnt x | _ -> Err TypingError
+
 (** Evaluate a subexpression, then apply a continuation function to the result if it an integer and give a typing error otherwise *)
 let rec eval_apply_to_int (store : store) (x : Ast.expr) (cnt : int -> exec_res)
     : exec_res =
-  eval store x >>= fun v -> apply_to_int cnt v
+  eval store x >>= apply_to_int cnt
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an boolean and give a typing error otherwise *)
 and eval_apply_to_bool (store : store) (x : Ast.expr) (cnt : bool -> exec_res) :
     exec_res =
-  eval store x >>= fun v -> apply_to_bool cnt v
+  eval store x >>= apply_to_bool cnt
+
+(** Evaluate a subexpression, then apply a continuation function to the result if it an function and give a typing error otherwise *)
+and eval_apply_to_closure (store : store) (x : Ast.expr)
+    (cnt : closure_props -> exec_res) : exec_res =
+  eval store x >>= apply_to_closure cnt
 
 (** Evaluate an AST subtree *)
 and eval (store : store) (e : Ast.expr) : exec_res =
@@ -123,5 +146,12 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       eval store e1 >>= fun v ->
       if check_value_vtype v xtype then eval (store_set xname v store) e2
       else Err TypingError
+  | Fun ((xname, xtype), e) -> Res (Closure (xname, xtype, e, store))
+  | App (e1, e2) ->
+      (* This uses call-by-value semantics *)
+      eval_apply_to_closure store e1 (fun (argname, argtype, fe, fs) ->
+          eval store e2 >>= fun v2 ->
+          if check_value_vtype v2 argtype then eval (store_set argname v2 fs) fe
+          else Err TypingError)
 
 let execute = eval store_empty
