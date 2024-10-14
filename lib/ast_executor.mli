@@ -33,8 +33,26 @@ val store_traverse : store -> (varname * value) list
 (** String representation of a store, for debugging purposes *)
 val show_store : store -> string
 
+(** Details of a typing error. Fields are optional in case they can't be provided *)
+type typing_error = {
+  expected_type : (Ast.vtype, string) Either.t option;
+  actual_type : (Ast.vtype, string) Either.t option;
+  variable_name : varname option;
+  custom_message : string option;
+}
+
+(** Details for a typing error that are the default empty values *)
+val empty_typing_error : typing_error
+
+(** Give the string description of a typing error, to return to the user *)
+val show_typing_error : typing_error -> string
+
+(** Compare two typing errors for equality *)
+val typing_error_compare : typing_error -> typing_error -> bool
+
 type exec_err =
-  | TypingError  (** Execution was halted due to a typing error *)
+  | TypingError of typing_error
+      (** Execution was halted due to a typing error *)
   | UndefinedVarError of string
       (** Execution was halted due to usage of an undefined variable of the provided name *)
 

@@ -54,7 +54,7 @@ expr:
   | n = NAME { Var n }
   | LET l = assign_l ASSIGN r = expr IN subexpr = expr END { Let (l, r, subexpr) }
   | FUN fdefn = var_defn ARROW e = expr { Fun (fdefn, e) }
-  | e1 = expr e2 = expr { App (e1, e2) }
+  | e1 = expr e2 = expr { App (e1, e2) } (* TODO - need to make the function application rule left-associative *)
 ;
 
 assign_l:

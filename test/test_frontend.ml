@@ -239,6 +239,61 @@ let test_cases_functions : test_case list =
         Some (App (Fun (("x", VTypeInt), Add (Var "x", IntLit 1)), IntLit 4)) );
       ("x 5", [ NAME "x"; INTLIT 5 ], Some (App (Var "x", IntLit 5)));
       ("x y", [ NAME "x"; NAME "y" ], Some (App (Var "x", Var "y")));
+      ( "(((fun (b : bool) -> (fun (x : int) -> fun (y : int) -> if b then x \
+         else y end )) true) 1) 2",
+        [
+          LPAREN;
+          FUN;
+          LPAREN;
+          NAME "b";
+          COLON;
+          BOOL;
+          RPAREN;
+          ARROW;
+          LPAREN;
+          FUN;
+          LPAREN;
+          NAME "x";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          LPAREN;
+          FUN;
+          LPAREN;
+          NAME "y";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          IF;
+          NAME "b";
+          THEN;
+          NAME "x";
+          ELSE;
+          NAME "y";
+          END;
+          END;
+          RPAREN;
+          RPAREN;
+          TRUE;
+          INTLIT 1;
+          INTLIT 2;
+        ],
+        Some
+          (App
+             ( App
+                 ( App
+                     ( Fun
+                         ( ("b", VTypeBool),
+                           Fun
+                             ( ("x", VTypeInt),
+                               Fun
+                                 ( ("y", VTypeInt),
+                                   If (Var "b", Var "x", Var "y") ) ) ),
+                       BoolLit true ),
+                   IntLit 1 ),
+               IntLit 2 )) );
     ]
 
 let create_lexer_test ((name, inp, exp, _) : test_case) =
