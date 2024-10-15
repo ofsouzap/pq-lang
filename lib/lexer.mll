@@ -6,7 +6,6 @@ let whitespace = [' ' '\t' '\n']
 
 rule token = parse
   (* Keywords *)
-  | "end" { END }
   | "if" { IF }
   | "then" { THEN }
   | "else" { ELSE }

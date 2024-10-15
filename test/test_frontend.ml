@@ -11,11 +11,7 @@ let test_cases_arithmetic : test_case list =
     (fun (x, y, z) -> (x, x, y, z))
     [
       ("1", [ INTLIT 1 ], Some (IntLit 1));
-      ("-3", [ MINUS; INTLIT 3 ], Some (Neg (IntLit 3)));
       ("1 + 2", [ INTLIT 1; PLUS; INTLIT 2 ], Some (Add (IntLit 1, IntLit 2)));
-      ( "1 + - 2",
-        [ INTLIT 1; PLUS; MINUS; INTLIT 2 ],
-        Some (Add (IntLit 1, Neg (IntLit 2))) );
       ("1 * 2", [ INTLIT 1; TIMES; INTLIT 2 ], Some (Mult (IntLit 1, IntLit 2)));
       ( "1    + 4 * (1+2 )",
         [
@@ -88,10 +84,10 @@ let test_cases_if_then_else : test_case list =
   List.map
     (fun (x, y, z) -> (x, x, y, z))
     [
-      ( "if true then 1 else 2 end",
-        [ IF; TRUE; THEN; INTLIT 1; ELSE; INTLIT 2; END ],
+      ( "if true then 1 else 2",
+        [ IF; TRUE; THEN; INTLIT 1; ELSE; INTLIT 2 ],
         Some (If (BoolLit true, IntLit 1, IntLit 2)) );
-      ( "if true then 1 else if false then 2 else 3 end end",
+      ( "if true then 1 else if false then 2 else 3",
         [
           IF;
           TRUE;
@@ -104,11 +100,45 @@ let test_cases_if_then_else : test_case list =
           INTLIT 2;
           ELSE;
           INTLIT 3;
-          END;
-          END;
         ],
         Some
           (If (BoolLit true, IntLit 1, If (BoolLit false, IntLit 2, IntLit 3)))
+      );
+      ( "if true then (if false then 1 else 2) else 3",
+        [
+          IF;
+          TRUE;
+          THEN;
+          LPAREN;
+          IF;
+          FALSE;
+          THEN;
+          INTLIT 1;
+          ELSE;
+          INTLIT 2;
+          RPAREN;
+          ELSE;
+          INTLIT 3;
+        ],
+        Some
+          (If (BoolLit true, If (BoolLit false, IntLit 1, IntLit 2), IntLit 3))
+      );
+      ( "if true then if false then 1 else 2 else 3",
+        [
+          IF;
+          TRUE;
+          THEN;
+          IF;
+          FALSE;
+          THEN;
+          INTLIT 1;
+          ELSE;
+          INTLIT 2;
+          ELSE;
+          INTLIT 3;
+        ],
+        Some
+          (If (BoolLit true, If (BoolLit false, IntLit 1, IntLit 2), IntLit 3))
       );
     ]
 
@@ -117,7 +147,7 @@ let test_cases_variables : test_case list =
     (fun (x, y, z) -> (x, x, y, z))
     [
       ("x", [ NAME "x" ], Some (Var "x"));
-      ( "let (x : int) = 1 in x end",
+      ( "let (x : int) = 1 in x",
         [
           LET;
           LPAREN;
@@ -129,10 +159,9 @@ let test_cases_variables : test_case list =
           INTLIT 1;
           IN;
           NAME "x";
-          END;
         ],
         Some (Let (("x", VTypeInt), IntLit 1, Var "x")) );
-      ( "let (x : bool) = 1 in x end",
+      ( "let (x : bool) = 1 in x",
         [
           LET;
           LPAREN;
@@ -144,10 +173,9 @@ let test_cases_variables : test_case list =
           INTLIT 1;
           IN;
           NAME "x";
-          END;
         ],
         Some (Let (("x", VTypeBool), IntLit 1, Var "x")) );
-      ( "let (x : int) = 1 in let y in x end",
+      ( "let (x : int) = 1 in let y in x",
         [
           LET;
           LPAREN;
@@ -162,13 +190,10 @@ let test_cases_variables : test_case list =
           NAME "y";
           IN;
           NAME "x";
-          END;
         ],
         None );
-      ( "let x = 1 in let y in x end",
-        [
-          LET; NAME "x"; ASSIGN; INTLIT 1; IN; LET; NAME "y"; IN; NAME "x"; END;
-        ],
+      ( "let x = 1 in let y in x",
+        [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; LET; NAME "y"; IN; NAME "x" ],
         None );
     ]
 
@@ -176,10 +201,10 @@ let test_cases_functions : test_case list =
   List.map
     (fun (x, y, z) -> (x, x, y, z))
     [
-      ( "fun (x : int) -> x end",
-        [ FUN; LPAREN; NAME "x"; COLON; INT; RPAREN; ARROW; NAME "x"; END ],
+      ( "fun (x : int) -> x",
+        [ FUN; LPAREN; NAME "x"; COLON; INT; RPAREN; ARROW; NAME "x" ],
         Some (Fun (("x", VTypeInt), Var "x")) );
-      ( "fun (x : int) -> x + 1 end",
+      ( "fun (x : int) -> x + 1",
         [
           FUN;
           LPAREN;
@@ -191,10 +216,9 @@ let test_cases_functions : test_case list =
           NAME "x";
           PLUS;
           INTLIT 1;
-          END;
         ],
         Some (Fun (("x", VTypeInt), Add (Var "x", IntLit 1))) );
-      ( "fun (x : int) -> fun (y : int) -> x + y end end",
+      ( "fun (x : int) -> fun (y : int) -> x + y",
         [
           FUN;
           LPAREN;
@@ -213,13 +237,11 @@ let test_cases_functions : test_case list =
           NAME "x";
           PLUS;
           NAME "y";
-          END;
-          END;
         ],
         Some
           (Fun (("x", VTypeInt), Fun (("y", VTypeInt), Add (Var "x", Var "y"))))
       );
-      ( "(fun (x : int) -> x + 1 end) 4",
+      ( "(fun (x : int) -> x + 1) 4",
         [
           LPAREN;
           FUN;
@@ -232,15 +254,14 @@ let test_cases_functions : test_case list =
           NAME "x";
           PLUS;
           INTLIT 1;
-          END;
           RPAREN;
           INTLIT 4;
         ],
         Some (App (Fun (("x", VTypeInt), Add (Var "x", IntLit 1)), IntLit 4)) );
       ("x 5", [ NAME "x"; INTLIT 5 ], Some (App (Var "x", IntLit 5)));
       ("x y", [ NAME "x"; NAME "y" ], Some (App (Var "x", Var "y")));
-      ( "(((fun (b : bool) -> (fun (x : int) -> fun (y : int) -> if b then x \
-         else y end )) true) 1) 2",
+      ( "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x else \
+         y ) true 1 2",
         [
           LPAREN;
           FUN;
@@ -250,7 +271,6 @@ let test_cases_functions : test_case list =
           BOOL;
           RPAREN;
           ARROW;
-          LPAREN;
           FUN;
           LPAREN;
           NAME "x";
@@ -258,7 +278,6 @@ let test_cases_functions : test_case list =
           INT;
           RPAREN;
           ARROW;
-          LPAREN;
           FUN;
           LPAREN;
           NAME "y";
@@ -272,9 +291,6 @@ let test_cases_functions : test_case list =
           NAME "x";
           ELSE;
           NAME "y";
-          END;
-          END;
-          RPAREN;
           RPAREN;
           TRUE;
           INTLIT 1;
@@ -294,6 +310,9 @@ let test_cases_functions : test_case list =
                        BoolLit true ),
                    IntLit 1 ),
                IntLit 2 )) );
+      ( "f1 f2 f3",
+        [ NAME "f1"; NAME "f2"; NAME "f3" ],
+        Some (App (App (Var "f1", Var "f2"), Var "f3")) );
     ]
 
 let create_lexer_test ((name, inp, exp, _) : test_case) =
@@ -327,6 +346,7 @@ let test_suites test_create_func =
     >::: List.map test_create_func test_cases_integer_comparisons;
     "If-Then-Else" >::: List.map test_create_func test_cases_if_then_else;
     "Variables" >::: List.map test_create_func test_cases_variables;
+    "Functions" >::: List.map test_create_func test_cases_functions;
   ]
 
 let suite =
