@@ -16,9 +16,11 @@ let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
     [
       (IntLit 0, 0);
       (IntLit 5, 5);
+      (Neg (IntLit 7), -7);
       (IntLit (-5), -5);
       (Add (IntLit 1, IntLit 2), 3);
       (Mult (IntLit 1, IntLit 2), 2);
+      (Mult (Neg (IntLit 1), IntLit 2), -2);
       (Add (IntLit 1, Mult (IntLit 4, Add (IntLit 1, IntLit 2))), 13);
       (Mult (Add (IntLit 1, IntLit 2), IntLit 3), 9);
       (Mult (Add (IntLit 1, IntLit 2), Add (IntLit 3, IntLit 4)), 21);
