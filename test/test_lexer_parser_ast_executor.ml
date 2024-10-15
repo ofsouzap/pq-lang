@@ -16,11 +16,11 @@ let suite =
   >::: List.map create_test
          [
            ( "Program 1a",
-             "(((fun (b : bool) -> (fun (x : int) -> fun (y : int) -> if b \
-              then x else y end )) true) 1) 2",
+             "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x \
+              else y) true 1 2",
              Res (Int 1) );
            ( "Program 1b",
-             "(((fun (b : bool) -> (fun (x : int) -> fun (y : int) -> if b \
-              then x else y end )) false) 1) 2",
+             "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x \
+              else y) false 1 2",
              Res (Int 2) );
          ]
