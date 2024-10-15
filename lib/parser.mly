@@ -2,8 +2,6 @@
 open Ast
 %}
 
-(* TODO - implement unary minus *)
-
 // Tokens
 %token IF THEN ELSE LET IN TRUE FALSE INT BOOL FUN
 %token COLON
@@ -48,6 +46,7 @@ vtype:
 expr:
   | e = contained_expr { e }
   | e1 = expr PLUS e2 = expr { Add (e1, e2) }
+  | MINUS e = expr { Neg (e) }
   | e1 = expr MINUS e2 = expr { Subtr (e1, e2) }
   | e1 = expr TIMES e2 = expr { Mult (e1, e2) }
   | BNOT e = expr { BNot (e) }

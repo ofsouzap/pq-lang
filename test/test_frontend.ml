@@ -11,8 +11,23 @@ let test_cases_arithmetic : test_case list =
     (fun (x, y, z) -> (x, x, y, z))
     [
       ("1", [ INTLIT 1 ], Some (IntLit 1));
+      ("0", [ INTLIT 0 ], Some (IntLit 0));
+      ("-5", [ MINUS; INTLIT 5 ], Some (Neg (IntLit 5)));
       ("1 + 2", [ INTLIT 1; PLUS; INTLIT 2 ], Some (Add (IntLit 1, IntLit 2)));
+      ("1 - 2", [ INTLIT 1; MINUS; INTLIT 2 ], Some (Subtr (IntLit 1, IntLit 2)));
+      ( "1 + -2",
+        [ INTLIT 1; PLUS; MINUS; INTLIT 2 ],
+        Some (Add (IntLit 1, Neg (IntLit 2))) );
+      ( "-1 + 2",
+        [ MINUS; INTLIT 1; PLUS; INTLIT 2 ],
+        Some (Add (Neg (IntLit 1), IntLit 2)) );
+      ( "-1 + -2",
+        [ MINUS; INTLIT 1; PLUS; MINUS; INTLIT 2 ],
+        Some (Add (Neg (IntLit 1), Neg (IntLit 2))) );
       ("1 * 2", [ INTLIT 1; TIMES; INTLIT 2 ], Some (Mult (IntLit 1, IntLit 2)));
+      ( "1 * -2",
+        [ INTLIT 1; TIMES; MINUS; INTLIT 2 ],
+        Some (Mult (IntLit 1, Neg (IntLit 2))) );
       ( "1    + 4 * (1+2 )",
         [
           INTLIT 1;
