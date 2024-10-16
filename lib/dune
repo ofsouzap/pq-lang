@@ -1,7 +1,9 @@
 (library
  (public_name pq_lang.lib)
  (name pq_lang)
- (modules ast lexer parser ast_executor))
+ (modules ast parser lexer frontend ast_executor))
+
+; TODO - consider not making lexer and parser public modules and instead having the frontend API just use frontend.ml[i]
 
 (ocamllex lexer)
 
