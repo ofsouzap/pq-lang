@@ -1,5 +1,7 @@
 {
 open Parser
+
+exception LexingError of char
 }
 
 let whitespace = [' ' '\t' '\n']
@@ -39,4 +41,4 @@ rule token = parse
   (* Misc *)
   | eof { EOF }
   | whitespace { token lexbuf }
-  | _ { failwith "Unexpected character" } (* TODO - use a proper exception *)
+  | _ as c { raise (LexingError c) }
