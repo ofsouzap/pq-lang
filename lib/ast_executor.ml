@@ -144,6 +144,8 @@ and eval_apply_to_closure (store : store) (x : Ast.expr)
     (cnt : closure_props -> exec_res) : exec_res =
   eval store x >>= apply_to_closure cnt
 
+(* TODO - allow recursion in functions *)
+
 (** Evaluate an AST subtree *)
 and eval (store : store) (e : Ast.expr) : exec_res =
   match e with

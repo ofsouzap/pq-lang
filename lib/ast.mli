@@ -12,8 +12,8 @@ type vtype = VTypeInt | VTypeBool | VTypeFun of vtype * vtype
 *)
 val show_vtype : vtype -> string
 
-(* TODO - have programs composed of optional function defintions then a concluding expression to evaluate, instead of just allowing a single main expression to evaluate *)
-(* TODO - implement custom data types *)
+(* TODO - have programs composed of optional custom type defintions then a concluding expression to evaluate, instead of just allowing a single main expression to evaluate.
+   Defining functions can just be done with "let f = ... in" *)
 
 (**
   Expressions in the language.
