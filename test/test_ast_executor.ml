@@ -109,6 +109,11 @@ let test_cases_variables : (string * Ast.expr * exec_res) list =
       (Let (("x", VTypeBool), BoolLit true, Var "x"), Res (Bool true));
       ( Let (("x", VTypeBool), BoolLit false, BOr (Var "x", Var "x")),
         Res (Bool false) );
+      ( Let
+          ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+            Fun (("x", VTypeInt), Var "x"),
+            App (Var "f", IntLit 8) ),
+        Res (Int 8) );
     ]
 
 let test_cases_functions : (string * Ast.expr * exec_res) list =
@@ -131,8 +136,6 @@ let test_cases_functions : (string * Ast.expr * exec_res) list =
         Res (Int 8) );
       ( App (Fun (("x", VTypeInt), Var "y"), IntLit 3),
         Err (UndefinedVarError "y") );
-      ( App (Fun (("x", VTypeInt), Var "x"), BoolLit false),
-        Err (TypingError empty_typing_error) );
       ( App
           ( App
               ( App

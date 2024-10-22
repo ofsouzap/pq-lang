@@ -1,7 +1,10 @@
 open Pq_lang
 
 let () =
-  let lexbuf = Lexing.from_channel stdin in
-  let ast = Parser.prog Lexer.token lexbuf in
-  let result = Ast_executor.execute ast in
-  Printf.printf "%s\n" (Ast_executor.show_exec_res result)
+  let open Frontend in
+  match run_frontend_channel stdin with
+  | LexingError c -> Printf.printf "Lexing error: %c\n" c
+  | ParsingError -> Printf.printf "Parsing error\n"
+  | Res ast ->
+      let result = Ast_executor.execute ast in
+      Printf.printf "%s\n" (Ast_executor.show_exec_res result)

@@ -17,10 +17,18 @@ let suite =
          [
            ( "Program 1a",
              "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x \
-              else y) true 1 2",
+              else y end end end end) true 1 2",
              Res (Int 1) );
            ( "Program 1b",
              "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x \
-              else y) false 1 2",
+              else y end end end end) false 1 2",
              Res (Int 2) );
+           ( "Program Triangles-a",
+             "let (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x \
+              + f (x - 1) end end in f 0 end",
+             Res (Int 0) );
+           ( "Program Triangles-b",
+             "let (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x \
+              + f (x - 1) end end in f 5 end",
+             Res (Int 15) );
          ]

@@ -3,7 +3,7 @@ open Ast
 %}
 
 // Tokens
-%token IF THEN ELSE LET IN TRUE FALSE INT BOOL FUN
+%token END IF THEN ELSE LET IN TRUE FALSE INT BOOL FUN
 %token COLON
 %token PLUS MINUS TIMES LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW
 %token <int> INTLIT
@@ -13,9 +13,8 @@ open Ast
 // Precedence and associativity rules
 %nonassoc INTLIT NAME TRUE FALSE
 %nonassoc LPAREN
+%left VTYPE_FUN_ARROW
 %nonassoc ARROW
-%nonassoc IN
-%nonassoc ELSE
 %left BNOT
 %left BOR
 %left BAND
@@ -41,6 +40,7 @@ vtype:
   | LPAREN t = vtype RPAREN { t }
   | INT { VTypeInt }
   | BOOL { VTypeBool }
+  | tx = vtype ARROW ty = vtype %prec VTYPE_FUN_ARROW { VTypeFun (tx, ty) }
 ;
 
 expr:
@@ -57,9 +57,9 @@ expr:
   | e1 = expr GTEQ e2 = expr { GtEq (e1, e2) }
   | e1 = expr LT e2 = expr { Lt (e1, e2) }
   | e1 = expr LTEQ e2 = expr { LtEq (e1, e2) }
-  | IF e1 = expr THEN e2 = expr ELSE e3 = expr { If (e1, e2, e3) }
-  | LET l = var_defn ASSIGN r = expr IN subexpr = expr { Let (l, r, subexpr) }
-  | FUN fdefn = var_defn ARROW e = expr { Fun (fdefn, e) }
+  | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If (e1, e2, e3) }
+  | LET l = var_defn ASSIGN r = expr IN subexpr = expr END { Let (l, r, subexpr) }
+  | FUN LPAREN fdefn = var_defn RPAREN ARROW e = expr END { Fun (fdefn, e) }
   | e1 = expr e2 = contained_expr { App (e1, e2) }
 ;
 

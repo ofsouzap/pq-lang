@@ -96,12 +96,6 @@ let show_exec_res = function
 let ( >>= ) (x : exec_res) (f : value -> exec_res) : exec_res =
   match x with Res v -> f v | _ -> x
 
-let check_value_vtype (v : value) (vtype : Ast.vtype) : bool =
-  match (v, vtype) with
-  | Int _, VTypeInt -> true
-  | Bool _, VTypeBool -> true
-  | _, _ -> false
-
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
   match x with
@@ -204,26 +198,12 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       match store_get x store with
       | Some v -> Res v
       | None -> Err (UndefinedVarError x))
-  | Let ((xname, xtype), e1, e2) ->
-      eval store e1 >>= fun v ->
-      if check_value_vtype v xtype then eval (store_set xname v store) e2
-      else
-        Err
-          (TypingError
-             {
-               empty_typing_error with
-               expected_type = Some (Left xtype);
-               variable_name = Some xname;
-             })
+  | Let ((xname, _), e1, e2) ->
+      eval store e1 >>= fun v -> eval (store_set xname v store) e2
   | Fun ((xname, xtype), e) -> Res (Closure (xname, xtype, e, store))
   | App (e1, e2) ->
       (* This uses call-by-value semantics *)
-      eval_apply_to_closure store e1 (fun (argname, argtype, fe, fs) ->
-          eval store e2 >>= fun v2 ->
-          if check_value_vtype v2 argtype then eval (store_set argname v2 fs) fe
-          else
-            Err
-              (TypingError
-                 { empty_typing_error with expected_type = Some (Left argtype) }))
+      eval_apply_to_closure store e1 (fun (argname, _, fe, fs) ->
+          eval store e2 >>= fun v2 -> eval (store_set argname v2 fs) fe)
 
 let execute = eval store_empty

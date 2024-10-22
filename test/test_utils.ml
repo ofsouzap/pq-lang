@@ -3,6 +3,7 @@ open Parser
 open Ast_executor
 
 let string_of_token = function
+  | END -> "END"
   | IF -> "IF"
   | THEN -> "THEN"
   | ELSE -> "ELSE"
