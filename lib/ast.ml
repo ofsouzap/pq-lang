@@ -45,12 +45,14 @@ let rec show e =
   | Lt (e1, e2) -> Printf.sprintf "(%s) < (%s)" (show e1) (show e2)
   | LtEq (e1, e2) -> Printf.sprintf "(%s) <= (%s)" (show e1) (show e2)
   | If (e1, e2, e3) ->
-      Printf.sprintf "if %s then %s else %s" (show e1) (show e2) (show e3)
+      Printf.sprintf "if (%s) then (%s) else (%s) end" (show e1) (show e2)
+        (show e3)
   | Var x -> x
   | Let ((xname, xtype), e1, e2) ->
-      Printf.sprintf "let ((%s) : (%s)) = (%s) in (%s)" xname (show_vtype xtype)
-        (show e1) (show e2)
+      Printf.sprintf "let ((%s) : (%s)) = (%s) in (%s) end" xname
+        (show_vtype xtype) (show e1) (show e2)
   | Fun ((xname, xtype), e) ->
-      Printf.sprintf "fun ((%s) : (%s)) -> (%s)" xname (show_vtype xtype)
+      Printf.sprintf "fun ((%s) : (%s)) -> (%s) end" xname (show_vtype xtype)
         (show e)
   | App (e1, e2) -> Printf.sprintf "(%s) (%s)" (show e1) (show e2)
+  | Fix -> "fix"
