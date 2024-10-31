@@ -55,6 +55,11 @@ type exec_err =
       (** Execution was halted due to a typing error *)
   | UndefinedVarError of string
       (** Execution was halted due to usage of an undefined variable of the provided name *)
+  | MisplacedFixError  (** Fix node was inappropriately used in the AST *)
+  | FixApplicationError
+      (** Application of the Fix node was done on an invalid target *)
+  | MaxRecursionDepthExceeded
+      (** The maximum recursion depth of the execution has been exceeded so the program was terminated *)
 
 (** The result of executing an AST *)
 type exec_res =

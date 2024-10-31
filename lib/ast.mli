@@ -43,6 +43,8 @@ type expr =
   | Let of (string * vtype) * expr * expr  (** Let binding *)
   | Fun of (string * vtype) * expr  (** Function definition *)
   | App of expr * expr  (** Function application *)
+  | Fix  (** The fix operation, used for recursion *)
+(* TODO - change Fix node so that it is better-typed: don't require it to be part of an App node, make it work on its own *)
 
 (**
   Recursively converts an expression to its string representation.

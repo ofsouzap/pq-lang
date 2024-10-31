@@ -151,6 +151,29 @@ let test_cases_functions : (string * Ast.expr * exec_res) list =
         Res (Int 1) );
     ]
 
+let test_cases_recursion : (string * Ast.expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
+  List.map mapf
+    [
+      ( Let
+          ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+            App
+              ( Fix,
+                Fun
+                  ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+                    Fun
+                      ( ("x", VTypeInt),
+                        If
+                          ( Eq (Var "x", IntLit 0),
+                            IntLit 0,
+                            Add
+                              (Var "x", App (Var "f", Subtr (Var "x", IntLit 1)))
+                          ) ) ) ),
+            App (Var "f", IntLit 5) ),
+        Res (Int 15) );
+    ]
+
 let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
   name >:: fun _ ->
   let out = Ast_executor.execute inp in
@@ -167,4 +190,5 @@ let suite =
          "Control Flow" >::: List.map create_test test_cases_control_flow;
          "Variables" >::: List.map create_test test_cases_variables;
          "Functions" >::: List.map create_test test_cases_functions;
+         "Recursion" >::: List.map create_test test_cases_recursion;
        ]

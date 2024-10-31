@@ -20,6 +20,7 @@ type expr =
   | Let of (string * vtype) * expr * expr
   | Fun of (string * vtype) * expr
   | App of expr * expr
+  | Fix
 
 let rec show_vtype vtype =
   match vtype with

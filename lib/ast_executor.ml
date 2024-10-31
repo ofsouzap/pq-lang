@@ -58,7 +58,13 @@ let typing_error_compare (a : typing_error) (b : typing_error) : bool =
   && a.actual_type = b.actual_type
   && a.variable_name = b.variable_name
 
-type exec_err = TypingError of typing_error | UndefinedVarError of string
+type exec_err =
+  | TypingError of typing_error
+  | UndefinedVarError of string
+  | MisplacedFixError
+  | FixApplicationError
+  | MaxRecursionDepthExceeded
+
 type exec_res = Res of value | Err of exec_err
 
 let exec_res_compare a b =
@@ -91,7 +97,10 @@ let show_exec_res = function
   | Err e -> (
       match e with
       | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
-      | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]")
+      | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
+      | MisplacedFixError -> "[MISPLACED FIX NODE]"
+      | FixApplicationError -> "[Fix APPLICATION ERROR]"
+      | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]")
 
 let ( >>= ) (x : exec_res) (f : value -> exec_res) : exec_res =
   match x with Res v -> f v | _ -> x
@@ -201,9 +210,16 @@ and eval (store : store) (e : Ast.expr) : exec_res =
   | Let ((xname, _), e1, e2) ->
       eval store e1 >>= fun v -> eval (store_set xname v store) e2
   | Fun ((xname, xtype), e) -> Res (Closure (xname, xtype, e, store))
+  | App (Fix, (Fun ((_, VTypeFun _), Fun ((xname, xtype), _)) as e2)) ->
+      (* Note, Fix is handled specially as it is only valid in an application expression *)
+      (* fix (\f. \x. e2) ~> \ x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
+      eval store
+        (Fun ((xname, xtype), App (App (e2, App (Fix, e2)), Var xname)))
+  | App (Fix, _) -> Err FixApplicationError
   | App (e1, e2) ->
       (* This uses call-by-value semantics *)
       eval_apply_to_closure store e1 (fun (argname, _, fe, fs) ->
           eval store e2 >>= fun v2 -> eval (store_set argname v2 fs) fe)
+  | Fix -> Err MisplacedFixError
 
 let execute = eval store_empty

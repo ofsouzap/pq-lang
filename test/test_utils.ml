@@ -8,6 +8,7 @@ let string_of_token = function
   | THEN -> "THEN"
   | ELSE -> "ELSE"
   | LET -> "LET"
+  | REC -> "REC"
   | IN -> "IN"
   | TRUE -> "TRUE"
   | FALSE -> "FALSE"
