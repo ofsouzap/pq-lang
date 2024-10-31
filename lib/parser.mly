@@ -3,7 +3,7 @@ open Ast
 %}
 
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE INT BOOL FUN
+%token END IF THEN ELSE LET IN TRUE FALSE INT BOOL FUN REC
 %token COLON
 %token PLUS MINUS TIMES LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW
 %token <int> INTLIT
@@ -59,6 +59,7 @@ expr:
   | e1 = expr LTEQ e2 = expr { LtEq (e1, e2) }
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If (e1, e2, e3) }
   | LET l = var_defn ASSIGN r = expr IN subexpr = expr END { Let (l, r, subexpr) }
+  (* TODO - add let-rec bindings, that are immediately translated to let-bindings that use application of Fix *)
   | FUN LPAREN fdefn = var_defn RPAREN ARROW e = expr END { Fun (fdefn, e) }
   | e1 = expr e2 = contained_expr { App (e1, e2) }
 ;
