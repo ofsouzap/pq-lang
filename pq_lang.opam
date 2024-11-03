@@ -9,6 +9,7 @@ bug-reports: "https://github.com/ofsouzap/pq-lang/issues"
 depends: [
   "ocaml"
   "dune" {>= "3.11"}
+  "core"
   "menhir"
   "ounit2"
   "qcheck"
