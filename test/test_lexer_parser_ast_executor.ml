@@ -24,11 +24,11 @@ let suite =
               else y end end end end) false 1 2",
              Res (Int 2) );
            ( "Program Triangles-a",
-             "let (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x \
-              + f (x - 1) end end in f 0 end",
+             "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 \
+              else x + f (x - 1) end end in f 0 end",
              Res (Int 0) );
            ( "Program Triangles-b",
-             "let (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x \
-              + f (x - 1) end end in f 5 end",
+             "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 \
+              else x + f (x - 1) end end in f 5 end",
              Res (Int 15) );
          ]
