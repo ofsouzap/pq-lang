@@ -13,6 +13,7 @@ rule token = parse
   | "then" { THEN }
   | "else" { ELSE }
   | "let" { LET }
+  | "rec" { REC }
   | "in" { IN }
   | "true" { TRUE }
   | "false" { FALSE }

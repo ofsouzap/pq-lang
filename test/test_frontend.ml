@@ -380,70 +380,70 @@ let test_cases_functions : test_case list =
         Res (App (App (Var "f1", Var "f2"), Var "f3")) );
     ]
 
-(* TODO - enable this test *)
-(* let test_cases_recursion : test_case list =
-   List.map
-     (fun (x, y, z) -> (x, x, y, z))
-     [
-       ( "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x + \
-          f (x - 1) end end in f 5",
-         [
-           LET;
-           REC;
-           LPAREN;
-           NAME "f";
-           COLON;
-           INT;
-           ARROW;
-           INT;
-           RPAREN;
-           ASSIGN;
-           FUN;
-           LPAREN;
-           NAME "x";
-           COLON;
-           INT;
-           RPAREN;
-           ARROW;
-           IF;
-           NAME "x";
-           EQ;
-           INTLIT 0;
-           THEN;
-           INTLIT 0;
-           ELSE;
-           NAME "x";
-           PLUS;
-           NAME "f";
-           LPAREN;
-           NAME "x";
-           MINUS;
-           INTLIT 1;
-           RPAREN;
-           END;
-           END;
-           IN;
-           NAME "f";
-           INTLIT 5;
-         ],
-         Res
-           (Let
-              ( ("f", VTypeFun (VTypeInt, VTypeInt)),
-                App
-                  ( Fix,
-                    Fun
-                      ( ("f", VTypeFun (VTypeInt, VTypeInt)),
-                        Fun
-                          ( ("x", VTypeInt),
-                            If
-                              ( Eq (Var "x", IntLit 0),
-                                IntLit 0,
-                                Add
-                                  ( Var "x",
-                                    App (Var "f", Subtr (Var "x", IntLit 1)) ) )
-                          ) ) ),
-                App (Var "f", IntLit 5) )) );
-     ] *)
+let test_cases_recursion : test_case list =
+  List.map
+    (fun (x, y, z) -> (x, x, y, z))
+    [
+      ( "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x + \
+         f (x - 1) end end in f 5 end",
+        [
+          LET;
+          REC;
+          LPAREN;
+          NAME "f";
+          COLON;
+          INT;
+          ARROW;
+          INT;
+          RPAREN;
+          ASSIGN;
+          FUN;
+          LPAREN;
+          NAME "x";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          IF;
+          NAME "x";
+          EQ;
+          INTLIT 0;
+          THEN;
+          INTLIT 0;
+          ELSE;
+          NAME "x";
+          PLUS;
+          NAME "f";
+          LPAREN;
+          NAME "x";
+          MINUS;
+          INTLIT 1;
+          RPAREN;
+          END;
+          END;
+          IN;
+          NAME "f";
+          INTLIT 5;
+          END;
+        ],
+        Res
+          (Let
+             ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+               App
+                 ( Fix,
+                   Fun
+                     ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+                       Fun
+                         ( ("x", VTypeInt),
+                           If
+                             ( Eq (Var "x", IntLit 0),
+                               IntLit 0,
+                               Add
+                                 ( Var "x",
+                                   App (Var "f", Subtr (Var "x", IntLit 1)) ) )
+                         ) ) ),
+               App (Var "f", IntLit 5) )) );
+    ]
 
 let create_lexer_test ((name, inp, exp, _) : test_case) =
   name >:: fun _ ->
@@ -474,8 +474,7 @@ let test_suites test_create_func =
     "If-Then-Else" >::: List.map test_create_func test_cases_if_then_else;
     "Variables" >::: List.map test_create_func test_cases_variables;
     "Functions" >::: List.map test_create_func test_cases_functions;
-    (* TODO *)
-    (* "Recursion" >::: List.map test_create_func test_cases_recursion; *)
+    "Recursion" >::: List.map test_create_func test_cases_recursion;
   ]
 
 let suite =

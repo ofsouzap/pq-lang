@@ -1,5 +1,29 @@
 %{
 open Ast
+
+(*
+ * As an example,
+ *   let rec (f : ft) = fun (x : xt) -> e end in e' end
+ * gets converted to
+ *   let (f : ft) = fix (fun f : ft -> fun (x : xt) -> e end end) in e' end
+ * i.e.
+ *   Let (
+ *     ("f": ft),
+ *     App (
+ *       Fix,
+ *       Fun (
+ *         ("f": ft),
+ *         Fun (
+ *           ("x": xt),
+ *           e
+ *         )
+ *       ),
+ *     e'
+ *   )
+*)
+
+let create_let_rec (((fname : string), (ftype : vtype)), (fbody : expr), (subexpr : expr)) : expr =
+  Let ((fname, ftype), App (Fix, Fun ((fname, ftype), fbody)), subexpr)
 %}
 
 // Tokens
@@ -59,7 +83,7 @@ expr:
   | e1 = expr LTEQ e2 = expr { LtEq (e1, e2) }
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If (e1, e2, e3) }
   | LET l = var_defn ASSIGN r = expr IN subexpr = expr END { Let (l, r, subexpr) }
-  (* TODO - add let-rec bindings, that are immediately translated to let-bindings that use application of Fix *)
+  | LET REC l = var_defn ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }
   | FUN LPAREN fdefn = var_defn RPAREN ARROW e = expr END { Fun (fdefn, e) }
   | e1 = expr e2 = contained_expr { App (e1, e2) }
 ;
