@@ -323,20 +323,35 @@ let test_cases_recursion : test_case list =
         Res
           (Let
              ( "f",
-               App
-                 ( Fix,
-                   Fun
-                     ( "f",
-                       Fun
-                         ( "x",
-                           If
-                             ( Eq (Var "x", IntLit 0),
-                               IntLit 0,
-                               Add
-                                 ( Var "x",
-                                   App (Var "f", Subtr (Var "x", IntLit 1)) ) )
-                         ) ) ),
+               Fix
+                 ( "f",
+                   "x",
+                   If
+                     ( Eq (Var "x", IntLit 0),
+                       IntLit 0,
+                       Add (Var "x", App (Var "f", Subtr (Var "x", IntLit 1)))
+                     ) ),
                App (Var "f", IntLit 5) )) );
+      ( "let rec f = 2 in f end",
+        [ LET; REC; NAME "f"; ASSIGN; INTLIT 2; IN; NAME "f"; END ],
+        ParsingError );
+      ( "let rec f = fun y -> y end in f 5 end",
+        [
+          LET;
+          REC;
+          NAME "f";
+          ASSIGN;
+          FUN;
+          NAME "y";
+          ARROW;
+          NAME "y";
+          END;
+          IN;
+          NAME "f";
+          INTLIT 5;
+          END;
+        ],
+        Res (Let ("f", Fix ("f", "y", Var "y"), App (Var "f", IntLit 5))) );
     ]
 
 let test_cases_precedence : test_case_precedence list =

@@ -1,29 +1,28 @@
 %{
 open Ast
+open Parsing_errors
 
 (*
  * As an example,
- *   let rec (f : ft) = fun (x : xt) -> e end in e' end
+ *   let rec f = fun x -> e end in e' end
  * gets converted to
- *   let (f : ft) = fix (fun f : ft -> fun (x : xt) -> e end end) in e' end
+ *   let f = fix (fun f -> fun x -> e end end) in e' end
  * i.e.
  *   Let (
- *     ("f": ft),
- *     App (
- *       Fix,
- *       Fun (
- *         ("f": ft),
- *         Fun (
- *           ("x": xt),
- *           e
- *         )
- *       ),
+ *     "f",
+ *     Fix (
+ *       "f",
+ *       "x",
+ *       e
+ *     ),
  *     e'
  *   )
 *)
 
 let create_let_rec ((fname : string), (fbody : expr), (subexpr : expr)) : expr =
-  Let (fname, App (Fix, Fun (fname, fbody)), subexpr)
+  match fbody with
+  | Fun (xname, fbody') -> Let (fname, Fix (fname, xname, fbody'), subexpr)
+  | _ -> raise CustomError
 %}
 
 // Tokens
