@@ -170,76 +170,24 @@ let test_cases_variables : test_case list =
     (fun (x, y, z) -> (x, x, y, z))
     [
       ("x", [ NAME "x" ], Res (Var "x"));
-      ( "let (x : int) = 1 in x end",
-        [
-          LET;
-          LPAREN;
-          NAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ASSIGN;
-          INTLIT 1;
-          IN;
-          NAME "x";
-          END;
-        ],
-        Res (Let (("x", VTypeInt), IntLit 1, Var "x")) );
-      ( "let (x : bool) = 1 in x end",
-        [
-          LET;
-          LPAREN;
-          NAME "x";
-          COLON;
-          BOOL;
-          RPAREN;
-          ASSIGN;
-          INTLIT 1;
-          IN;
-          NAME "x";
-          END;
-        ],
-        Res (Let (("x", VTypeBool), IntLit 1, Var "x")) );
-      ( "let (x : int) = 1 in let y in x end",
-        [
-          LET;
-          LPAREN;
-          NAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ASSIGN;
-          INTLIT 1;
-          IN;
-          LET;
-          NAME "y";
-          IN;
-          NAME "x";
-          END;
-        ],
-        ParsingError );
+      ( "let x = 1 in x end",
+        [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
+        Res (Let ("x", IntLit 1, Var "x")) );
+      ( "let x = 1 in x end",
+        [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
+        Res (Let ("x", IntLit 1, Var "x")) );
       ( "let x = 1 in let y in x end",
         [
           LET; NAME "x"; ASSIGN; INTLIT 1; IN; LET; NAME "y"; IN; NAME "x"; END;
         ],
         ParsingError );
-      ( "let (f : int -> bool) = fun (x : int) -> true end in f 1 end",
+      ( "let f = fun x -> true end in f 1 end",
         [
           LET;
-          LPAREN;
           NAME "f";
-          COLON;
-          INT;
-          ARROW;
-          BOOL;
-          RPAREN;
           ASSIGN;
           FUN;
-          LPAREN;
           NAME "x";
-          COLON;
-          INT;
-          RPAREN;
           ARROW;
           TRUE;
           END;
@@ -248,50 +196,26 @@ let test_cases_variables : test_case list =
           INTLIT 1;
           END;
         ],
-        Res
-          (Let
-             ( ("f", VTypeFun (VTypeInt, VTypeBool)),
-               Fun (("x", VTypeInt), BoolLit true),
-               App (Var "f", IntLit 1) )) );
+        Res (Let ("f", Fun ("x", BoolLit true), App (Var "f", IntLit 1))) );
     ]
 
 let test_cases_functions : test_case list =
   List.map
     (fun (x, y, z) -> (x, x, y, z))
     [
-      ( "fun (x : int) -> x end",
-        [ FUN; LPAREN; NAME "x"; COLON; INT; RPAREN; ARROW; NAME "x"; END ],
-        Res (Fun (("x", VTypeInt), Var "x")) );
-      ( "fun (x : int) -> x + 1 end",
+      ( "fun x -> x end",
+        [ FUN; NAME "x"; ARROW; NAME "x"; END ],
+        Res (Fun ("x", Var "x")) );
+      ( "fun x -> x + 1 end",
+        [ FUN; NAME "x"; ARROW; NAME "x"; PLUS; INTLIT 1; END ],
+        Res (Fun ("x", Add (Var "x", IntLit 1))) );
+      ( "fun x -> fun y -> x + y end end",
         [
           FUN;
-          LPAREN;
           NAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          NAME "x";
-          PLUS;
-          INTLIT 1;
-          END;
-        ],
-        Res (Fun (("x", VTypeInt), Add (Var "x", IntLit 1))) );
-      ( "fun (x : int) -> fun (y : int) -> x + y end end",
-        [
-          FUN;
-          LPAREN;
-          NAME "x";
-          COLON;
-          INT;
-          RPAREN;
           ARROW;
           FUN;
-          LPAREN;
           NAME "y";
-          COLON;
-          INT;
-          RPAREN;
           ARROW;
           NAME "x";
           PLUS;
@@ -299,18 +223,12 @@ let test_cases_functions : test_case list =
           END;
           END;
         ],
-        Res
-          (Fun (("x", VTypeInt), Fun (("y", VTypeInt), Add (Var "x", Var "y"))))
-      );
-      ( "(fun (x : int) -> x + 1 end) 4",
+        Res (Fun ("x", Fun ("y", Add (Var "x", Var "y")))) );
+      ( "(fun x -> x + 1 end) 4",
         [
           LPAREN;
           FUN;
-          LPAREN;
           NAME "x";
-          COLON;
-          INT;
-          RPAREN;
           ARROW;
           NAME "x";
           PLUS;
@@ -319,33 +237,21 @@ let test_cases_functions : test_case list =
           RPAREN;
           INTLIT 4;
         ],
-        Res (App (Fun (("x", VTypeInt), Add (Var "x", IntLit 1)), IntLit 4)) );
+        Res (App (Fun ("x", Add (Var "x", IntLit 1)), IntLit 4)) );
       ("x 5", [ NAME "x"; INTLIT 5 ], Res (App (Var "x", IntLit 5)));
       ("x y", [ NAME "x"; NAME "y" ], Res (App (Var "x", Var "y")));
-      ( "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x else \
-         y end end end end ) true 1 2",
+      ( "(fun b -> fun x -> fun y -> if b then x else y end end end end ) true \
+         1 2",
         [
           LPAREN;
           FUN;
-          LPAREN;
           NAME "b";
-          COLON;
-          BOOL;
-          RPAREN;
           ARROW;
           FUN;
-          LPAREN;
           NAME "x";
-          COLON;
-          INT;
-          RPAREN;
           ARROW;
           FUN;
-          LPAREN;
           NAME "y";
-          COLON;
-          INT;
-          RPAREN;
           ARROW;
           IF;
           NAME "b";
@@ -367,12 +273,9 @@ let test_cases_functions : test_case list =
              ( App
                  ( App
                      ( Fun
-                         ( ("b", VTypeBool),
-                           Fun
-                             ( ("x", VTypeInt),
-                               Fun
-                                 ( ("y", VTypeInt),
-                                   If (Var "b", Var "x", Var "y") ) ) ),
+                         ( "b",
+                           Fun ("x", Fun ("y", If (Var "b", Var "x", Var "y")))
+                         ),
                        BoolLit true ),
                    IntLit 1 ),
                IntLit 2 )) );
@@ -385,25 +288,15 @@ let test_cases_recursion : test_case list =
   List.map
     (fun (x, y, z) -> (x, x, y, z))
     [
-      ( "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x + \
-         f (x - 1) end end in f 5 end",
+      ( "let rec f = fun x -> if x == 0 then 0 else x + f (x - 1) end end in f \
+         5 end",
         [
           LET;
           REC;
-          LPAREN;
           NAME "f";
-          COLON;
-          INT;
-          ARROW;
-          INT;
-          RPAREN;
           ASSIGN;
           FUN;
-          LPAREN;
           NAME "x";
-          COLON;
-          INT;
-          RPAREN;
           ARROW;
           IF;
           NAME "x";
@@ -429,13 +322,13 @@ let test_cases_recursion : test_case list =
         ],
         Res
           (Let
-             ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+             ( "f",
                App
                  ( Fix,
                    Fun
-                     ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+                     ( "f",
                        Fun
-                         ( ("x", VTypeInt),
+                         ( "x",
                            If
                              ( Eq (Var "x", IntLit 0),
                                IntLit 0,

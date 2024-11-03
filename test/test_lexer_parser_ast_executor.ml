@@ -16,19 +16,19 @@ let suite =
   >::: List.map create_test
          [
            ( "Program 1a",
-             "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x \
-              else y end end end end) true 1 2",
+             "(fun b -> fun x -> fun y -> if b then x else y end end end end) \
+              true 1 2",
              Res (Int 1) );
            ( "Program 1b",
-             "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x \
-              else y end end end end) false 1 2",
+             "(fun b -> fun x -> fun y -> if b then x else y end end end end) \
+              false 1 2",
              Res (Int 2) );
            ( "Program Triangles-a",
-             "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 \
-              else x + f (x - 1) end end in f 0 end",
+             "let rec f = fun x -> if x == 0 then 0 else x + f (x - 1) end end \
+              in f 0 end",
              Res (Int 0) );
            ( "Program Triangles-b",
-             "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 \
-              else x + f (x - 1) end end in f 5 end",
+             "let rec f = fun x -> if x == 0 then 0 else x + f (x - 1) end end \
+              in f 5 end",
              Res (Int 15) );
          ]

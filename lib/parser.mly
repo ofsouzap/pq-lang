@@ -22,21 +22,18 @@ open Ast
  *   )
 *)
 
-let create_let_rec (((fname : string), (ftype : vtype)), (fbody : expr), (subexpr : expr)) : expr =
-  Let ((fname, ftype), App (Fix, Fun ((fname, ftype), fbody)), subexpr)
+let create_let_rec ((fname : string), (fbody : expr), (subexpr : expr)) : expr =
+  Let (fname, App (Fix, Fun (fname, fbody)), subexpr)
 %}
 
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE INT BOOL FUN REC
-%token COLON
+%token END IF THEN ELSE LET IN TRUE FALSE FUN REC
 %token PLUS MINUS TIMES LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW
 %token <int> INTLIT
 %token <string> NAME
 %token EOF
 
 // Precedence and associativity rules
-%left VTYPE_FUN_ARROW // -> (in vtype)
-%nonassoc ARROW // ->
 %left BNOT // ~
 %left BOR // ||
 %left BAND // &&
@@ -50,21 +47,12 @@ let create_let_rec (((fname : string), (ftype : vtype)), (fbody : expr), (subexp
 // Non-terminal typing
 %type <expr> expr
 %type <expr> contained_expr
-%type <vtype> vtype
-%type <(string * vtype)> var_defn
 %start <expr> prog
 
 %%
 
 prog:
   | e = expr EOF { e }
-;
-
-vtype:
-  | LPAREN t = vtype RPAREN { t }
-  | INT { VTypeInt }
-  | BOOL { VTypeBool }
-  | tx = vtype ARROW ty = vtype %prec VTYPE_FUN_ARROW { VTypeFun (tx, ty) }
 ;
 
 expr:
@@ -82,9 +70,9 @@ expr:
   | e1 = expr LT e2 = expr { Lt (e1, e2) }
   | e1 = expr LTEQ e2 = expr { LtEq (e1, e2) }
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If (e1, e2, e3) }
-  | LET l = var_defn ASSIGN r = expr IN subexpr = expr END { Let (l, r, subexpr) }
-  | LET REC l = var_defn ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }
-  | FUN LPAREN fdefn = var_defn RPAREN ARROW e = expr END { Fun (fdefn, e) }
+  | LET l = NAME ASSIGN r = expr IN subexpr = expr END { Let (l, r, subexpr) }
+  | LET REC l = NAME ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }
+  | FUN fname = NAME ARROW e = expr END { Fun (fname, e) }
   | e1 = expr e2 = contained_expr { App (e1, e2) }
 ;
 
@@ -94,9 +82,4 @@ contained_expr:
   | TRUE { BoolLit true }
   | FALSE { BoolLit false }
   | n = NAME { Var n }
-;
-
-var_defn:
-  | LPAREN x = var_defn RPAREN { x }
-  | n = NAME COLON t = vtype { (n, t) }
 ;

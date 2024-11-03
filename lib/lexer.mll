@@ -17,11 +17,8 @@ rule token = parse
   | "in" { IN }
   | "true" { TRUE }
   | "false" { FALSE }
-  | "int" { INT }
-  | "bool" { BOOL }
   | "fun" { FUN }
   (* Operators and symbols *)
-  | ':' { COLON }
   | '+' { PLUS }
   | '-' { MINUS }
   | '*' { TIMES }

@@ -10,7 +10,7 @@ end
 
 module VarnameMap = Map.Make (Varname)
 
-type closure_props = varname * Ast.vtype * Ast.expr * store
+type closure_props = varname * Ast.expr * store
 and value = Int of int | Bool of bool | Closure of closure_props
 and store = value VarnameMap.t
 
@@ -21,15 +21,11 @@ let store_compare = VarnameMap.equal ( = )
 let store_traverse = VarnameMap.to_list
 
 type typing_error = {
-  expected_type : (Ast.vtype, string) Either.t option;
-  actual_type : (Ast.vtype, string) Either.t option;
+  expected_type : string option;
+  actual_type : string option;
   variable_name : varname option;
   custom_message : string option;
 }
-
-let typing_error_show_type = function
-  | Either.Left t -> Ast.show_vtype t
-  | Either.Right s -> s
 
 let empty_typing_error =
   {
@@ -45,10 +41,10 @@ let show_typing_error (terr : typing_error) : string =
      | Some vname -> [ "Variable name: " ^ vname ]
      | None -> [])
     @ (match terr.expected_type with
-      | Some t -> [ "Expected type: " ^ typing_error_show_type t ]
+      | Some t -> [ "Expected type: " ^ t ]
       | None -> [])
     @ (match terr.actual_type with
-      | Some t -> [ "Actual type: " ^ typing_error_show_type t ]
+      | Some t -> [ "Actual type: " ^ t ]
       | None -> [])
     @ (match terr.custom_message with Some msg -> [ msg ] | None -> [])
     @ [])
@@ -88,9 +84,9 @@ let rec show_store store =
 and show_value = function
   | Int i -> "Int " ^ string_of_int i
   | Bool b -> "Bool " ^ string_of_bool b
-  | Closure (xname, xtype, e, store) ->
-      Printf.sprintf "Closure (%s : %s, %s, %s)" xname (Ast.show_vtype xtype)
-        (Ast.show_ast e) (show_store store)
+  | Closure (xname, e, store) ->
+      Printf.sprintf "Closure (%s, %s, %s)" xname (Ast.show_ast e)
+        (show_store store)
 
 let show_exec_res = function
   | Res v -> show_value v
@@ -110,18 +106,14 @@ let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
   match x with
   | Int i -> cnt i
   | _ ->
-      Err
-        (TypingError
-           { empty_typing_error with expected_type = Some (Left VTypeInt) })
+      Err (TypingError { empty_typing_error with expected_type = Some "Int" })
 
 (** Apply a function to the execution value if it is a boolean, otherwise return a typing error *)
 let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
   match x with
   | Bool b -> cnt b
   | _ ->
-      Err
-        (TypingError
-           { empty_typing_error with expected_type = Some (Left VTypeBool) })
+      Err (TypingError { empty_typing_error with expected_type = Some "Bool" })
 
 (** Apply a function to the execution value if it is a function, otherwise return a typing error *)
 let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
@@ -129,8 +121,7 @@ let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
   | Closure x -> cnt x
   | _ ->
       Err
-        (TypingError
-           { empty_typing_error with expected_type = Some (Right "Closure") })
+        (TypingError { empty_typing_error with expected_type = Some "Closure" })
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an integer and give a typing error otherwise *)
 let rec eval_apply_to_int (store : store) (x : Ast.expr) (cnt : int -> exec_res)
@@ -207,18 +198,17 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       match store_get x store with
       | Some v -> Res v
       | None -> Err (UndefinedVarError x))
-  | Let ((xname, _), e1, e2) ->
+  | Let (xname, e1, e2) ->
       eval store e1 >>= fun v -> eval (store_set xname v store) e2
-  | Fun ((xname, xtype), e) -> Res (Closure (xname, xtype, e, store))
-  | App (Fix, (Fun ((_, VTypeFun _), Fun ((xname, xtype), _)) as e2)) ->
+  | Fun (xname, e) -> Res (Closure (xname, e, store))
+  | App (Fix, (Fun (_, Fun (xname, _)) as e2)) ->
       (* Note, Fix is handled specially as it is only valid in an application expression *)
       (* fix (\f. \x. e2) ~> \ x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
-      eval store
-        (Fun ((xname, xtype), App (App (e2, App (Fix, e2)), Var xname)))
+      eval store (Fun (xname, App (App (e2, App (Fix, e2)), Var xname)))
   | App (Fix, _) -> Err FixApplicationError
   | App (e1, e2) ->
       (* This uses call-by-value semantics *)
-      eval_apply_to_closure store e1 (fun (argname, _, fe, fs) ->
+      eval_apply_to_closure store e1 (fun (argname, fe, fs) ->
           eval store e2 >>= fun v2 -> eval (store_set argname v2 fs) fe)
   | Fix -> Err MisplacedFixError
 
