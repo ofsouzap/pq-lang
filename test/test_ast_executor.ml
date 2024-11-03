@@ -11,7 +11,7 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
 
 let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : int)) = (show x, x, Res (Int y)) in
+  let mapf ((x : expr), (y : int)) = (show_ast x, x, Res (Int y)) in
   List.map mapf
     [
       (IntLit 0, 0);
@@ -29,7 +29,7 @@ let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
 
 let test_cases_booleans : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : bool)) = (show x, x, Res (Bool y)) in
+  let mapf ((x : expr), (y : bool)) = (show_ast x, x, Res (Bool y)) in
   List.map mapf
     [
       (BoolLit true, true);
@@ -52,7 +52,7 @@ let test_cases_booleans : (string * Ast.expr * exec_res) list =
 
 let test_cases_integer_comparisons : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : bool)) = (show x, x, Res (Bool y)) in
+  let mapf ((x : expr), (y : bool)) = (show_ast x, x, Res (Bool y)) in
   List.map mapf
     [
       (Eq (IntLit 0, IntLit 0), true);
@@ -79,7 +79,7 @@ let test_cases_integer_comparisons : (string * Ast.expr * exec_res) list =
 
 let test_cases_control_flow : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
+  let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
   List.map mapf
     [
       (If (BoolLit true, IntLit 1, IntLit 2), Res (Int 1));
@@ -91,7 +91,7 @@ let test_cases_control_flow : (string * Ast.expr * exec_res) list =
 
 let test_cases_variables : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
+  let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
   List.map mapf
     [
       (Var "x", Err (UndefinedVarError "x"));
@@ -118,7 +118,7 @@ let test_cases_variables : (string * Ast.expr * exec_res) list =
 
 let test_cases_functions : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
+  let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
   List.map mapf
     [
       ( Fun (("x", VTypeInt), Var "x"),
@@ -153,7 +153,7 @@ let test_cases_functions : (string * Ast.expr * exec_res) list =
 
 let test_cases_recursion : (string * Ast.expr * exec_res) list =
   let open Ast in
-  let mapf ((x : expr), (y : exec_res)) = (show x, x, y) in
+  let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
   List.map mapf
     [
       ( Let

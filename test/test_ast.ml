@@ -4,11 +4,11 @@ open Ast
 
 let test_cases_equality : test list =
   let create_positive_test ((x : expr), (y : expr)) =
-    let name = Printf.sprintf "%s =? %s" (show x) (show y) in
+    let name = Printf.sprintf "%s =? %s" (show_ast x) (show_ast y) in
     name >:: fun _ -> assert_bool "not equal" (x = y)
   in
   let create_negative_test ((x : expr), (y : expr)) =
-    let name = Printf.sprintf "%s =? %s" (show x) (show y) in
+    let name = Printf.sprintf "%s =? %s" (show_ast x) (show_ast y) in
     name >:: fun _ -> assert_bool "equal" (x <> y)
   in
   List.map create_positive_test

@@ -29,31 +29,28 @@ let rec show_vtype vtype =
   | VTypeFun (x, y) ->
       Printf.sprintf "(%s) -> (%s)" (show_vtype x) (show_vtype y)
 
-let rec show e =
-  match e with
-  | IntLit i -> string_of_int i
-  | Add (e1, e2) -> Printf.sprintf "(%s) + (%s)" (show e1) (show e2)
-  | Neg e -> Printf.sprintf "-(%s)" (show e)
-  | Subtr (e1, e2) -> Printf.sprintf "(%s) - (%s)" (show e1) (show e2)
-  | Mult (e1, e2) -> Printf.sprintf "(%s) * (%s)" (show e1) (show e2)
-  | BoolLit b -> string_of_bool b
-  | BNot e -> Printf.sprintf "~(%s)" (show e)
-  | BOr (e1, e2) -> Printf.sprintf "(%s) || (%s)" (show e1) (show e2)
-  | BAnd (e1, e2) -> Printf.sprintf "(%s) || (%s)" (show e1) (show e2)
-  | Eq (e1, e2) -> Printf.sprintf "(%s) == (%s)" (show e1) (show e2)
-  | Gt (e1, e2) -> Printf.sprintf "(%s) > (%s)" (show e1) (show e2)
-  | GtEq (e1, e2) -> Printf.sprintf "(%s) >= (%s)" (show e1) (show e2)
-  | Lt (e1, e2) -> Printf.sprintf "(%s) < (%s)" (show e1) (show e2)
-  | LtEq (e1, e2) -> Printf.sprintf "(%s) <= (%s)" (show e1) (show e2)
-  | If (e1, e2, e3) ->
-      Printf.sprintf "if (%s) then (%s) else (%s) end" (show e1) (show e2)
-        (show e3)
-  | Var x -> x
-  | Let ((xname, xtype), e1, e2) ->
-      Printf.sprintf "let ((%s) : (%s)) = (%s) in (%s) end" xname
-        (show_vtype xtype) (show e1) (show e2)
-  | Fun ((xname, xtype), e) ->
-      Printf.sprintf "fun ((%s) : (%s)) -> (%s) end" xname (show_vtype xtype)
-        (show e)
-  | App (e1, e2) -> Printf.sprintf "(%s) (%s)" (show e1) (show e2)
-  | Fix -> "fix"
+let rec show_ast = function
+  | IntLit i -> Printf.sprintf "IntLit %d" i
+  | Add (x, y) -> Printf.sprintf "Add (%s, %s)" (show_ast x) (show_ast y)
+  | Neg x -> Printf.sprintf "Neg (%s)" (show_ast x)
+  | Subtr (x, y) -> Printf.sprintf "Subtr (%s, %s)" (show_ast x) (show_ast y)
+  | Mult (x, y) -> Printf.sprintf "Mult (%s, %s)" (show_ast x) (show_ast y)
+  | BoolLit b -> Printf.sprintf "BoolLit %b" b
+  | BNot x -> Printf.sprintf "BNot (%s)" (show_ast x)
+  | BOr (x, y) -> Printf.sprintf "BOr (%s, %s)" (show_ast x) (show_ast y)
+  | BAnd (x, y) -> Printf.sprintf "BAnd (%s, %s)" (show_ast x) (show_ast y)
+  | Eq (x, y) -> Printf.sprintf "Eq (%s, %s)" (show_ast x) (show_ast y)
+  | Gt (x, y) -> Printf.sprintf "Gt (%s, %s)" (show_ast x) (show_ast y)
+  | GtEq (x, y) -> Printf.sprintf "GtEq (%s, %s)" (show_ast x) (show_ast y)
+  | Lt (x, y) -> Printf.sprintf "Lt (%s, %s)" (show_ast x) (show_ast y)
+  | LtEq (x, y) -> Printf.sprintf "LtEq (%s, %s)" (show_ast x) (show_ast y)
+  | If (x, y, z) ->
+      Printf.sprintf "If (%s, %s, %s)" (show_ast x) (show_ast y) (show_ast z)
+  | Var x -> Printf.sprintf "Var %s" x
+  | Let ((x, y), z, w) ->
+      Printf.sprintf "Let ((%s, %s), %s, %s)" x (show_vtype y) (show_ast z)
+        (show_ast w)
+  | Fun ((x, y), z) ->
+      Printf.sprintf "Fun ((%s, %s), %s)" x (show_vtype y) (show_ast z)
+  | App (x, y) -> Printf.sprintf "App (%s, %s)" (show_ast x) (show_ast y)
+  | Fix -> "Fix"

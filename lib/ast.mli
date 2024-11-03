@@ -51,6 +51,6 @@ type expr =
   @param e The expression to convert.
   @return A string representing the expression.
 *)
-val show : expr -> string
+val show_ast : expr -> string
 
-(* TODO - replace show function with two functions: one for converting to source code, and one for showing the AST as a string *)
+(* TODO - create function to convert AST to source code *)
