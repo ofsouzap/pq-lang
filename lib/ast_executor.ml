@@ -90,7 +90,7 @@ and show_value = function
   | Bool b -> "Bool " ^ string_of_bool b
   | Closure (xname, xtype, e, store) ->
       Printf.sprintf "Closure (%s : %s, %s, %s)" xname (Ast.show_vtype xtype)
-        (Ast.show e) (show_store store)
+        (Ast.show_ast e) (show_store store)
 
 let show_exec_res = function
   | Res v -> show_value v

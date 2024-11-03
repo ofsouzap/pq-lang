@@ -36,7 +36,7 @@ let string_of_token = function
   | EOF -> "EOF"
 
 let token_printer tokens = String.concat ", " (List.map string_of_token tokens)
-let ast_printer ast = Ast.show ast
+let ast_printer ast = Ast.show_ast ast
 
 let override_compare_exec_res (a : exec_res) (b : exec_res) : bool =
   match (a, b) with
