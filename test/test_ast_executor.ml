@@ -95,25 +95,16 @@ let test_cases_variables : (string * Ast.expr * exec_res) list =
   List.map mapf
     [
       (Var "x", Err (UndefinedVarError "x"));
-      (Let (("x", VTypeInt), IntLit 1, Var "x"), Res (Int 1));
-      (Let (("x", VTypeInt), IntLit 1, Add (Var "x", IntLit 2)), Res (Int 3));
-      ( Let
-          ( ("x", VTypeInt),
-            IntLit 1,
-            Let (("y", VTypeInt), IntLit 2, Add (Var "x", Var "y")) ),
+      (Let ("x", IntLit 1, Var "x"), Res (Int 1));
+      (Let ("x", IntLit 1, Add (Var "x", IntLit 2)), Res (Int 3));
+      ( Let ("x", IntLit 1, Let ("y", IntLit 2, Add (Var "x", Var "y"))),
         Res (Int 3) );
-      ( Let (("x", VTypeInt), IntLit 1, Let (("x", VTypeInt), IntLit 2, Var "x")),
-        Res (Int 2) );
-      ( Let (("x", VTypeInt), Let (("y", VTypeInt), IntLit 1, Var "y"), Var "y"),
+      (Let ("x", IntLit 1, Let ("x", IntLit 2, Var "x")), Res (Int 2));
+      ( Let ("x", Let ("y", IntLit 1, Var "y"), Var "y"),
         Err (UndefinedVarError "y") );
-      (Let (("x", VTypeBool), BoolLit true, Var "x"), Res (Bool true));
-      ( Let (("x", VTypeBool), BoolLit false, BOr (Var "x", Var "x")),
-        Res (Bool false) );
-      ( Let
-          ( ("f", VTypeFun (VTypeInt, VTypeInt)),
-            Fun (("x", VTypeInt), Var "x"),
-            App (Var "f", IntLit 8) ),
-        Res (Int 8) );
+      (Let ("x", BoolLit true, Var "x"), Res (Bool true));
+      (Let ("x", BoolLit false, BOr (Var "x", Var "x")), Res (Bool false));
+      (Let ("f", Fun ("x", Var "x"), App (Var "f", IntLit 8)), Res (Int 8));
     ]
 
 let test_cases_functions : (string * Ast.expr * exec_res) list =
@@ -121,30 +112,19 @@ let test_cases_functions : (string * Ast.expr * exec_res) list =
   let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
   List.map mapf
     [
-      ( Fun (("x", VTypeInt), Var "x"),
-        Res (Closure ("x", VTypeInt, Var "x", store_empty)) );
-      ( Fun (("x", VTypeBool), BOr (Var "x", BoolLit true)),
-        Res (Closure ("x", VTypeBool, BOr (Var "x", BoolLit true), store_empty))
-      );
+      (Fun ("x", Var "x"), Res (Closure ("x", Var "x", store_empty)));
+      ( Fun ("x", BOr (Var "x", BoolLit true)),
+        Res (Closure ("x", BOr (Var "x", BoolLit true), store_empty)) );
       ( App
-          ( App
-              ( Fun
-                  ( ("a", VTypeInt),
-                    Fun (("b", VTypeInt), Add (Var "a", Var "b")) ),
-                IntLit 3 ),
+          ( App (Fun ("a", Fun ("b", Add (Var "a", Var "b"))), IntLit 3),
             IntLit 5 ),
         Res (Int 8) );
-      ( App (Fun (("x", VTypeInt), Var "y"), IntLit 3),
-        Err (UndefinedVarError "y") );
+      (App (Fun ("x", Var "y"), IntLit 3), Err (UndefinedVarError "y"));
       ( App
           ( App
               ( App
                   ( Fun
-                      ( ("b", VTypeBool),
-                        Fun
-                          ( ("x", VTypeInt),
-                            Fun (("y", VTypeInt), If (Var "b", Var "x", Var "y"))
-                          ) ),
+                      ("b", Fun ("x", Fun ("y", If (Var "b", Var "x", Var "y")))),
                     BoolLit true ),
                 IntLit 1 ),
             IntLit 2 ),
@@ -157,13 +137,13 @@ let test_cases_recursion : (string * Ast.expr * exec_res) list =
   List.map mapf
     [
       ( Let
-          ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+          ( "f",
             App
               ( Fix,
                 Fun
-                  ( ("f", VTypeFun (VTypeInt, VTypeInt)),
+                  ( "f",
                     Fun
-                      ( ("x", VTypeInt),
+                      ( "x",
                         If
                           ( Eq (Var "x", IntLit 0),
                             IntLit 0,

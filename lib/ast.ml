@@ -1,5 +1,3 @@
-type vtype = VTypeInt | VTypeBool | VTypeFun of vtype * vtype
-
 type expr =
   | IntLit of int
   | Add of expr * expr
@@ -17,17 +15,10 @@ type expr =
   | LtEq of expr * expr
   | If of expr * expr * expr
   | Var of string
-  | Let of (string * vtype) * expr * expr
-  | Fun of (string * vtype) * expr
+  | Let of string * expr * expr
+  | Fun of string * expr
   | App of expr * expr
   | Fix
-
-let rec show_vtype vtype =
-  match vtype with
-  | VTypeInt -> "int"
-  | VTypeBool -> "bool"
-  | VTypeFun (x, y) ->
-      Printf.sprintf "(%s) -> (%s)" (show_vtype x) (show_vtype y)
 
 let rec show_ast = function
   | IntLit i -> Printf.sprintf "IntLit %d" i
@@ -47,10 +38,8 @@ let rec show_ast = function
   | If (x, y, z) ->
       Printf.sprintf "If (%s, %s, %s)" (show_ast x) (show_ast y) (show_ast z)
   | Var x -> Printf.sprintf "Var %s" x
-  | Let ((x, y), z, w) ->
-      Printf.sprintf "Let ((%s, %s), %s, %s)" x (show_vtype y) (show_ast z)
-        (show_ast w)
-  | Fun ((x, y), z) ->
-      Printf.sprintf "Fun ((%s, %s), %s)" x (show_vtype y) (show_ast z)
+  | Let (x, z, w) ->
+      Printf.sprintf "Let (%s, %s, %s)" x (show_ast z) (show_ast w)
+  | Fun (x, z) -> Printf.sprintf "Fun (%s, %s)" x (show_ast z)
   | App (x, y) -> Printf.sprintf "App (%s, %s)" (show_ast x) (show_ast y)
   | Fix -> "Fix"

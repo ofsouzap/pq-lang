@@ -4,7 +4,7 @@
 type varname = string
 
 (** Properties of a closure *)
-type closure_props = varname * Ast.vtype * Ast.expr * store
+type closure_props = varname * Ast.expr * store
 
 (** A resulting value from executing an AST *)
 and value =
@@ -35,8 +35,8 @@ val show_store : store -> string
 
 (** Details of a typing error. Fields are optional in case they can't be provided *)
 type typing_error = {
-  expected_type : (Ast.vtype, string) Either.t option;
-  actual_type : (Ast.vtype, string) Either.t option;
+  expected_type : string option;
+  actual_type : string option;
   variable_name : varname option;
   custom_message : string option;
 }

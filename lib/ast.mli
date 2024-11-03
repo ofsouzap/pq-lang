@@ -2,16 +2,6 @@
   Abstract syntax tree for the language.
 *)
 
-(** Types in the language. *)
-type vtype = VTypeInt | VTypeBool | VTypeFun of vtype * vtype
-
-(**
-  Converts value type to its string representation.
-  @param vtype The value type to convert.
-  @return A string representing the expression.
-*)
-val show_vtype : vtype -> string
-
 (* TODO - have programs composed of optional custom type defintions then a concluding expression to evaluate, instead of just allowing a single main expression to evaluate.
    Defining functions can just be done with "let f = ... in" *)
 
@@ -40,8 +30,8 @@ type expr =
   | If of expr * expr * expr  (** If-then-else *)
   (* Variables and functions *)
   | Var of string  (** Variable references *)
-  | Let of (string * vtype) * expr * expr  (** Let binding *)
-  | Fun of (string * vtype) * expr  (** Function definition *)
+  | Let of string * expr * expr  (** Let binding *)
+  | Fun of string * expr  (** Function definition *)
   | App of expr * expr  (** Function application *)
   | Fix  (** The fix operation, used for recursion *)
 (* TODO - change Fix node so that it is better-typed: don't require it to be part of an App node, make it work on its own *)
