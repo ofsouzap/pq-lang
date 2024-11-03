@@ -18,7 +18,7 @@ type expr =
   | Let of string * expr * expr
   | Fun of string * expr
   | App of expr * expr
-  | Fix
+  | Fix of string * string * expr
 
 let rec show_ast = function
   | IntLit i -> Printf.sprintf "IntLit %d" i
@@ -42,4 +42,4 @@ let rec show_ast = function
       Printf.sprintf "Let (%s, %s, %s)" x (show_ast z) (show_ast w)
   | Fun (x, z) -> Printf.sprintf "Fun (%s, %s)" x (show_ast z)
   | App (x, y) -> Printf.sprintf "App (%s, %s)" (show_ast x) (show_ast y)
-  | Fix -> "Fix"
+  | Fix (x, y, z) -> Printf.sprintf "Fix (%s, %s, %s)" x y (show_ast z)

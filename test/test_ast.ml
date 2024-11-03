@@ -33,16 +33,25 @@ let test_cases_equality : test list =
       (Let ("x", IntLit 1, IntLit 2), Let ("x", IntLit 1, IntLit 2));
       (Fun ("x", IntLit 1), Fun ("x", IntLit 1));
       (App (IntLit 1, IntLit 2), App (IntLit 1, IntLit 2));
-      (Fix, Fix);
-      ( App (Fix, Fun ("x", Fun ("x", IntLit 1))),
-        App (Fix, Fun ("x", Fun ("x", IntLit 1))) );
+      ( Fix ("f", "x", App (Var "f", Var "x")),
+        Fix ("f", "x", App (Var "f", Var "x")) );
+      ( App
+          ( Fix ("f", "x", App (Var "f", Var "x")),
+            Fun ("x", Fun ("x", IntLit 1)) ),
+        App
+          ( Fix ("f", "x", App (Var "f", Var "x")),
+            Fun ("x", Fun ("x", IntLit 1)) ) );
       ( Let
           ( "f",
-            App (Fix, Fun ("f", App (Var "f", IntLit 0))),
+            App
+              ( Fix ("f", "x", App (Var "f", Var "x")),
+                Fun ("f", App (Var "f", IntLit 0)) ),
             App (Var "f", IntLit 0) ),
         Let
           ( "f",
-            App (Fix, Fun ("f", App (Var "f", IntLit 0))),
+            App
+              ( Fix ("f", "x", App (Var "f", Var "x")),
+                Fun ("f", App (Var "f", IntLit 0)) ),
             App (Var "f", IntLit 0) ) );
     ]
   @ List.map create_negative_test

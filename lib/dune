@@ -1,7 +1,7 @@
 (library
  (public_name pq_lang.lib)
  (name pq_lang)
- (modules ast parser lexer frontend ast_executor))
+ (modules ast parsing_errors parser lexer frontend ast_executor))
 
 ; TODO - consider not making lexer and parser public modules and instead having the frontend API just use frontend.ml[i]
 

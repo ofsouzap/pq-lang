@@ -201,15 +201,18 @@ and eval (store : store) (e : Ast.expr) : exec_res =
   | Let (xname, e1, e2) ->
       eval store e1 >>= fun v -> eval (store_set xname v store) e2
   | Fun (xname, e) -> Res (Closure (xname, e, store))
-  | App (Fix, (Fun (_, Fun (xname, _)) as e2)) ->
-      (* Note, Fix is handled specially as it is only valid in an application expression *)
-      (* fix (\f. \x. e2) ~> \ x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
-      eval store (Fun (xname, App (App (e2, App (Fix, e2)), Var xname)))
-  | App (Fix, _) -> Err FixApplicationError
   | App (e1, e2) ->
       (* This uses call-by-value semantics *)
       eval_apply_to_closure store e1 (fun (argname, fe, fs) ->
           eval store e2 >>= fun v2 -> eval (store_set argname v2 fs) fe)
-  | Fix -> Err MisplacedFixError
+  | Fix (fname, xname, fxbody) ->
+      (* fix (\f. \x. e2) ~> \x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
+      eval store
+        (Fun
+           ( xname,
+             App
+               ( App
+                   (Fun (fname, Fun (xname, fxbody)), Fix (fname, xname, fxbody)),
+                 Var xname ) ))
 
 let execute = eval store_empty

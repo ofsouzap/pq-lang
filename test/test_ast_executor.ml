@@ -138,18 +138,13 @@ let test_cases_recursion : (string * Ast.expr * exec_res) list =
     [
       ( Let
           ( "f",
-            App
-              ( Fix,
-                Fun
-                  ( "f",
-                    Fun
-                      ( "x",
-                        If
-                          ( Eq (Var "x", IntLit 0),
-                            IntLit 0,
-                            Add
-                              (Var "x", App (Var "f", Subtr (Var "x", IntLit 1)))
-                          ) ) ) ),
+            Fix
+              ( "f",
+                "x",
+                If
+                  ( Eq (Var "x", IntLit 0),
+                    IntLit 0,
+                    Add (Var "x", App (Var "f", Subtr (Var "x", IntLit 1))) ) ),
             App (Var "f", IntLit 5) ),
         Res (Int 15) );
     ]
