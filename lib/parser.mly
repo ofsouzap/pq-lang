@@ -35,17 +35,17 @@ let create_let_rec (((fname : string), (ftype : vtype)), (fbody : expr), (subexp
 %token EOF
 
 // Precedence and associativity rules
-%nonassoc INTLIT NAME TRUE FALSE
-%nonassoc LPAREN
-%left VTYPE_FUN_ARROW
-%nonassoc ARROW
-%left BNOT
-%left BOR
-%left BAND
-%nonassoc EQ
-%nonassoc GT GTEQ LT LTEQ
-%left PLUS MINUS
-%left TIMES
+%left VTYPE_FUN_ARROW // -> (in vtype)
+%nonassoc ARROW // ->
+%left BNOT // ~
+%left BOR // ||
+%left BAND // &&
+%nonassoc EQ // =
+%nonassoc GT GTEQ LT LTEQ // > >= < <=
+%left PLUS MINUS // + -
+%left TIMES // *
+%nonassoc INTLIT NAME TRUE FALSE // literals
+%nonassoc LPAREN // (
 
 // Non-terminal typing
 %type <expr> expr

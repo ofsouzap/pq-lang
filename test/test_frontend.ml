@@ -6,6 +6,7 @@ open Frontend
 open Test_utils
 
 type test_case = string * string * token list * run_frontend_res
+type test_case_precedence = string * string * Ast.expr
 
 let test_cases_arithmetic : test_case list =
   List.map
@@ -445,6 +446,17 @@ let test_cases_recursion : test_case list =
                App (Var "f", IntLit 5) )) );
     ]
 
+let test_cases_precedence : test_case_precedence list =
+  List.map
+    (fun (x, z) -> (x, x, z))
+    [
+      ("x + y * z", Add (Var "x", Mult (Var "y", Var "z")));
+      ("x + y < z", Lt (Add (Var "x", Var "y"), Var "z"));
+      ("x >= y - z", GtEq (Var "x", Subtr (Var "y", Var "z")));
+      ("x + f y", Add (Var "x", App (Var "f", Var "y")));
+      ("f x + y", Add (App (Var "f", Var "x"), Var "y"));
+    ]
+
 let create_lexer_test ((name, inp, exp, _) : test_case) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
@@ -465,6 +477,14 @@ let create_frontend_test ((name, inp, _, exp) : test_case) =
       | LexingError c -> Printf.sprintf "LexingError %c" c
       | ParsingError -> "ParsingError")
 
+let create_precedence_test ((name, inp, exp) : test_case_precedence) =
+  name >:: fun _ ->
+  let out = run_frontend_string inp in
+  match out with
+  | Res e -> assert_equal exp e ~printer:ast_printer
+  | LexingError c -> assert_failure (Printf.sprintf "LexingError %c" c)
+  | ParsingError -> assert_failure "ParsingError"
+
 let test_suites test_create_func =
   [
     "Arithmetic" >::: List.map test_create_func test_cases_arithmetic;
@@ -481,5 +501,10 @@ let suite =
   "Frontend Tests"
   >::: [
          "Lexer" >::: test_suites create_lexer_test;
-         "Frontend" >::: test_suites create_frontend_test;
+         "Frontend"
+         >::: test_suites create_frontend_test
+              @ [
+                  "Precedence"
+                  >::: List.map create_precedence_test test_cases_precedence;
+                ];
        ]
