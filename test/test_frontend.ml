@@ -1,4 +1,4 @@
-(* TODO - open Core *)
+open Core
 open OUnit2
 open Pq_lang
 open Ast
@@ -11,7 +11,7 @@ type test_case_precedence = string * string * Ast.expr
 
 let test_cases_arithmetic : test_case list =
   List.map
-    (fun (x, y, z) -> (x, x, y, z))
+    ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ("1", [ INTLIT 1 ], Res (IntLit 1));
       ("0", [ INTLIT 0 ], Res (IntLit 0));
@@ -67,7 +67,7 @@ let test_cases_arithmetic : test_case list =
 
 let test_cases_booleans : test_case list =
   List.map
-    (fun (x, y, z) -> (x, x, y, z))
+    ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ("true", [ TRUE ], Res (BoolLit true));
       ("false", [ FALSE ], Res (BoolLit false));
@@ -88,7 +88,7 @@ let test_cases_booleans : test_case list =
 
 let test_cases_integer_comparisons : test_case list =
   List.map
-    (fun (x, y, z) -> (x, x, y, z))
+    ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ("0 == 0", [ INTLIT 0; EQ; INTLIT 0 ], Res (Eq (IntLit 0, IntLit 0)));
       ("1 > 0", [ INTLIT 1; GT; INTLIT 0 ], Res (Gt (IntLit 1, IntLit 0)));
@@ -100,7 +100,7 @@ let test_cases_integer_comparisons : test_case list =
 
 let test_cases_if_then_else : test_case list =
   List.map
-    (fun (x, y, z) -> (x, x, y, z))
+    ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( "if true then 1 else 2 end",
         [ IF; TRUE; THEN; INTLIT 1; ELSE; INTLIT 2; END ],
@@ -168,7 +168,7 @@ let test_cases_if_then_else : test_case list =
 
 let test_cases_variables : test_case list =
   List.map
-    (fun (x, y, z) -> (x, x, y, z))
+    ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ("x", [ NAME "x" ], Res (Var "x"));
       ( "let x = 1 in x end",
@@ -202,7 +202,7 @@ let test_cases_variables : test_case list =
 
 let test_cases_functions : test_case list =
   List.map
-    (fun (x, y, z) -> (x, x, y, z))
+    ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( "fun x -> x end",
         [ FUN; NAME "x"; ARROW; NAME "x"; END ],
@@ -287,7 +287,7 @@ let test_cases_functions : test_case list =
 
 let test_cases_recursion : test_case list =
   List.map
-    (fun (x, y, z) -> (x, x, y, z))
+    ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( "let rec f = fun x -> if x == 0 then 0 else x + f (x - 1) end end in f \
          5 end",
@@ -357,7 +357,7 @@ let test_cases_recursion : test_case list =
 
 let test_cases_precedence : test_case_precedence list =
   List.map
-    (fun (x, z) -> (x, x, z))
+    ~f:(fun (x, z) -> (x, x, z))
     [
       ("x + y * z", Add (Var "x", Mult (Var "y", Var "z")));
       ("x + y < z", Lt (Add (Var "x", Var "y"), Var "z"));
@@ -396,14 +396,14 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
 
 let test_suites test_create_func =
   [
-    "Arithmetic" >::: List.map test_create_func test_cases_arithmetic;
-    "Booleans" >::: List.map test_create_func test_cases_booleans;
+    "Arithmetic" >::: List.map ~f:test_create_func test_cases_arithmetic;
+    "Booleans" >::: List.map ~f:test_create_func test_cases_booleans;
     "Integer Comparisons"
-    >::: List.map test_create_func test_cases_integer_comparisons;
-    "If-Then-Else" >::: List.map test_create_func test_cases_if_then_else;
-    "Variables" >::: List.map test_create_func test_cases_variables;
-    "Functions" >::: List.map test_create_func test_cases_functions;
-    "Recursion" >::: List.map test_create_func test_cases_recursion;
+    >::: List.map ~f:test_create_func test_cases_integer_comparisons;
+    "If-Then-Else" >::: List.map ~f:test_create_func test_cases_if_then_else;
+    "Variables" >::: List.map ~f:test_create_func test_cases_variables;
+    "Functions" >::: List.map ~f:test_create_func test_cases_functions;
+    "Recursion" >::: List.map ~f:test_create_func test_cases_recursion;
   ]
 
 let suite =
@@ -414,6 +414,6 @@ let suite =
          >::: test_suites create_frontend_test
               @ [
                   "Precedence"
-                  >::: List.map create_precedence_test test_cases_precedence;
+                  >::: List.map ~f:create_precedence_test test_cases_precedence;
                 ];
        ]

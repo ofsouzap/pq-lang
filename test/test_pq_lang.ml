@@ -1,4 +1,3 @@
-(* TODO - open Core *)
 open OUnit2
 
 let () =

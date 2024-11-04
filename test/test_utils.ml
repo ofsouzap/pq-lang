@@ -1,4 +1,4 @@
-(* TODO - open Core *)
+open Core
 open Pq_lang
 open Parser
 open Ast_executor
@@ -34,7 +34,9 @@ let string_of_token = function
   | NAME n -> "NAME[" ^ n ^ "]"
   | EOF -> "EOF"
 
-let token_printer tokens = String.concat ", " (List.map string_of_token tokens)
+let token_printer tokens =
+  String.concat ~sep:", " (List.map ~f:string_of_token tokens)
+
 let ast_printer ast = Ast.show_ast ast
 
 let override_compare_exec_res (a : exec_res) (b : exec_res) : bool =

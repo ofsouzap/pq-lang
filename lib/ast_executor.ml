@@ -63,7 +63,6 @@ type exec_err =
 
 type exec_res = Res of value | Err of exec_err
 
-(* TODO - replace these stdlib equality checks with Core equality checks. Probably need to derive equality stuff *)
 let exec_res_compare a b =
   match (a, b) with
   | Res v1, Res v2 -> equal_value v1 v2

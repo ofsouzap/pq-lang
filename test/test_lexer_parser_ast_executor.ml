@@ -1,4 +1,4 @@
-(* TODO - open Core *)
+open Core
 open OUnit2
 open Pq_lang
 open Ast_executor
@@ -14,7 +14,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) =
 
 let suite =
   "Lexer-Parser-AST Executor"
-  >::: List.map create_test
+  >::: List.map ~f:create_test
          [
            ( "Program 1a",
              "(fun b -> fun x -> fun y -> if b then x else y end end end end) \
