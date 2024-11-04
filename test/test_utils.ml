@@ -3,41 +3,42 @@ open Pq_lang
 open Parser
 open Ast_executor
 
-(* TODO - replace this with just implementing derived stuff *)
-let string_of_token = function
-  | END -> "END"
-  | IF -> "IF"
-  | THEN -> "THEN"
-  | ELSE -> "ELSE"
-  | LET -> "LET"
-  | REC -> "REC"
-  | IN -> "IN"
-  | TRUE -> "TRUE"
-  | FALSE -> "FALSE"
-  | FUN -> "FUN"
-  | PLUS -> "PLUS"
-  | MINUS -> "MINUS"
-  | TIMES -> "TIMES"
-  | LPAREN -> "LPAREN"
-  | RPAREN -> "RPAREN"
-  | BNOT -> "BNOT"
-  | BOR -> "BOR"
-  | BAND -> "BAND"
-  | ASSIGN -> "ASSIGN"
-  | EQ -> "EQ"
-  | GT -> "GT"
-  | GTEQ -> "GTEQ"
-  | LT -> "LT"
-  | LTEQ -> "LTEQ"
-  | ARROW -> "ARROW"
-  | INTLIT i -> "INT[" ^ string_of_int i ^ "]"
-  | NAME n -> "NAME[" ^ n ^ "]"
-  | EOF -> "EOF"
+let sexp_of_token = function
+  | END -> Sexp.Atom "END"
+  | IF -> Sexp.Atom "IF"
+  | THEN -> Sexp.Atom "THEN"
+  | ELSE -> Sexp.Atom "ELSE"
+  | LET -> Sexp.Atom "LET"
+  | REC -> Sexp.Atom "REC"
+  | IN -> Sexp.Atom "IN"
+  | TRUE -> Sexp.Atom "TRUE"
+  | FALSE -> Sexp.Atom "FALSE"
+  | FUN -> Sexp.Atom "FUN"
+  | PLUS -> Sexp.Atom "PLUS"
+  | MINUS -> Sexp.Atom "MINUS"
+  | TIMES -> Sexp.Atom "TIMES"
+  | LPAREN -> Sexp.Atom "LPAREN"
+  | RPAREN -> Sexp.Atom "RPAREN"
+  | BNOT -> Sexp.Atom "BNOT"
+  | BOR -> Sexp.Atom "BOR"
+  | BAND -> Sexp.Atom "BAND"
+  | ASSIGN -> Sexp.Atom "ASSIGN"
+  | EQ -> Sexp.Atom "EQ"
+  | GT -> Sexp.Atom "GT"
+  | GTEQ -> Sexp.Atom "GTEQ"
+  | LT -> Sexp.Atom "LT"
+  | LTEQ -> Sexp.Atom "LTEQ"
+  | ARROW -> Sexp.Atom "ARROW"
+  | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
+  | NAME n -> Sexp.List [ Sexp.Atom "NAME"; Sexp.Atom n ]
+  | EOF -> Sexp.Atom "EOF"
 
 let token_printer tokens =
-  String.concat ~sep:", " (List.map ~f:string_of_token tokens)
+  String.concat ~sep:", "
+    (List.map ~f:(Fn.compose Sexp.to_string sexp_of_token) tokens)
 
-let ast_printer ast = Ast.show_ast ast
+let ast_printer = Fn.compose Sexp.to_string Ast.sexp_of_expr
+let show_ast = ast_printer
 
 let override_compare_exec_res (a : exec_res) (b : exec_res) : bool =
   match (a, b) with

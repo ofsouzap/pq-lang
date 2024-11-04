@@ -3,6 +3,8 @@ open OUnit2
 open Pq_lang
 open Ast
 
+let show_ast = Fn.compose Sexp.to_string sexp_of_expr
+
 let test_cases_equality : test list =
   let create_positive_test ((x : expr), (y : expr)) =
     let name = Printf.sprintf "%s =? %s" (show_ast x) (show_ast y) in

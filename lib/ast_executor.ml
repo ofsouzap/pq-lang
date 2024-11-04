@@ -2,17 +2,17 @@ open Core
 
 (* TODO - have backends as a module thing, so that they can more easily be swapped in *)
 
-type varname = string [@@deriving equal]
+type varname = string [@@deriving sexp, equal]
 
 module Varname = String
 module VarnameMap = Map.Make_using_comparator (Varname)
 
-type closure_props = varname * Ast.expr * store [@@deriving equal]
+type closure_props = varname * Ast.expr * store [@@deriving sexp, equal]
 
 and value = Int of int | Bool of bool | Closure of closure_props
-[@@deriving equal]
+[@@deriving sexp, equal]
 
-and store = value VarnameMap.t [@@deriving equal]
+and store = value VarnameMap.t [@@deriving sexp, equal]
 
 let empty_store = (VarnameMap.empty : store)
 let store_get store key = Map.find store key
@@ -36,17 +36,20 @@ let empty_typing_error =
   }
 
 let show_typing_error (terr : typing_error) : string =
-  (match terr.variable_name with
-  | Some vname -> [ "Variable name: " ^ vname ]
-  | None -> [])
-  @ (match terr.expected_type with
-    | Some t -> [ "Expected type: " ^ t ]
-    | None -> [])
-  @ (match terr.actual_type with
-    | Some t -> [ "Actual type: " ^ t ]
-    | None -> [])
-  @ (match terr.custom_message with Some msg -> [ msg ] | None -> [])
-  @ []
+  (terr.variable_name
+  |> Option.value_map
+       ~f:(fun vname -> [ "Variable name: " ^ vname ])
+       ~default:[])
+  @ (terr.expected_type
+    |> Option.value_map
+         ~f:(fun vname -> [ "Expected type: " ^ vname ])
+         ~default:[])
+  @ (terr.actual_type
+    |> Option.value_map
+         ~f:(fun vname -> [ "Actual type: " ^ vname ])
+         ~default:[])
+  @ (terr.custom_message
+    |> Option.value_map ~f:(fun vname -> [ vname ]) ~default:[])
   |> String.concat ~sep:", "
 
 let typing_error_compare (a : typing_error) (b : typing_error) : bool =
@@ -73,22 +76,8 @@ let exec_res_compare a b =
       | _ -> false)
   | _ -> false
 
-(* TODO - consider having this part of a deriving ppx *)
-let rec show_store store =
-  store_traverse store
-  |> List.map ~f:(fun (k, v) -> sprintf "(%s, %s)" k (show_value v))
-  |> String.concat ~sep:", "
-  |> fun s -> "[" ^ s ^ "]"
-
-and show_value = function
-  | Int i -> "Int " ^ string_of_int i
-  | Bool b -> "Bool " ^ string_of_bool b
-  | Closure (xname, e, store) ->
-      Printf.sprintf "Closure (%s, %s, %s)" xname (Ast.show_ast e)
-        (show_store store)
-
 let show_exec_res = function
-  | Res v -> show_value v
+  | Res v -> sexp_of_value v |> Sexp.to_string
   | Err e -> (
       match e with
       | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
@@ -191,10 +180,10 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       eval_apply_to_bool store e_cond (fun b ->
           let next_e = if b then e_then else e_else in
           eval store next_e)
-  | Var x -> (
-      match store_get store x with
-      | Some v -> Res v
-      | None -> Err (UndefinedVarError x))
+  | Var x ->
+      store_get store x
+      |> Option.value_map ~default:(Err (UndefinedVarError x)) ~f:(fun v ->
+             Res v)
   | Let (xname, e1, e2) ->
       eval store e1 >>= fun v -> eval (store_set store ~key:xname ~value:v) e2
   | Fun (xname, e) -> Res (Closure (xname, e, store))
