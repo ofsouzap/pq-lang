@@ -7,6 +7,8 @@ type run_frontend_res =
       (** A lexing error occured on the specified character *)
   | ParsingError  (** A parsing error occured on the token stream *)
 
+(* TODO - use the Result module here instead of run_frontend_res *)
+
 (** Run the lexer and parser on an input channel *)
 val run_frontend_channel : In_channel.t -> run_frontend_res
 
