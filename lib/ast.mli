@@ -35,13 +35,6 @@ type expr =
   | App of expr * expr  (** Function application *)
   | Fix of string * string * expr
       (** Application of fix operator: (function_name_for_recursion, param_name, expr) *)
-[@@deriving equal]
-
-(**
-  Recursively converts an expression to its string representation.
-  @param e The expression to convert.
-  @return A string representing the expression.
-*)
-val show_ast : expr -> string
+[@@deriving sexp, equal]
 
 (* TODO - create function to convert AST to source code *)

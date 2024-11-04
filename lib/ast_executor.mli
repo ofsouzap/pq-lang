@@ -4,17 +4,17 @@
 type varname = string
 
 (** Properties of a closure *)
-type closure_props = varname * Ast.expr * store [@@deriving equal]
+type closure_props = varname * Ast.expr * store [@@deriving sexp, equal]
 
 (** A resulting value from executing an AST *)
 and value =
   | Int of int  (** An integer values *)
   | Bool of bool  (** A boolean value *)
   | Closure of closure_props  (** A function closure *)
-[@@deriving equal]
+[@@deriving sexp, equal]
 
 (** A store, containing the values of variables under the current context *)
-and store [@@deriving equal]
+and store [@@deriving sexp, equal]
 
 (** The empty store *)
 val empty_store : store
@@ -30,9 +30,6 @@ val store_compare : store -> store -> bool
 
 (** Traverse the entire store's variable names and values in arbitrary order into a list *)
 val store_traverse : store -> (varname * value) list
-
-(** String representation of a store, for debugging purposes *)
-val show_store : store -> string
 
 (** Details of a typing error. Fields are optional in case they can't be provided *)
 type typing_error = {
@@ -63,9 +60,6 @@ type exec_res =
 
 (** Check if two execution results are equal *)
 val exec_res_compare : exec_res -> exec_res -> bool
-
-(** String representation of a value *)
-val show_value : value -> string
 
 (** String representation of an execution result *)
 val show_exec_res : exec_res -> string
