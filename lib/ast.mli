@@ -37,4 +37,10 @@ type expr =
       (** Application of fix operator: (function_name_for_recursion, param_name, expr) *)
 [@@deriving sexp, equal]
 
-(* TODO - create function to convert AST to source code *)
+exception AstConverionFixError
+
+(**
+  Convert an AST expression into source code that corresponds to the AST representation.
+  If the input has a malformed usage of the Fix node, this will raise a `AstConversionFixError` exception.
+*)
+val ast_to_source_code : expr -> string
