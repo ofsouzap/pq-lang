@@ -1,4 +1,4 @@
-(* TODO - open Core *)
+open Core
 open OUnit2
 open Pq_lang
 open Ast
@@ -6,13 +6,13 @@ open Ast
 let test_cases_equality : test list =
   let create_positive_test ((x : expr), (y : expr)) =
     let name = Printf.sprintf "%s =? %s" (show_ast x) (show_ast y) in
-    name >:: fun _ -> assert_bool "not equal" (x = y)
+    name >:: fun _ -> assert_bool "not equal" (equal_expr x y)
   in
   let create_negative_test ((x : expr), (y : expr)) =
     let name = Printf.sprintf "%s =? %s" (show_ast x) (show_ast y) in
-    name >:: fun _ -> assert_bool "equal" (x <> y)
+    name >:: fun _ -> assert_bool "equal" (not (equal_expr x y))
   in
-  List.map create_positive_test
+  List.map ~f:create_positive_test
     [
       (IntLit 1, IntLit 1);
       (Add (IntLit 1, IntLit 2), Add (IntLit 1, IntLit 2));
@@ -55,7 +55,7 @@ let test_cases_equality : test list =
                 Fun ("f", App (Var "f", IntLit 0)) ),
             App (Var "f", IntLit 0) ) );
     ]
-  @ List.map create_negative_test
+  @ List.map ~f:create_negative_test
       [
         (IntLit 2, IntLit 1);
         (Add (IntLit 1, IntLit 2), Add (IntLit 2, IntLit 1));
