@@ -7,11 +7,11 @@ let show_ast = Fn.compose Sexp.to_string sexp_of_expr
 
 let test_cases_equality : test list =
   let create_positive_test ((x : expr), (y : expr)) =
-    let name = Printf.sprintf "%s =? %s" (show_ast x) (show_ast y) in
+    let name = sprintf "%s =? %s" (show_ast x) (show_ast y) in
     name >:: fun _ -> assert_bool "not equal" (equal_expr x y)
   in
   let create_negative_test ((x : expr), (y : expr)) =
-    let name = Printf.sprintf "%s =? %s" (show_ast x) (show_ast y) in
+    let name = sprintf "%s =? %s" (show_ast x) (show_ast y) in
     name >:: fun _ -> assert_bool "equal" (not (equal_expr x y))
   in
   List.map ~f:create_positive_test
