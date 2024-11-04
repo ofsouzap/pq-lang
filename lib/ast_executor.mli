@@ -58,6 +58,8 @@ type exec_res =
   | Res of value  (** The execution terminated with the provided value *)
   | Err of exec_err  (** The execution terminated with an error *)
 
+(* TODO - use the Result module here instead of exec_res *)
+
 (** Check if two execution results are equal *)
 val exec_res_compare : exec_res -> exec_res -> bool
 
