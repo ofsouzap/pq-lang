@@ -4,25 +4,26 @@
 type varname = string
 
 (** Properties of a closure *)
-type closure_props = varname * Ast.expr * store
+type closure_props = varname * Ast.expr * store [@@deriving equal]
 
 (** A resulting value from executing an AST *)
 and value =
   | Int of int  (** An integer values *)
   | Bool of bool  (** A boolean value *)
   | Closure of closure_props  (** A function closure *)
+[@@deriving equal]
 
 (** A store, containing the values of variables under the current context *)
-and store
+and store [@@deriving equal]
 
 (** The empty store *)
-val store_empty : store
+val empty_store : store
 
 (** Get a named variable's value from a store *)
-val store_get : varname -> store -> value option
+val store_get : store -> varname -> value option
 
 (** Set a named variable's value to the provided value in the provided store and return the resulting store *)
-val store_set : varname -> value -> store -> store
+val store_set : store -> key:varname -> value:value -> store
 
 (** Check if two stores are equal. This is, they have the exact same set of keys, and each key maps to the same value in both stores *)
 val store_compare : store -> store -> bool
@@ -43,12 +44,6 @@ type typing_error = {
 
 (** Details for a typing error that are the default empty values *)
 val empty_typing_error : typing_error
-
-(** Give the string description of a typing error, to return to the user *)
-val show_typing_error : typing_error -> string
-
-(** Compare two typing errors for equality *)
-val typing_error_compare : typing_error -> typing_error -> bool
 
 type exec_err =
   | TypingError of typing_error

@@ -35,6 +35,7 @@ type expr =
   | App of expr * expr  (** Function application *)
   | Fix of string * string * expr
       (** Application of fix operator: (function_name_for_recursion, param_name, expr) *)
+[@@deriving equal]
 
 (**
   Recursively converts an expression to its string representation.
