@@ -1,3 +1,5 @@
+open Core
+
 type expr =
   | IntLit of int
   | Add of expr * expr
@@ -19,6 +21,7 @@ type expr =
   | Fun of string * expr
   | App of expr * expr
   | Fix of string * string * expr
+[@@deriving equal]
 
 let rec show_ast = function
   | IntLit i -> Printf.sprintf "IntLit %d" i

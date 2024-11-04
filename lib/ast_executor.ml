@@ -1,24 +1,24 @@
+open Core
+
 (* TODO - have backends as a module thing, so that they can more easily be swapped in *)
 
-type varname = string
+type varname = string [@@deriving equal]
 
-module Varname = struct
-  type t = varname
+module Varname = String
+module VarnameMap = Map.Make_using_comparator (Varname)
 
-  let compare = String.compare
-end
+type closure_props = varname * Ast.expr * store [@@deriving equal]
 
-module VarnameMap = Map.Make (Varname)
-
-type closure_props = varname * Ast.expr * store
 and value = Int of int | Bool of bool | Closure of closure_props
-and store = value VarnameMap.t
+[@@deriving equal]
 
-let store_empty : store = VarnameMap.empty
-let store_get = VarnameMap.find_opt
-let store_set = VarnameMap.add
-let store_compare = VarnameMap.equal ( = )
-let store_traverse = VarnameMap.to_list
+and store = value VarnameMap.t [@@deriving equal]
+
+let empty_store = (VarnameMap.empty : store)
+let store_get store key = Map.find store key
+let store_set store ~key ~value = Map.set store ~key ~data:value
+let store_compare = equal_store
+let store_traverse = Map.to_alist ~key_order:`Increasing
 
 type typing_error = {
   expected_type : string option;
@@ -36,23 +36,23 @@ let empty_typing_error =
   }
 
 let show_typing_error (terr : typing_error) : string =
-  String.concat ", "
-    ((match terr.variable_name with
-     | Some vname -> [ "Variable name: " ^ vname ]
-     | None -> [])
-    @ (match terr.expected_type with
-      | Some t -> [ "Expected type: " ^ t ]
-      | None -> [])
-    @ (match terr.actual_type with
-      | Some t -> [ "Actual type: " ^ t ]
-      | None -> [])
-    @ (match terr.custom_message with Some msg -> [ msg ] | None -> [])
-    @ [])
+  (match terr.variable_name with
+  | Some vname -> [ "Variable name: " ^ vname ]
+  | None -> [])
+  @ (match terr.expected_type with
+    | Some t -> [ "Expected type: " ^ t ]
+    | None -> [])
+  @ (match terr.actual_type with
+    | Some t -> [ "Actual type: " ^ t ]
+    | None -> [])
+  @ (match terr.custom_message with Some msg -> [ msg ] | None -> [])
+  @ []
+  |> String.concat ~sep:", "
 
 let typing_error_compare (a : typing_error) (b : typing_error) : bool =
-  a.expected_type = b.expected_type
-  && a.actual_type = b.actual_type
-  && a.variable_name = b.variable_name
+  equal_option equal_string a.expected_type b.expected_type
+  && equal_option equal_string a.actual_type b.actual_type
+  && equal_option equal_string a.variable_name b.variable_name
 
 type exec_err =
   | TypingError of typing_error
@@ -63,23 +63,23 @@ type exec_err =
 
 type exec_res = Res of value | Err of exec_err
 
+(* TODO - replace these stdlib equality checks with Core equality checks. Probably need to derive equality stuff *)
 let exec_res_compare a b =
   match (a, b) with
-  | Res v1, Res v2 -> v1 = v2
+  | Res v1, Res v2 -> equal_value v1 v2
   | Err e1, Err e2 -> (
       match (e1, e2) with
       | TypingError terr1, TypingError terr2 -> typing_error_compare terr1 terr2
-      | UndefinedVarError x, UndefinedVarError y -> x = y
+      | UndefinedVarError x, UndefinedVarError y -> equal_varname x y
       | _ -> false)
   | _ -> false
 
+(* TODO - consider having this part of a deriving ppx *)
 let rec show_store store =
-  "["
-  ^ String.concat ", "
-      (List.map
-         (fun (k, v) -> Printf.sprintf "(%s, %s)" k (show_value v))
-         (store_traverse store))
-  ^ "]"
+  store_traverse store
+  |> List.map ~f:(fun (k, v) -> sprintf "(%s, %s)" k (show_value v))
+  |> String.concat ~sep:", "
+  |> fun s -> "[" ^ s ^ "]"
 
 and show_value = function
   | Int i -> "Int " ^ string_of_int i
@@ -165,7 +165,7 @@ and eval (store : store) (e : Ast.expr) : exec_res =
       eval store e2 >>= fun v2 ->
       match (v1, v2) with
       | Int i1, Int i2 -> Res (Bool (i1 = i2))
-      | Bool b1, Bool b2 -> Res (Bool (b1 = b2))
+      | Bool b1, Bool b2 -> Res (Bool (equal_bool b1 b2))
       | _ ->
           Err
             (TypingError
@@ -193,16 +193,17 @@ and eval (store : store) (e : Ast.expr) : exec_res =
           let next_e = if b then e_then else e_else in
           eval store next_e)
   | Var x -> (
-      match store_get x store with
+      match store_get store x with
       | Some v -> Res v
       | None -> Err (UndefinedVarError x))
   | Let (xname, e1, e2) ->
-      eval store e1 >>= fun v -> eval (store_set xname v store) e2
+      eval store e1 >>= fun v -> eval (store_set store ~key:xname ~value:v) e2
   | Fun (xname, e) -> Res (Closure (xname, e, store))
   | App (e1, e2) ->
       (* This uses call-by-value semantics *)
       eval_apply_to_closure store e1 (fun (argname, fe, fs) ->
-          eval store e2 >>= fun v2 -> eval (store_set argname v2 fs) fe)
+          eval store e2 >>= fun v2 ->
+          eval (store_set fs ~key:argname ~value:v2) fe)
   | Fix (fname, xname, fxbody) ->
       (* fix (\f. \x. e2) ~> \x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
       eval store
@@ -213,4 +214,4 @@ and eval (store : store) (e : Ast.expr) : exec_res =
                    (Fun (fname, Fun (xname, fxbody)), Fix (fname, xname, fxbody)),
                  Var xname ) ))
 
-let execute = eval store_empty
+let execute = eval (VarnameMap.empty : store)

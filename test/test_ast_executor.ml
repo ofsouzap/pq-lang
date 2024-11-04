@@ -1,3 +1,4 @@
+open Core
 open OUnit2
 open Pq_lang
 open Ast_executor
@@ -5,14 +6,14 @@ open Test_utils
 
 let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     =
-  List.fold_left
-    (fun store (name, value) -> Ast_executor.store_set name value store)
-    Ast_executor.store_empty vars
+  List.fold_left vars
+    ~f:(fun store (name, value) -> store_set store ~key:name ~value)
+    ~init:Ast_executor.empty_store
 
 let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : int)) = (show_ast x, x, Res (Int y)) in
-  List.map mapf
+  List.map ~f:mapf
     [
       (IntLit 0, 0);
       (IntLit 5, 5);
@@ -30,7 +31,7 @@ let test_cases_arithmetic : (string * Ast.expr * exec_res) list =
 let test_cases_booleans : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : bool)) = (show_ast x, x, Res (Bool y)) in
-  List.map mapf
+  List.map ~f:mapf
     [
       (BoolLit true, true);
       (BoolLit false, false);
@@ -53,7 +54,7 @@ let test_cases_booleans : (string * Ast.expr * exec_res) list =
 let test_cases_integer_comparisons : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : bool)) = (show_ast x, x, Res (Bool y)) in
-  List.map mapf
+  List.map ~f:mapf
     [
       (Eq (IntLit 0, IntLit 0), true);
       (Eq (IntLit 0, IntLit 1), false);
@@ -80,7 +81,7 @@ let test_cases_integer_comparisons : (string * Ast.expr * exec_res) list =
 let test_cases_control_flow : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
-  List.map mapf
+  List.map ~f:mapf
     [
       (If (BoolLit true, IntLit 1, IntLit 2), Res (Int 1));
       (If (BoolLit false, IntLit 1, IntLit 2), Res (Int 2));
@@ -92,7 +93,7 @@ let test_cases_control_flow : (string * Ast.expr * exec_res) list =
 let test_cases_variables : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
-  List.map mapf
+  List.map ~f:mapf
     [
       (Var "x", Err (UndefinedVarError "x"));
       (Let ("x", IntLit 1, Var "x"), Res (Int 1));
@@ -110,11 +111,11 @@ let test_cases_variables : (string * Ast.expr * exec_res) list =
 let test_cases_functions : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
-  List.map mapf
+  List.map ~f:mapf
     [
-      (Fun ("x", Var "x"), Res (Closure ("x", Var "x", store_empty)));
+      (Fun ("x", Var "x"), Res (Closure ("x", Var "x", empty_store)));
       ( Fun ("x", BOr (Var "x", BoolLit true)),
-        Res (Closure ("x", BOr (Var "x", BoolLit true), store_empty)) );
+        Res (Closure ("x", BOr (Var "x", BoolLit true), empty_store)) );
       ( App
           ( App (Fun ("a", Fun ("b", Add (Var "a", Var "b"))), IntLit 3),
             IntLit 5 ),
@@ -134,7 +135,7 @@ let test_cases_functions : (string * Ast.expr * exec_res) list =
 let test_cases_recursion : (string * Ast.expr * exec_res) list =
   let open Ast in
   let mapf ((x : expr), (y : exec_res)) = (show_ast x, x, y) in
-  List.map mapf
+  List.map ~f:mapf
     [
       ( Let
           ( "f",
@@ -158,12 +159,12 @@ let create_test ((name : string), (inp : Ast.expr), (exp : exec_res)) =
 let suite =
   "AST Executor"
   >::: [
-         "Arithmetic" >::: List.map create_test test_cases_arithmetic;
-         "Booleans" >::: List.map create_test test_cases_booleans;
+         "Arithmetic" >::: List.map ~f:create_test test_cases_arithmetic;
+         "Booleans" >::: List.map ~f:create_test test_cases_booleans;
          "Integer Comparisons"
-         >::: List.map create_test test_cases_integer_comparisons;
-         "Control Flow" >::: List.map create_test test_cases_control_flow;
-         "Variables" >::: List.map create_test test_cases_variables;
-         "Functions" >::: List.map create_test test_cases_functions;
-         "Recursion" >::: List.map create_test test_cases_recursion;
+         >::: List.map ~f:create_test test_cases_integer_comparisons;
+         "Control Flow" >::: List.map ~f:create_test test_cases_control_flow;
+         "Variables" >::: List.map ~f:create_test test_cases_variables;
+         "Functions" >::: List.map ~f:create_test test_cases_functions;
+         "Recursion" >::: List.map ~f:create_test test_cases_recursion;
        ]
