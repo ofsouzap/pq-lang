@@ -37,7 +37,7 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string sexp_of_token) tokens)
 
-let ast_printer = Fn.compose Sexp.to_string Ast.sexp_of_expr
+let ast_printer = Fn.compose Sexp.to_string Ast.sexp_of_plain_expr
 let show_ast = ast_printer
 
 let override_compare_exec_res (a : exec_res) (b : exec_res) : bool =

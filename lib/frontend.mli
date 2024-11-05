@@ -2,7 +2,8 @@ open Core
 
 (** A result from trying to run the lexer and parser on an input *)
 type run_frontend_res =
-  | Res of Ast.expr  (** A successful lex and parse, with the resulting AST *)
+  | Res of Ast.plain_expr
+      (** A successful lex and parse, with the resulting AST *)
   | LexingError of char
       (** A lexing error occured on the specified character *)
   | ParsingError  (** A parsing error occured on the token stream *)
