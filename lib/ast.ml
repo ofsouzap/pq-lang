@@ -41,7 +41,7 @@ let rec ast_to_source_code = function
   | BAnd (e1, e2) ->
       sprintf "(%s) && (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | Eq (e1, e2) ->
-      sprintf "(%s) && (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) == (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | Gt (e1, e2) ->
       sprintf "(%s) > (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | GtEq (e1, e2) ->
@@ -56,7 +56,7 @@ let rec ast_to_source_code = function
   | Var vname -> vname
   | Let (xname, e1, e2) -> (
       let eval_default_repr () =
-        sprintf "let (%s) = (%s) in (%s) end" xname (ast_to_source_code e1)
+        sprintf "let %s = (%s) in (%s) end" xname (ast_to_source_code e1)
           (ast_to_source_code e2)
       in
       match e1 with
