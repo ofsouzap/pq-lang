@@ -11,46 +11,50 @@ let varname_gen : string QCheck.Gen.t =
   int_range 1 5 >>= fun n ->
   list_repeat n (char_range 'a' 'z') >|= String.of_char_list
 
-let ast_expr_arb_any : plain_expr QCheck.arbitrary =
+let ast_expr_arb_any (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
   let open QCheck in
   let open QCheck.Gen in
   let gen =
     fix (fun self d ->
         let self' = self (d - 1) in
+        v_gen >>= fun v ->
         let base_cases =
           [
-            (nat >|= fun n -> IntLit ((), n));
-            (bool >|= fun b -> BoolLit ((), b));
-            (varname_gen >|= fun vname -> Var ((), vname));
+            (nat >|= fun n -> IntLit (v, n));
+            (bool >|= fun b -> BoolLit (v, b));
+            (varname_gen >|= fun vname -> Var (v, vname));
           ]
         in
         let rec_cases =
           [
-            (pair self' self' >|= fun (e1, e2) -> Add ((), e1, e2));
-            (self' >|= fun e -> Neg ((), e));
-            (pair self' self' >|= fun (e1, e2) -> Subtr ((), e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> Mult ((), e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> BOr ((), e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> BAnd ((), e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> Eq ((), e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> Gt ((), e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> GtEq ((), e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> Lt ((), e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> LtEq ((), e1, e2));
-            ( triple self' self' self' >|= fun (e1, e2, e3) ->
-              If ((), e1, e2, e3) );
+            (pair self' self' >|= fun (e1, e2) -> Add (v, e1, e2));
+            (self' >|= fun e -> Neg (v, e));
+            (pair self' self' >|= fun (e1, e2) -> Subtr (v, e1, e2));
+            (pair self' self' >|= fun (e1, e2) -> Mult (v, e1, e2));
+            (pair self' self' >|= fun (e1, e2) -> BOr (v, e1, e2));
+            (pair self' self' >|= fun (e1, e2) -> BAnd (v, e1, e2));
+            (pair self' self' >|= fun (e1, e2) -> Eq (v, e1, e2));
+            (pair self' self' >|= fun (e1, e2) -> Gt (v, e1, e2));
+            (pair self' self' >|= fun (e1, e2) -> GtEq (v, e1, e2));
+            (pair self' self' >|= fun (e1, e2) -> Lt (v, e1, e2));
+            (pair self' self' >|= fun (e1, e2) -> LtEq (v, e1, e2));
+            (triple self' self' self' >|= fun (e1, e2, e3) -> If (v, e1, e2, e3));
             ( triple varname_gen self' self' >|= fun (vname, e1, e2) ->
-              Let ((), vname, e1, e2) );
-            (pair varname_gen self' >|= fun (vname, e) -> Ast.Fun ((), vname, e));
-            (pair self' self' >|= fun (e1, e2) -> App ((), e1, e2));
+              Let (v, vname, e1, e2) );
+            (pair varname_gen self' >|= fun (vname, e) -> Ast.Fun (v, vname, e));
+            (pair self' self' >|= fun (e1, e2) -> App (v, e1, e2));
             ( quad varname_gen varname_gen self' self'
             >|= fun (fname, xname, e1, e2) ->
-              Let ((), fname, Fix ((), fname, xname, e1), e2) );
+              Let (v, fname, Fix (v, fname, xname, e1), e2) );
           ]
         in
+
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
   in
-  make (gen 3) ~print:show_plain_ast
+  make (gen 3)
+
+let plain_ast_expr_arb_any : plain_expr QCheck.arbitrary =
+  ast_expr_arb_any (QCheck.Gen.return ())
 
 let test_cases_equality : test list =
   let create_positive_test ((x : plain_expr), (y : plain_expr)) =
@@ -133,12 +137,18 @@ let test_cases_equality : test list =
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:100 ~name:"AST to source code" ast_expr_arb_any (fun e ->
+  Test.make ~count:100 ~name:"AST to source code" plain_ast_expr_arb_any
+    (fun e ->
       match run_frontend_string (ast_to_source_code e) with
       | Res e' -> equal_plain_expr e e'
       | _ -> false)
 
-(* TODO - AST expr_node_val tests *)
+let test_cases_expr_node_val =
+  let open QCheck in
+  Test.make ~count:100 ~name:"AST node value" (pair int plain_ast_expr_arb_any)
+    (fun (x, e_raw) ->
+      let e = fmap ~f:(const x) e_raw in
+      equal_int (expr_node_val e) x)
 
 (* TODO - AST fmap tests *)
 
@@ -147,4 +157,5 @@ let suite =
   >::: [
          "Equality Tests" >::: test_cases_equality;
          QCheck_runner.to_ounit2_test test_cases_to_source_code_inv;
+         QCheck_runner.to_ounit2_test test_cases_expr_node_val;
        ]
