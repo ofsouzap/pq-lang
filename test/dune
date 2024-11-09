@@ -5,6 +5,7 @@
   test_pq_lang
   test_utils
   test_ast
+  test_typing
   test_frontend
   test_ast_executor
   test_ast_executor_store

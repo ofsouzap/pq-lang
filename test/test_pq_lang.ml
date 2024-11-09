@@ -9,7 +9,7 @@ let () =
            Test_ast_executor.suite;
            Test_ast_executor_store.suite;
            Test_lexer_parser_ast_executor.suite;
-           (* TODO - typing tests *)
+           Test_typing.suite;
          ]
   in
   run_test_tt_main suite
