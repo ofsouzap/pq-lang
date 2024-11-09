@@ -23,6 +23,53 @@ type 'a expr =
   | Fix of 'a * string * string * 'a expr
 [@@deriving sexp, equal]
 
+let expr_node_val : 'a expr -> 'a = function
+  | IntLit (x, _) -> x
+  | Add (x, _, _) -> x
+  | Neg (x, _) -> x
+  | Subtr (x, _, _) -> x
+  | Mult (x, _, _) -> x
+  | BoolLit (x, _) -> x
+  | BNot (x, _) -> x
+  | BOr (x, _, _) -> x
+  | BAnd (x, _, _) -> x
+  | Eq (x, _, _) -> x
+  | Gt (x, _, _) -> x
+  | GtEq (x, _, _) -> x
+  | Lt (x, _, _) -> x
+  | LtEq (x, _, _) -> x
+  | If (x, _, _, _) -> x
+  | Var (x, _) -> x
+  | Let (x, _, _, _) -> x
+  | Fun (x, _, _) -> x
+  | App (x, _, _) -> x
+  | Fix (x, _, _, _) -> x
+
+let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
+  match e with
+  | IntLit (a, i) -> IntLit (f a, i)
+  | Add (a, e1, e2) -> Add (f a, fmap ~f e1, fmap ~f e2)
+  | Neg (a, e) -> Neg (f a, fmap ~f e)
+  | Subtr (a, e1, e2) -> Subtr (f a, fmap ~f e1, fmap ~f e2)
+  | Mult (a, e1, e2) -> Mult (f a, fmap ~f e1, fmap ~f e2)
+  | BoolLit (a, b) -> BoolLit (f a, b)
+  | BNot (a, e) -> BNot (f a, fmap ~f e)
+  | BOr (a, e1, e2) -> BOr (f a, fmap ~f e1, fmap ~f e2)
+  | BAnd (a, e1, e2) -> BAnd (f a, fmap ~f e1, fmap ~f e2)
+  | Eq (a, e1, e2) -> Eq (f a, fmap ~f e1, fmap ~f e2)
+  | Gt (a, e1, e2) -> Gt (f a, fmap ~f e1, fmap ~f e2)
+  | GtEq (a, e1, e2) -> GtEq (f a, fmap ~f e1, fmap ~f e2)
+  | Lt (a, e1, e2) -> Lt (f a, fmap ~f e1, fmap ~f e2)
+  | LtEq (a, e1, e2) -> LtEq (f a, fmap ~f e1, fmap ~f e2)
+  | If (a, e1, e2, e3) -> If (f a, fmap ~f e1, fmap ~f e2, fmap ~f e3)
+  | Var (a, vname) -> Var (f a, vname)
+  | Let (a, xname, e1, e2) -> Let (f a, xname, fmap ~f e1, fmap ~f e2)
+  | Fun (a, xname, e) -> Fun (f a, xname, fmap ~f e)
+  | App (a, e1, e2) -> App (f a, fmap ~f e1, fmap ~f e2)
+  | Fix (a, xname, yname, e) -> Fix (f a, xname, yname, fmap ~f e)
+
+let ( >|= ) (e : 'a expr) (f : 'a -> 'b) = fmap ~f e
+
 type plain_expr = unit expr [@@deriving sexp, equal]
 
 let rec expr_to_plain_expr (e : 'a expr) : plain_expr =

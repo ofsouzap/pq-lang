@@ -38,6 +38,15 @@ type 'a expr =
       (** Application of fix operator: (function_name_for_recursion, param_name, expr) *)
 [@@deriving sexp, equal]
 
+(** Extract the value attached to a single node of a tagged AST expression *)
+val expr_node_val : 'a expr -> 'a
+
+(** Map a function onto values in an expression *)
+val fmap : f:('a -> 'b) -> 'a expr -> 'b expr
+
+(** Map a function onto values in an expression *)
+val ( >|= ) : 'a expr -> ('a -> 'b) -> 'b expr
+
 (** An expression in the language without any tagging data *)
 type plain_expr = unit expr [@@deriving sexp, equal]
 
