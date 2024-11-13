@@ -143,12 +143,11 @@ let test_cases_to_source_code_inv =
       | Res e' -> equal_plain_expr e e'
       | _ -> false)
 
-let test_cases_expr_node_val =
+let create_test_cases_expr_node_val type_arb type_eq =
   let open QCheck in
-  Test.make ~count:100 ~name:"AST node value" (pair int plain_ast_expr_arb_any)
-    (fun (x, e_raw) ->
+  Test.make ~count:100 (pair type_arb plain_ast_expr_arb_any) (fun (x, e_raw) ->
       let e = fmap ~f:(const x) e_raw in
-      equal_int (expr_node_val e) x)
+      type_eq (expr_node_val e) x)
 
 (* TODO - AST fmap tests *)
 
@@ -157,5 +156,26 @@ let suite =
   >::: [
          "Equality Tests" >::: test_cases_equality;
          QCheck_runner.to_ounit2_test test_cases_to_source_code_inv;
-         QCheck_runner.to_ounit2_test test_cases_expr_node_val;
+         "AST node value"
+         >::: List.map
+                ~f:(fun (name, test) ->
+                  name >::: [ QCheck_runner.to_ounit2_test test ])
+                [
+                  ( "unit",
+                    create_test_cases_expr_node_val QCheck.unit equal_unit );
+                  ("int", create_test_cases_expr_node_val QCheck.int equal_int);
+                  ( "bool",
+                    create_test_cases_expr_node_val QCheck.bool equal_bool );
+                  ( "string",
+                    create_test_cases_expr_node_val QCheck.string equal_string
+                  );
+                  ( "string option",
+                    create_test_cases_expr_node_val
+                      QCheck.(option string)
+                      (equal_option equal_string) );
+                  ( "int list",
+                    create_test_cases_expr_node_val
+                      QCheck.(list int)
+                      (equal_list equal_int) );
+                ];
        ]
