@@ -1,6 +1,4 @@
 open Ast
-
-type vtype = VTypeInt | VTypeBool | VTypeFun of vtype * vtype
-[@@deriving sexp, equal]
+open Vtype
 
 val type_expr : 'a expr -> ((vtype * 'a) expr, unit) Result.t

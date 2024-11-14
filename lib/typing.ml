@@ -1,8 +1,6 @@
 open Core
 open Ast
-
-type vtype = VTypeInt | VTypeBool | VTypeFun of vtype * vtype
-[@@deriving sexp, equal]
+open Vtype
 
 let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
   let open Result in
