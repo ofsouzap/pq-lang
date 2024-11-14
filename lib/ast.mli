@@ -2,6 +2,8 @@
   Abstract syntax tree for the language.
 *)
 
+open Vtype
+
 (* TODO - have programs composed of optional custom type defintions then a concluding expression to evaluate, instead of just allowing a single main expression to evaluate.
    Defining functions can just be done with "let f = ... in" *)
 
@@ -32,9 +34,9 @@ type 'a expr =
   (* Variables and functions *)
   | Var of 'a * string  (** Variable references *)
   | Let of 'a * string * 'a expr * 'a expr  (** Let binding *)
-  | Fun of 'a * string * 'a expr  (** Function definition *)
+  | Fun of 'a * (string * vtype) * 'a expr  (** Function definition *)
   | App of 'a * 'a expr * 'a expr  (** Function application *)
-  | Fix of 'a * string * string * 'a expr
+  | Fix of 'a * (string * vtype) * (string * vtype) * 'a expr
       (** Application of fix operator: (function_name_for_recursion, param_name, expr) *)
 [@@deriving sexp, equal]
 

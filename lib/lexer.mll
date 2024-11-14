@@ -18,6 +18,8 @@ rule token = parse
   | "true" { TRUE }
   | "false" { FALSE }
   | "fun" { FUN }
+  | "int" { INT }
+  | "bool" { BOOL }
   (* Operators and symbols *)
   | '+' { PLUS }
   | '-' { MINUS }
@@ -34,6 +36,7 @@ rule token = parse
   | "<" { LT }
   | "<=" { LTEQ }
   | "->" { ARROW }
+  | ":" { COLON }
   (* Literals and names *)
   | ['0'-'9']+ as n { INTLIT (int_of_string n) }
   | ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9']* as name { NAME name }

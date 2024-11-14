@@ -1,4 +1,5 @@
 open Core
+open Vtype
 
 type 'a expr =
   | IntLit of 'a * int
@@ -18,9 +19,9 @@ type 'a expr =
   | If of 'a * 'a expr * 'a expr * 'a expr
   | Var of 'a * string
   | Let of 'a * string * 'a expr * 'a expr
-  | Fun of 'a * string * 'a expr
+  | Fun of 'a * (string * vtype) * 'a expr
   | App of 'a * 'a expr * 'a expr
-  | Fix of 'a * string * string * 'a expr
+  | Fix of 'a * (string * vtype) * (string * vtype) * 'a expr
 [@@deriving sexp, equal]
 
 let expr_node_val : 'a expr -> 'a = function
@@ -64,7 +65,7 @@ let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
   | If (a, e1, e2, e3) -> If (f a, fmap ~f e1, fmap ~f e2, fmap ~f e3)
   | Var (a, vname) -> Var (f a, vname)
   | Let (a, xname, e1, e2) -> Let (f a, xname, fmap ~f e1, fmap ~f e2)
-  | Fun (a, xname, e) -> Fun (f a, xname, fmap ~f e)
+  | Fun (a, (xname, xtype), e) -> Fun (f a, (xname, xtype), fmap ~f e)
   | App (a, e1, e2) -> App (f a, fmap ~f e1, fmap ~f e2)
   | Fix (a, xname, yname, e) -> Fix (f a, xname, yname, fmap ~f e)
 
@@ -135,14 +136,16 @@ let rec ast_to_source_code = function
           (ast_to_source_code e2)
       in
       match e1 with
-      | Fix (_, xname2, yname, e1') ->
+      | Fix (_, (xname2, _), (yname, _), e1') ->
           if equal_string xname xname2 then
             sprintf "let rec %s = fun %s -> (%s) end in (%s) end" xname yname
               (ast_to_source_code e1') (ast_to_source_code e2)
           else eval_default_repr ()
       | _ -> eval_default_repr ())
-  | Fun (_, xname, e) ->
-      sprintf "fun %s -> (%s) end" xname (ast_to_source_code e)
+  | Fun (_, (xname, xtype), e) ->
+      sprintf "fun (%s : %s) -> (%s) end" xname
+        (vtype_to_source_code xtype)
+        (ast_to_source_code e)
   | App (_, e1, e2) ->
       sprintf "(%s) (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | Fix _ -> raise AstConverionFixError

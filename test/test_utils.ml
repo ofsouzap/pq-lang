@@ -14,6 +14,8 @@ let sexp_of_token = function
   | TRUE -> Sexp.Atom "TRUE"
   | FALSE -> Sexp.Atom "FALSE"
   | FUN -> Sexp.Atom "FUN"
+  | INT -> Sexp.Atom "INT"
+  | BOOL -> Sexp.Atom "BOOL"
   | PLUS -> Sexp.Atom "PLUS"
   | MINUS -> Sexp.Atom "MINUS"
   | TIMES -> Sexp.Atom "TIMES"
@@ -29,6 +31,7 @@ let sexp_of_token = function
   | LT -> Sexp.Atom "LT"
   | LTEQ -> Sexp.Atom "LTEQ"
   | ARROW -> Sexp.Atom "ARROW"
+  | COLON -> Sexp.Atom "COLON"
   | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
   | NAME n -> Sexp.List [ Sexp.Atom "NAME"; Sexp.Atom n ]
   | EOF -> Sexp.Atom "EOF"

@@ -1,6 +1,6 @@
 open Core
-open Ast
 open Vtype
+open Ast
 
 let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
   let open Result in

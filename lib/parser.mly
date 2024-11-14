@@ -1,4 +1,5 @@
 %{
+open Vtype
 open Ast
 open Parsing_errors
 
@@ -19,15 +20,15 @@ open Parsing_errors
  *   )
 *)
 
-let create_let_rec ((fname : string), (fbody : plain_expr), (subexpr : plain_expr)) : plain_expr =
+let create_let_rec (((fname : string), (_ : vtype) as f), (fbody : plain_expr), (subexpr : plain_expr)) : plain_expr =
   match fbody with
-  | Fun (_, xname, fbody') -> Let ((), fname, Fix ((), fname, xname, fbody'), subexpr)
+  | Fun (_, x, fbody') -> Let ((), fname, Fix ((), f, x, fbody'), subexpr)
   | _ -> raise CustomError
 %}
 
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE FUN REC
-%token PLUS MINUS TIMES LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW
+%token END IF THEN ELSE LET IN TRUE FALSE FUN REC INT BOOL
+%token PLUS MINUS TIMES LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON
 %token <int> INTLIT
 %token <string> NAME
 %token EOF
@@ -44,35 +45,44 @@ let create_let_rec ((fname : string), (fbody : plain_expr), (subexpr : plain_exp
 %nonassoc LPAREN // (
 
 // Non-terminal typing
+%type <vtype> vtype
+%type <string * vtype> typed_name
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
 %start <plain_expr> prog
 
 %%
 
-prog:
-  | e = expr EOF { e }
+vtype:
+  | LPAREN v = vtype RPAREN { v }
+  | INT { VTypeInt }
+  | BOOL { VTypeBool }
+  | ARROW { VTypeFun (VTypeInt, VTypeInt) }
+;
+
+typed_name:
+  | n = NAME COLON t = vtype { (n, t) }
 ;
 
 expr:
-  | e = contained_expr { e }
-  | e1 = expr PLUS e2 = expr { Add ((), e1, e2) }
-  | MINUS e = expr { Neg ((), e) }
-  | e1 = expr MINUS e2 = expr { Subtr ((), e1, e2) }
-  | e1 = expr TIMES e2 = expr { Mult ((), e1, e2) }
-  | BNOT e = expr { BNot ((), e) }
-  | e1 = expr BOR e2 = expr { BOr ((), e1, e2) }
-  | e1 = expr BAND e2 = expr { BAnd ((), e1, e2) }
-  | e1 = expr EQ e2 = expr { Eq ((), e1, e2) }
-  | e1 = expr GT e2 = expr { Gt ((), e1, e2) }
-  | e1 = expr GTEQ e2 = expr { GtEq ((), e1, e2) }
-  | e1 = expr LT e2 = expr { Lt ((), e1, e2) }
-  | e1 = expr LTEQ e2 = expr { LtEq ((), e1, e2) }
-  | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }
-  | LET l = NAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }
-  | LET REC l = NAME ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }
-  | FUN fname = NAME ARROW e = expr END { Fun ((), fname, e) }
-  | e1 = expr e2 = contained_expr { App ((), e1, e2) }
+  | e = contained_expr { e }  (* ( e ) *)
+  | e1 = expr PLUS e2 = expr { Add ((), e1, e2) }  (* e1 + e2 *)
+  | MINUS e = expr { Neg ((), e) }  (* - e *)
+  | e1 = expr MINUS e2 = expr { Subtr ((), e1, e2) }  (* e1 - e2 *)
+  | e1 = expr TIMES e2 = expr { Mult ((), e1, e2) }  (* e1 * e2 *)
+  | BNOT e = expr { BNot ((), e) }  (* ~ e *)
+  | e1 = expr BOR e2 = expr { BOr ((), e1, e2) }  (* e1 || e2 *)
+  | e1 = expr BAND e2 = expr { BAnd ((), e1, e2) }  (* e1 && e2 *)
+  | e1 = expr EQ e2 = expr { Eq ((), e1, e2) }  (* e1 == e2 *)
+  | e1 = expr GT e2 = expr { Gt ((), e1, e2) }  (* e1 > e2 *)
+  | e1 = expr GTEQ e2 = expr { GtEq ((), e1, e2) }  (* e1 >= e2 *)
+  | e1 = expr LT e2 = expr { Lt ((), e1, e2) }  (* e1 < e2 *)
+  | e1 = expr LTEQ e2 = expr { LtEq ((), e1, e2) }  (* e1 <= e2 *)
+  | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }  (* if e1 then e2 else e3 *)
+  | LET l = NAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
+  | LET REC l = typed_name ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
+  | FUN x = typed_name ARROW e = expr END { Fun ((), x, e) }  (* fun xname : xtype -> e *)
+  | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
 ;
 
 contained_expr:
@@ -81,4 +91,8 @@ contained_expr:
   | TRUE { BoolLit ((), true) }
   | FALSE { BoolLit ((), false) }
   | n = NAME { Var ((), n) }
+;
+
+prog:
+  | e = expr EOF { e }
 ;

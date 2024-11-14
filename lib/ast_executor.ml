@@ -187,24 +187,22 @@ and eval (store : store) (e : ast_tag Ast.expr) : exec_res =
              Res v)
   | Let (_, xname, e1, e2) ->
       eval store e1 >>= fun v -> eval (store_set store ~key:xname ~value:v) e2
-  | Fun (_, xname, e) -> Res (Closure (xname, e, store))
+  | Fun (_, (xname, _), e) -> Res (Closure (xname, e, store))
   | App (_, e1, e2) ->
       (* This uses call-by-value semantics *)
       eval_apply_to_closure store e1 (fun (argname, fe, fs) ->
           eval store e2 >>= fun v2 ->
           eval (store_set fs ~key:argname ~value:v2) fe)
-  | Fix (_, fname, xname, fxbody) ->
+  | Fix (_, f, ((xname, _) as x), fxbody) ->
       (* fix (\f. \x. e2) ~> \x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
       eval store
         (Fun
            ( (),
-             xname,
+             x,
              App
                ( (),
                  App
-                   ( (),
-                     Fun ((), fname, Fun ((), xname, fxbody)),
-                     Fix ((), fname, xname, fxbody) ),
+                   ((), Fun ((), f, Fun ((), x, fxbody)), Fix ((), f, x, fxbody)),
                  Var ((), xname) ) ))
 
 let execute (e : 'a Ast.expr) =
