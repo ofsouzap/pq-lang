@@ -7,25 +7,27 @@ let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
   let add_type (t : vtype) (e : 'a expr) : (vtype * 'a) expr =
     e >|= fun x -> (t, x)
   in
+  let node_type = Fn.(compose fst expr_node_val) in
   let be_of_type (t : vtype) (e : (vtype * 'a) expr) :
       ((vtype * 'a) expr, unit) Result.t =
-    let t_e = e |> expr_node_val |> fst in
+    let t_e = node_type e in
     if equal_vtype t_e t then Ok e else Error ()
   in
-  let type_binop (e : 'a expr) (e1 : 'a expr) (e2 : 'a expr) :
-      ((vtype * 'a) expr, unit) Result.t =
+  let type_binop ?(out_type_f : (vtype -> vtype) option) (e : 'a expr)
+      (e1 : 'a expr) (e2 : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
+    let out_type_f = match out_type_f with Some f -> f | None -> Fn.id in
     type_expr e1 >>= fun e1' ->
     type_expr e2 >>= fun e2' ->
     let t1 = e1' |> expr_node_val |> fst in
     let t2 = e2' |> expr_node_val |> fst in
     match (t1, t2) with
-    | VTypeInt, VTypeInt -> Ok (add_type VTypeInt e)
+    | VTypeInt, VTypeInt -> Ok (add_type (out_type_f VTypeInt) e)
     | VTypeInt, _ -> Error ()
-    | VTypeBool, VTypeBool -> Ok (add_type VTypeBool e)
+    | VTypeBool, VTypeBool -> Ok (add_type (out_type_f VTypeBool) e)
     | VTypeBool, _ -> Error ()
     | VTypeFun (t1, t2), VTypeFun (t3, t4) ->
         if equal_vtype t1 t3 && equal_vtype t2 t4 then
-          Ok (add_type (VTypeFun (t1, t2)) e)
+          Ok (add_type (out_type_f (VTypeFun (t1, t2))) e)
         else Error ()
     | VTypeFun _, _ -> Error ()
   in
@@ -34,7 +36,7 @@ let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
   | (Add (_, e1, e2) as e) | (Subtr (_, e1, e2) as e) | (Mult (_, e1, e2) as e)
     ->
       type_binop e e1 e2 >>= be_of_type VTypeInt
-  | Neg (_, e) -> type_expr e >>= be_of_type VTypeBool
+  | Neg (_, e) -> type_expr e >>= be_of_type VTypeInt
   | BoolLit _ -> Ok (add_type VTypeBool e)
   | BNot (_, e) -> type_expr e >>= be_of_type VTypeBool
   | (BOr (_, e1, e2) as e) | (BAnd (_, e1, e2) as e) ->
@@ -51,7 +53,9 @@ let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
   | (GtEq (_, e1, e2) as e)
   | (Lt (_, e1, e2) as e)
   | (LtEq (_, e1, e2) as e) ->
-      type_binop e e1 e2 >>= be_of_type VTypeBool
+      type_binop e e1 e2 ~out_type_f:(fun t ->
+          match t with VTypeInt | VTypeBool -> VTypeBool | t -> t)
+      >>= be_of_type VTypeBool
   | If (_, e1, e2, e3) ->
       type_expr e1 >>= be_of_type VTypeBool >>= fun _ ->
       type_expr e2 >>= fun e2' ->
