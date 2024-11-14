@@ -143,13 +143,21 @@ let test_cases_to_source_code_inv =
       | Res e' -> equal_plain_expr e e'
       | _ -> false)
 
-let create_test_cases_expr_node_val type_arb type_eq =
+let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
+    (type_eq : 'a -> 'a -> bool) =
   let open QCheck in
   Test.make ~count:100 (pair type_arb plain_ast_expr_arb_any) (fun (x, e_raw) ->
       let e = fmap ~f:(const x) e_raw in
       type_eq (expr_node_val e) x)
 
-(* TODO - AST fmap tests *)
+let create_test_cases_expr_fmap_root (t1_arb : 'a QCheck.arbitrary)
+    (fn : 'a -> 'b) (t2_eq : 'b -> 'b -> bool) =
+  let open QCheck in
+  Test.make ~count:100
+    (pair t1_arb (ast_expr_arb_any (QCheck.gen t1_arb)))
+    (fun (x, e) ->
+      let e' = fmap ~f:(Core.Fn.compose fn (const x)) e in
+      t2_eq (expr_node_val e') (fn x))
 
 let suite =
   "AST Tests"
@@ -177,5 +185,24 @@ let suite =
                     create_test_cases_expr_node_val
                       QCheck.(list int)
                       (equal_list equal_int) );
+                ];
+         "AST fmap root"
+         >::: List.map
+                ~f:(fun (name, test) ->
+                  name >::: [ QCheck_runner.to_ounit2_test test ])
+                [
+                  ( "unit -> int",
+                    create_test_cases_expr_fmap_root QCheck.unit (Fn.const 1)
+                      equal_int );
+                  ( "int -> string",
+                    create_test_cases_expr_fmap_root QCheck.int string_of_int
+                      equal_string );
+                  ( "bool -> int",
+                    create_test_cases_expr_fmap_root QCheck.bool
+                      (fun b -> if b then 1 else 0)
+                      equal_int );
+                  ( "string -> int",
+                    create_test_cases_expr_fmap_root QCheck.string String.length
+                      equal_int );
                 ];
        ]
