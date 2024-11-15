@@ -136,9 +136,13 @@ let rec ast_to_source_code = function
           (ast_to_source_code e2)
       in
       match e1 with
-      | Fix (_, (xname2, _), (yname, _), e1') ->
+      | Fix (_, (xname2, x2type), (yname, ytype), e1') ->
           if equal_string xname xname2 then
-            sprintf "let rec %s = fun %s -> (%s) end in (%s) end" xname yname
+            sprintf "let rec (%s : %s) = fun (%s : %s) -> (%s) end in (%s) end"
+              xname
+              (vtype_to_source_code x2type)
+              yname
+              (vtype_to_source_code ytype)
               (ast_to_source_code e1') (ast_to_source_code e2)
           else eval_default_repr ()
       | _ -> eval_default_repr ())

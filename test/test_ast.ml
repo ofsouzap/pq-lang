@@ -2,8 +2,12 @@ open Core
 open OUnit2
 open Pq_lang
 open Ast
+open Vtype
 
 let show_plain_ast = Fn.compose Sexp.to_string sexp_of_plain_expr
+
+let show_tagged_ast (f : 'a -> Sexp.t) =
+  Fn.compose Sexp.to_string (sexp_of_expr f)
 
 (** Generator for a small-length, non-empty string of lowercase characters *)
 let varname_gen : string QCheck.Gen.t =
@@ -11,7 +15,25 @@ let varname_gen : string QCheck.Gen.t =
   int_range 1 5 >>= fun n ->
   list_repeat n (char_range 'a' 'z') >|= String.of_char_list
 
-let ast_expr_arb_any (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
+let vtype_gen : vtype QCheck.Gen.t =
+  let open QCheck.Gen in
+  let gen =
+    fix (fun self d ->
+        let self' = self (d - 1) in
+        let base_cases = [ return VTypeInt; return VTypeBool ] in
+        let rec_cases =
+          [ (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2)) ]
+        in
+        oneof (base_cases @ rec_cases))
+  in
+  gen 3
+
+let typed_var_gen : (string * vtype) QCheck.Gen.t =
+  let open QCheck.Gen in
+  pair varname_gen vtype_gen
+
+let ast_expr_arb_any ?(val_sexp : ('a -> Sexp.t) option)
+    (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
   let open QCheck in
   let open QCheck.Gen in
   let gen =
@@ -41,20 +63,31 @@ let ast_expr_arb_any (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
             (triple self' self' self' >|= fun (e1, e2, e3) -> If (v, e1, e2, e3));
             ( triple varname_gen self' self' >|= fun (vname, e1, e2) ->
               Let (v, vname, e1, e2) );
-            (pair varname_gen self' >|= fun (vname, e) -> Ast.Fun (v, vname, e));
+            (pair typed_var_gen self' >|= fun (x, e) -> Ast.Fun (v, x, e));
             (pair self' self' >|= fun (e1, e2) -> App (v, e1, e2));
-            ( quad varname_gen varname_gen self' self'
-            >|= fun (fname, xname, e1, e2) ->
-              Let (v, fname, Fix (v, fname, xname, e1), e2) );
+            ( quad
+                (triple varname_gen vtype_gen vtype_gen)
+                typed_var_gen self' self'
+            >|= fun ((fname, ftype1, ftype2), x, e1, e2) ->
+              Let
+                ( v,
+                  fname,
+                  Fix (v, (fname, VTypeFun (ftype1, ftype2)), x, e1),
+                  e2 ) );
           ]
         in
 
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
   in
-  make (gen 3)
+  let make_fn g =
+    match val_sexp with
+    | None -> make g
+    | Some val_sexp -> make ~print:(show_tagged_ast val_sexp) g
+  in
+  make_fn (gen 3)
 
 let plain_ast_expr_arb_any : plain_expr QCheck.arbitrary =
-  ast_expr_arb_any (QCheck.Gen.return ())
+  ast_expr_arb_any ~val_sexp:sexp_of_unit (QCheck.Gen.return ())
 
 let test_cases_equality : test list =
   let create_positive_test ((x : plain_expr), (y : plain_expr)) =
@@ -96,34 +129,67 @@ let test_cases_equality : test list =
       (Var ((), "x"), Var ((), "x"));
       ( Let ((), "x", IntLit ((), 1), IntLit ((), 2)),
         Let ((), "x", IntLit ((), 1), IntLit ((), 2)) );
-      (Fun ((), "x", IntLit ((), 1)), Fun ((), "x", IntLit ((), 1)));
+      ( Fun ((), ("x", VTypeInt), IntLit ((), 1)),
+        Fun ((), ("x", VTypeInt), IntLit ((), 1)) );
       ( App ((), IntLit ((), 1), IntLit ((), 2)),
         App ((), IntLit ((), 1), IntLit ((), 2)) );
-      ( Fix ((), "f", "x", App ((), Var ((), "f"), Var ((), "x"))),
-        Fix ((), "f", "x", App ((), Var ((), "f"), Var ((), "x"))) );
+      ( Fix
+          ( (),
+            ("f", VTypeFun (VTypeInt, VTypeInt)),
+            ("x", VTypeInt),
+            App ((), Var ((), "f"), Var ((), "x")) ),
+        Fix
+          ( (),
+            ("f", VTypeFun (VTypeInt, VTypeInt)),
+            ("x", VTypeInt),
+            App ((), Var ((), "f"), Var ((), "x")) ) );
       ( App
           ( (),
-            Fix ((), "f", "x", App ((), Var ((), "f"), Var ((), "x"))),
-            Fun ((), "x", Fun ((), "x", IntLit ((), 1))) ),
+            Fix
+              ( (),
+                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("x", VTypeInt),
+                App ((), Var ((), "f"), Var ((), "x")) ),
+            Fun ((), ("x", VTypeInt), Fun ((), ("x", VTypeInt), IntLit ((), 1)))
+          ),
         App
           ( (),
-            Fix ((), "f", "x", App ((), Var ((), "f"), Var ((), "x"))),
-            Fun ((), "x", Fun ((), "x", IntLit ((), 1))) ) );
+            Fix
+              ( (),
+                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("x", VTypeInt),
+                App ((), Var ((), "f"), Var ((), "x")) ),
+            Fun ((), ("x", VTypeInt), Fun ((), ("x", VTypeInt), IntLit ((), 1)))
+          ) );
       ( Let
           ( (),
             "f",
             App
               ( (),
-                Fix ((), "f", "x", App ((), Var ((), "f"), Var ((), "x"))),
-                Fun ((), "f", App ((), Var ((), "f"), IntLit ((), 0))) ),
+                Fix
+                  ( (),
+                    ("f", VTypeFun (VTypeInt, VTypeInt)),
+                    ("x", VTypeInt),
+                    App ((), Var ((), "f"), Var ((), "x")) ),
+                Fun
+                  ( (),
+                    ("f", VTypeFun (VTypeInt, VTypeInt)),
+                    App ((), Var ((), "f"), IntLit ((), 0)) ) ),
             App ((), Var ((), "f"), IntLit ((), 0)) ),
         Let
           ( (),
             "f",
             App
               ( (),
-                Fix ((), "f", "x", App ((), Var ((), "f"), Var ((), "x"))),
-                Fun ((), "f", App ((), Var ((), "f"), IntLit ((), 0))) ),
+                Fix
+                  ( (),
+                    ("f", VTypeFun (VTypeInt, VTypeInt)),
+                    ("x", VTypeInt),
+                    App ((), Var ((), "f"), Var ((), "x")) ),
+                Fun
+                  ( (),
+                    ("f", VTypeFun (VTypeInt, VTypeInt)),
+                    App ((), Var ((), "f"), IntLit ((), 0)) ) ),
             App ((), Var ((), "f"), IntLit ((), 0)) ) );
     ]
   @ List.map ~f:create_negative_test

@@ -143,7 +143,7 @@ let test_cases_variables : (string * Ast.plain_expr * exec_res) list =
       ( Let
           ( (),
             "f",
-            Fun ((), "x", Var ((), "x")),
+            Fun ((), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 8)) ),
         Res (Int 8) );
     ]
@@ -153,9 +153,9 @@ let test_cases_functions : (string * Ast.plain_expr * exec_res) list =
   let mapf ((x : plain_expr), (y : exec_res)) = (show_ast x, x, y) in
   List.map ~f:mapf
     [
-      ( Fun ((), "x", Var ((), "x")),
+      ( Fun ((), ("x", VTypeInt), Var ((), "x")),
         Res (Closure ("x", Var ((), "x"), empty_store)) );
-      ( Fun ((), "x", BOr ((), Var ((), "x"), BoolLit ((), true))),
+      ( Fun ((), ("x", VTypeInt), BOr ((), Var ((), "x"), BoolLit ((), true))),
         Res
           (Closure
              ("x", BOr ((), Var ((), "x"), BoolLit ((), true)), empty_store)) );
@@ -165,12 +165,15 @@ let test_cases_functions : (string * Ast.plain_expr * exec_res) list =
               ( (),
                 Fun
                   ( (),
-                    "a",
-                    Fun ((), "b", Add ((), Var ((), "a"), Var ((), "b"))) ),
+                    ("a", VTypeInt),
+                    Fun
+                      ( (),
+                        ("b", VTypeInt),
+                        Add ((), Var ((), "a"), Var ((), "b")) ) ),
                 IntLit ((), 3) ),
             IntLit ((), 5) ),
         Res (Int 8) );
-      ( App ((), Fun ((), "x", Var ((), "y")), IntLit ((), 3)),
+      ( App ((), Fun ((), ("x", VTypeInt), Var ((), "y")), IntLit ((), 3)),
         Err (UndefinedVarError "y") );
       ( App
           ( (),
@@ -180,13 +183,13 @@ let test_cases_functions : (string * Ast.plain_expr * exec_res) list =
                   ( (),
                     Fun
                       ( (),
-                        "b",
+                        ("b", VTypeInt),
                         Fun
                           ( (),
-                            "x",
+                            ("x", VTypeInt),
                             Fun
                               ( (),
-                                "y",
+                                ("y", VTypeInt),
                                 If
                                   ( (),
                                     Var ((), "b"),
@@ -208,8 +211,8 @@ let test_cases_recursion : (string * Ast.plain_expr * exec_res) list =
             "f",
             Fix
               ( (),
-                "f",
-                "x",
+                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("x", VTypeInt),
                 If
                   ( (),
                     Eq ((), Var ((), "x"), IntLit ((), 0)),
