@@ -2,7 +2,12 @@ open Core
 open Vtype
 open Ast
 
-let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
+type var_context = (string * vtype) list
+
+(* TODO - have var_context as a module instead *)
+
+let rec type_expr (ctx : var_context) (e : 'a expr) :
+    ((vtype * 'a) expr, unit) Result.t =
   let open Result in
   let add_type (t : vtype) (e : 'a expr) : (vtype * 'a) expr =
     e >|= fun x -> (t, x)
@@ -16,8 +21,8 @@ let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
   let type_binop ?(out_type_f : (vtype -> vtype) option) (e : 'a expr)
       (e1 : 'a expr) (e2 : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
     let out_type_f = match out_type_f with Some f -> f | None -> Fn.id in
-    type_expr e1 >>= fun e1' ->
-    type_expr e2 >>= fun e2' ->
+    type_expr ctx e1 >>= fun e1' ->
+    type_expr ctx e2 >>= fun e2' ->
     let t1 = e1' |> expr_node_val |> fst in
     let t2 = e2' |> expr_node_val |> fst in
     match (t1, t2) with
@@ -36,14 +41,14 @@ let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
   | (Add (_, e1, e2) as e) | (Subtr (_, e1, e2) as e) | (Mult (_, e1, e2) as e)
     ->
       type_binop e e1 e2 >>= be_of_type VTypeInt
-  | Neg (_, e) -> type_expr e >>= be_of_type VTypeInt
+  | Neg (_, e) -> type_expr ctx e >>= be_of_type VTypeInt
   | BoolLit _ -> Ok (add_type VTypeBool e)
-  | BNot (_, e) -> type_expr e >>= be_of_type VTypeBool
+  | BNot (_, e) -> type_expr ctx e >>= be_of_type VTypeBool
   | (BOr (_, e1, e2) as e) | (BAnd (_, e1, e2) as e) ->
       type_binop e e1 e2 >>= be_of_type VTypeBool
   | Eq (_, e1, e2) -> (
-      type_expr e1 >>= fun e1' ->
-      type_expr e2 >>= fun e2' ->
+      type_expr ctx e1 >>= fun e1' ->
+      type_expr ctx e2 >>= fun e2' ->
       let t1 = e1' |> expr_node_val |> fst in
       let t2 = e2' |> expr_node_val |> fst in
       match (t1, t2) with
@@ -57,19 +62,29 @@ let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
           match t with VTypeInt | VTypeBool -> VTypeBool | t -> t)
       >>= be_of_type VTypeBool
   | If (_, e1, e2, e3) ->
-      type_expr e1 >>= be_of_type VTypeBool >>= fun _ ->
-      type_expr e2 >>= fun e2' ->
-      type_expr e3 >>= fun e3' ->
+      type_expr ctx e1 >>= be_of_type VTypeBool >>= fun _ ->
+      type_expr ctx e2 >>= fun e2' ->
+      type_expr ctx e3 >>= fun e3' ->
       let t2 = e2' |> expr_node_val |> fst in
       let t3 = e3' |> expr_node_val |> fst in
       if equal_vtype t2 t3 then Ok (add_type t2 e) else Error ()
-  | Var _ -> failwith "TODO - variable context"
-  | Let _ -> failwith "TODO - alter variable context"
-  | Fun _ ->
-      failwith "TODO - need to alter AST to have parameter type annotations"
+  | Var (_, xname) as e -> (
+      match List.Assoc.find ctx xname ~equal:String.equal with
+      | Some t -> Ok (add_type t e)
+      | None -> Error ())
+  | Let (_, xname, e1, e2) as e ->
+      type_expr ctx e1 >>= fun e1' ->
+      let t1 = e1' |> expr_node_val |> fst in
+      type_expr ((xname, t1) :: ctx) e2 >>= fun e2' ->
+      let t2 = e2' |> expr_node_val |> fst in
+      Ok (add_type t2 e)
+  | Fun (_, (xname, xtype), e') as e ->
+      type_expr ((xname, xtype) :: ctx) e' >>= fun e' ->
+      let t = e' |> expr_node_val |> fst in
+      Ok (add_type (VTypeFun (xtype, t)) e)
   | App (_, e1, e2) as e -> (
-      type_expr e1 >>= fun e1' ->
-      type_expr e2 >>= fun e2' ->
+      type_expr ctx e1 >>= fun e1' ->
+      type_expr ctx e2 >>= fun e2' ->
       let t1 = e1' |> expr_node_val |> fst in
       let t2 = e2' |> expr_node_val |> fst in
       match t1 with
@@ -77,3 +92,6 @@ let rec type_expr (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
           if equal_vtype t11 t2 then Ok (add_type t12 e) else Error ()
       | _ -> Error ())
   | Fix _ -> failwith "TODO"
+
+let type_expr_no_ctx (e : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
+  type_expr [] e

@@ -9,7 +9,7 @@ let test_cases_expr_typing : test list =
       test =
     name >:: fun _ ->
     let open Result in
-    let out = Typing.type_expr e in
+    let out = Typing.type_expr_no_ctx e in
     match out with
     | Ok e' -> (
         let e_t = e' |> expr_node_val |> fst in
@@ -65,7 +65,25 @@ let test_cases_expr_typing : test list =
       (If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)), None);
       ( If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
         Some VTypeInt );
-      (* TODO - var, let, fun, app, fix tests *)
+      (Var ((), "x"), None);
+      (Let ((), "x", IntLit ((), 3), Var ((), "x")), Some VTypeInt);
+      (Let ((), "x", BoolLit ((), true), Var ((), "x")), Some VTypeBool);
+      (Let ((), "x", IntLit ((), 3), BoolLit ((), true)), Some VTypeBool);
+      ( Let
+          ( (),
+            "f",
+            Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
+            App ((), Var ((), "f"), IntLit ((), 3)) ),
+        Some VTypeInt );
+      ( Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
+        Some (VTypeFun (VTypeInt, VTypeInt)) );
+      ( Let
+          ( (),
+            "f",
+            Fun ((), ("x", VTypeInt), Var ((), "x")),
+            App ((), Var ((), "f"), IntLit ((), 3)) ),
+        Some VTypeInt );
+      (* TODO - fix tests *)
     ]
 
 (* TODO - replace the above with qcheck tests for testing typing more throughly (e.g. generator for bool-typed expressions, then can check that any `BAdd` node with bool-typed arguments is typed as a bool) *)
