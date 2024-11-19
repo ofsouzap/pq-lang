@@ -9,7 +9,7 @@ let test_cases_expr_typing : test list =
       test =
     name >:: fun _ ->
     let open Result in
-    let out = Typing.type_expr_no_ctx e in
+    let out = Typing.type_expr e in
     match out with
     | Ok e' -> (
         let e_t = e' |> expr_node_val |> fst in
@@ -83,7 +83,6 @@ let test_cases_expr_typing : test list =
             Fun ((), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Some VTypeInt );
-      (* TODO - fix tests *)
     ]
 
 (* TODO - replace the above with qcheck tests for testing typing more throughly (e.g. generator for bool-typed expressions, then can check that any `BAdd` node with bool-typed arguments is typed as a bool) *)
