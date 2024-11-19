@@ -66,6 +66,8 @@ let test_cases_expr_typing : test list =
       ( If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
         Some VTypeInt );
       (Var ((), "x"), None);
+      ( Fun ((), ("x", VTypeInt), Var ((), "x")),
+        Some (VTypeFun (VTypeInt, VTypeInt)) );
       (Let ((), "x", IntLit ((), 3), Var ((), "x")), Some VTypeInt);
       (Let ((), "x", BoolLit ((), true), Var ((), "x")), Some VTypeBool);
       (Let ((), "x", IntLit ((), 3), BoolLit ((), true)), Some VTypeBool);
@@ -83,8 +85,60 @@ let test_cases_expr_typing : test list =
             Fun ((), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Some VTypeInt );
+      ( Let
+          ( (),
+            "f",
+            Fix
+              ( (),
+                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("x", VTypeInt),
+                Var ((), "x") ),
+            App ((), Var ((), "f"), IntLit ((), 3)) ),
+        Some VTypeInt );
+      ( Let
+          ( (),
+            "f",
+            Fix
+              ( (),
+                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("x", VTypeInt),
+                BoolLit ((), false) ),
+            App ((), Var ((), "f"), IntLit ((), 3)) ),
+        None );
+      ( Let
+          ( (),
+            "f",
+            Fix
+              ( (),
+                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("x", VTypeBool),
+                Var ((), "x") ),
+            App ((), Var ((), "f"), IntLit ((), 3)) ),
+        None );
+      ( Let
+          ( (),
+            "f",
+            Fix
+              ( (),
+                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("x", VTypeBool),
+                Var ((), "x") ),
+            App ((), Var ((), "f"), BoolLit ((), false)) ),
+        None );
+      ( Let
+          ( (),
+            "f",
+            Fix
+              ( (),
+                ("f", VTypeFun (VTypeInt, VTypeBool)),
+                ("x", VTypeInt),
+                BoolLit ((), false) ),
+            App ((), Var ((), "f"), IntLit ((), 3)) ),
+        Some VTypeBool );
     ]
 
-(* TODO - replace the above with qcheck tests for testing typing more throughly (e.g. generator for bool-typed expressions, then can check that any `BAdd` node with bool-typed arguments is typed as a bool) *)
+(* TODO - have tests that start with a variable context *)
+
+(* TODO - add qcheck tests for testing typing more throughly (e.g. generator for bool-typed expressions, then can check that any `BAdd` node with bool-typed arguments is typed as a bool) *)
 
 let suite = "Typing" >::: [ "Expression typing" >::: test_cases_expr_typing ]
