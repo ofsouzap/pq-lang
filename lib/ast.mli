@@ -37,7 +37,7 @@ type 'a expr =
   | Fun of 'a * (string * vtype) * 'a expr  (** Function definition *)
   | App of 'a * 'a expr * 'a expr  (** Function application *)
   | Fix of 'a * (string * vtype) * (string * vtype) * 'a expr
-      (** Application of fix operator: (function_name_for_recursion, param_name, expr) *)
+      (** Application of fix operator: `((function_name_for_recursion, function_for_recursion_type), (param_name, param_type), expr)` *)
 [@@deriving sexp, equal]
 
 (** Extract the value attached to a single node of a tagged AST expression *)
