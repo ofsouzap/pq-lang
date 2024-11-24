@@ -7,5 +7,6 @@ let () =
   | LexingError c -> eprintf "Lexing error: %c\n" c
   | ParsingError -> eprintf "Parsing error\n"
   | Res ast ->
+      (* TODO - add type-checking here *)
       let result = Ast_executor.execute ast in
       printf "%s\n" (Ast_executor.show_exec_res result)
