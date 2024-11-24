@@ -222,7 +222,6 @@ let ast_expr_arb ?(val_sexp : ('a -> Sexp.t) option) ?(t : vtype option)
             >|= fun (e1, e2) -> Lt (v, e1, e2) (* LT *) );
             ( pair (gen_int (d - 1, ctx)) (gen_int (d - 1, ctx))
             >|= fun (e1, e2) -> LtEq (v, e1, e2) (* LTEQ *) );
-            (* TODO - comparison operations *)
             gen_e_if (self, (d, ctx), v) (* If-then-else *);
             gen_e_let_in (self, (d, ctx), v) (* Let-in *);
             gen_e_app (self, (d, ctx), v) VTypeInt (* Function application *);
