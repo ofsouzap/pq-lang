@@ -6,6 +6,7 @@ open Parser
 open Ast_executor
 
 let max_gen_rec_depth : int = 5
+let default_max_gen_rec_depth : int = max_gen_rec_depth
 
 let sexp_of_token = function
   | END -> Sexp.Atom "END"
@@ -66,7 +67,7 @@ let varname_gen : string QCheck.Gen.t =
   int_range 1 5 >>= fun n ->
   list_repeat n (char_range 'a' 'z') >|= String.of_char_list
 
-let vtype_gen : vtype QCheck.Gen.t =
+let vtype_gen (d : int) : vtype QCheck.Gen.t =
   let open QCheck.Gen in
   let gen =
     fix (fun self d ->
@@ -75,13 +76,13 @@ let vtype_gen : vtype QCheck.Gen.t =
         let rec_cases =
           [ (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2)) ]
         in
-        oneof (base_cases @ rec_cases))
+        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
   in
-  gen max_gen_rec_depth
+  gen d
 
-let typed_var_gen : (string * vtype) QCheck.Gen.t =
+let typed_var_gen (d : int) : (string * vtype) QCheck.Gen.t =
   let open QCheck.Gen in
-  pair varname_gen vtype_gen
+  pair varname_gen (vtype_gen d)
 
 let gen_unique_pair ~(equal : 'a -> 'a -> bool) (g : 'a QCheck.Gen.t) :
     ('a * 'a) QCheck.Gen.t =
@@ -91,64 +92,6 @@ let gen_unique_pair ~(equal : 'a -> 'a -> bool) (g : 'a QCheck.Gen.t) :
       g >>= fun x ->
       g >>= fun y -> if equal x y then self () else return (x, y))
     ()
-
-(* TODO - delete this function and just have it accessed using the type-specified one *)
-let ast_expr_arb_any ?(val_sexp : ('a -> Sexp.t) option)
-    (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
-  let open QCheck in
-  let open QCheck.Gen in
-  let gen =
-    fix (fun self d ->
-        let self' = self (d - 1) in
-        v_gen >>= fun v ->
-        let base_cases =
-          [
-            (nat >|= fun n -> IntLit (v, n));
-            (bool >|= fun b -> BoolLit (v, b));
-            (varname_gen >|= fun vname -> Var (v, vname));
-          ]
-        in
-        let rec_cases =
-          [
-            (pair self' self' >|= fun (e1, e2) -> Add (v, e1, e2));
-            (self' >|= fun e -> Neg (v, e));
-            (pair self' self' >|= fun (e1, e2) -> Subtr (v, e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> Mult (v, e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> BOr (v, e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> BAnd (v, e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> Eq (v, e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> Gt (v, e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> GtEq (v, e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> Lt (v, e1, e2));
-            (pair self' self' >|= fun (e1, e2) -> LtEq (v, e1, e2));
-            (triple self' self' self' >|= fun (e1, e2, e3) -> If (v, e1, e2, e3));
-            ( triple varname_gen self' self' >|= fun (vname, e1, e2) ->
-              Let (v, vname, e1, e2) );
-            (pair typed_var_gen self' >|= fun (x, e) -> Ast.Fun (v, x, e));
-            (pair self' self' >|= fun (e1, e2) -> App (v, e1, e2));
-            ( quad
-                (triple varname_gen vtype_gen vtype_gen)
-                typed_var_gen self' self'
-            >|= fun ((fname, ftype1, ftype2), x, e1, e2) ->
-              Let
-                ( v,
-                  fname,
-                  Fix (v, (fname, VTypeFun (ftype1, ftype2)), x, e1),
-                  e2 ) );
-          ]
-        in
-
-        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
-  in
-  let make_fn g =
-    match val_sexp with
-    | None -> make g
-    | Some val_sexp -> make ~print:(show_tagged_ast val_sexp) g
-  in
-  make_fn (gen max_gen_rec_depth)
-
-let plain_ast_expr_arb_any : plain_expr QCheck.arbitrary =
-  ast_expr_arb_any ~val_sexp:sexp_of_unit (QCheck.Gen.return ())
 
 module TestingVarCtx : sig
   include Typing.TypingVarContext
@@ -169,20 +112,7 @@ end = struct
       ctx
 end
 
-let vtype_gen : vtype QCheck.Gen.t =
-  let open QCheck.Gen in
-  let gen =
-    fix (fun self d ->
-        let self' = self (d - 1) in
-        let base_cases = [ return VTypeInt; return VTypeBool ] in
-        let rec_cases =
-          [ (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2)) ]
-        in
-        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
-  in
-  gen max_gen_rec_depth
-
-let ast_expr_arb_of_type ?(val_sexp : ('a -> Sexp.t) option) (t : vtype)
+let ast_expr_arb ?(val_sexp : ('a -> Sexp.t) option) ?(t : vtype option)
     (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
   let open QCheck in
   let open QCheck.Gen in
@@ -216,7 +146,7 @@ let ast_expr_arb_of_type ?(val_sexp : ('a -> Sexp.t) option) (t : vtype)
         ((d : int), (ctx : TestingVarCtx.t)),
         (v : 'a) ) (t2 : vtype) : 'a expr Gen.t =
     (* Shorthand for generating a function application expression *)
-    vtype_gen >>= fun t1 ->
+    vtype_gen d >>= fun t1 ->
     pair (gen_fun (t1, t2) (d - 1, ctx)) (self (d - 1, ctx)) >|= fun (e1, e2) ->
     App (v, e1, e2)
   and gen_e_let_rec
@@ -226,7 +156,7 @@ let ast_expr_arb_of_type ?(val_sexp : ('a -> Sexp.t) option) (t : vtype)
     (* Shorthand for generating a let-rec expression *)
     pair
       (gen_unique_pair ~equal:equal_string varname_gen)
-      (pair vtype_gen vtype_gen)
+      (pair (vtype_gen d) (vtype_gen d))
     >>= fun ((fname, xname), (ftype1, ftype2)) ->
     let ctx_with_f = TestingVarCtx.add ctx fname (VTypeFun (ftype1, ftype2)) in
     let ctx_with_fx = TestingVarCtx.add ctx_with_f xname ftype1 in
@@ -238,6 +168,7 @@ let ast_expr_arb_of_type ?(val_sexp : ('a -> Sexp.t) option) (t : vtype)
         Fix (v, (fname, VTypeFun (ftype1, ftype2)), (xname, ftype1), e1),
         e2 )
   and gen_int (param : int * TestingVarCtx.t) : 'a expr Gen.t =
+    (* Generate an expression that types as integer *)
     fix
       (fun self (d, ctx) ->
         let self' = self (d - 1, ctx) in
@@ -263,6 +194,7 @@ let ast_expr_arb_of_type ?(val_sexp : ('a -> Sexp.t) option) (t : vtype)
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
   and gen_bool (param : int * TestingVarCtx.t) : 'a expr Gen.t =
+    (* Generate an expression that types as boolean *)
     fix
       (fun self (d, ctx) ->
         let self' = self (d - 1, ctx) in
@@ -301,7 +233,8 @@ let ast_expr_arb_of_type ?(val_sexp : ('a -> Sexp.t) option) (t : vtype)
       param
   and gen_fun ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
       'a expr Gen.t =
-    (* Note, functions have no base cases so recursion depth cannot be used to terminate it safely *)
+    (* Generate an expression that has type of t1 -> t2
+       Note, functions have no base cases so recursion depth cannot be used to terminate it safely *)
     let t = VTypeFun (t1, t2) in
     fix
       (fun self (d, ctx) ->
@@ -318,13 +251,13 @@ let ast_expr_arb_of_type ?(val_sexp : ('a -> Sexp.t) option) (t : vtype)
            ]
           @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)))
       param
-  and gen_any_of_type (param : int * TestingVarCtx.t) : (vtype * 'a expr) Gen.t
-      =
-    vtype_gen >>= fun t ->
+  and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
+      (vtype * 'a expr) Gen.t =
+    vtype_gen d >>= fun t ->
     (match t with
-    | VTypeInt -> gen_int param
-    | VTypeBool -> gen_bool param
-    | VTypeFun (t1, t2) -> gen_fun (t1, t2) param)
+    | VTypeInt -> gen_int (d, ctx)
+    | VTypeBool -> gen_bool (d, ctx)
+    | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx))
     >|= fun e -> (t, e)
   and gen ((d : int), (ctx : TestingVarCtx.t)) (t : vtype) : 'a expr Gen.t =
     match t with
@@ -337,4 +270,15 @@ let ast_expr_arb_of_type ?(val_sexp : ('a -> Sexp.t) option) (t : vtype)
     | None -> make g
     | Some val_sexp -> make ~print:(show_tagged_ast val_sexp) g
   in
-  make_fn (gen (max_gen_rec_depth, TestingVarCtx.empty) t)
+  make_fn
+    (match t with
+    | Some t -> gen (max_gen_rec_depth, TestingVarCtx.empty) t
+    | None -> gen_any_of_type (max_gen_rec_depth, TestingVarCtx.empty) >|= snd)
+
+let ast_expr_arb_any ?(val_sexp : ('a -> Sexp.t) option) v_gen =
+  match val_sexp with
+  | None -> ast_expr_arb v_gen
+  | Some x -> ast_expr_arb ~val_sexp:x v_gen
+
+let plain_ast_expr_arb_any : unit expr QCheck.arbitrary =
+  ast_expr_arb ~val_sexp:sexp_of_unit QCheck.Gen.unit

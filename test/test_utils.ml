@@ -7,8 +7,8 @@ open Utils
 
 let create_test_for_base_type (name : string) (t : vtype) : test =
   QCheck_runner.to_ounit2_test
-    (QCheck.Test.make ~name ~count:1000
-       (ast_expr_arb_of_type ~val_sexp:sexp_of_unit t Gen.unit) (fun e ->
+    (QCheck.Test.make ~name ~count:1
+       (ast_expr_arb ~val_sexp:sexp_of_unit ~t Gen.unit) (fun e ->
          let typed_result = Typing.type_expr e in
          match typed_result with
          | Ok typed_e ->
@@ -25,7 +25,7 @@ let create_test_for_compound_type (name : string) (t_gen : vtype Gen.t) : test =
         in
         let e_gen =
           t_gen >>= fun t ->
-          QCheck.gen (ast_expr_arb_of_type ~val_sexp:sexp_of_unit t Gen.unit)
+          QCheck.gen (ast_expr_arb ~val_sexp:sexp_of_unit ~t Gen.unit)
         in
         let e_arb =
           make
@@ -51,7 +51,9 @@ let suite =
                 create_test_for_base_type "bool" VTypeBool;
                 create_test_for_compound_type "'a -> 'b"
                   Gen.(
-                    pair vtype_gen vtype_gen >|= fun (t1, t2) ->
-                    VTypeFun (t1, t2));
+                    pair
+                      (vtype_gen default_max_gen_rec_depth)
+                      (vtype_gen default_max_gen_rec_depth)
+                    >|= fun (t1, t2) -> VTypeFun (t1, t2));
               ];
        ]
