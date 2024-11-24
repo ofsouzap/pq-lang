@@ -238,17 +238,23 @@ let ast_expr_arb ?(val_sexp : ('a -> Sexp.t) option) ?(t : vtype option)
     fix
       (fun self (d, ctx) ->
         v_gen >>= fun v ->
-        oneof
-          ([
-             gen_e_if (self, (d, ctx), v) (* If-then-else *);
-             gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-             ( varname_gen >>= fun vname ->
-               gen (d - 1, TestingVarCtx.add ctx vname t1) t2 >|= fun e ->
-               Ast.Fun (v, (vname, t1), e) (* Function value *) );
-             gen_e_app (self, (d, ctx), v) t (* Function application *);
-             gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
-           ]
-          @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)))
+        let base_cases =
+          [
+            ( varname_gen >>= fun vname ->
+              gen (d - 1, TestingVarCtx.add ctx vname t1) t2 >|= fun e ->
+              Ast.Fun (v, (vname, t1), e) (* Function value *) );
+          ]
+          @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+        in
+        let rec_cases =
+          [
+            gen_e_if (self, (d, ctx), v) (* If-then-else *);
+            gen_e_let_in (self, (d, ctx), v) (* Let-in *);
+            gen_e_app (self, (d, ctx), v) t (* Function application *);
+            gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
+          ]
+        in
+        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
   and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
       (vtype * 'a expr) Gen.t =
