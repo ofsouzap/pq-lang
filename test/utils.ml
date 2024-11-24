@@ -11,7 +11,7 @@ type 'a ast_print_method =
   | PrintExprSource
 
 let default_ast_print_method : 'a ast_print_method = PrintExprSource
-let max_gen_rec_depth : int = 5
+let max_gen_rec_depth : int = 10
 let default_max_gen_rec_depth : int = max_gen_rec_depth
 
 let sexp_of_token = function
@@ -67,11 +67,32 @@ let show_plain_ast = Fn.compose Sexp.to_string sexp_of_plain_expr
 let show_tagged_ast (f : 'a -> Sexp.t) =
   Fn.compose Sexp.to_string (sexp_of_expr f)
 
+let lexer_keywords : string list =
+  [
+    "end";
+    "if";
+    "then";
+    "else";
+    "let";
+    "rec";
+    "in";
+    "true";
+    "false";
+    "fun";
+    "int";
+    "bool";
+  ]
+
 (** Generator for a small-length, non-empty string of lowercase characters *)
 let varname_gen : string QCheck.Gen.t =
   let open QCheck.Gen in
-  int_range 1 5 >>= fun n ->
-  list_repeat n (char_range 'a' 'z') >|= String.of_char_list
+  fix
+    (fun self _ ->
+      int_range 1 5 >>= fun n ->
+      list_repeat n (char_range 'a' 'z') >|= String.of_char_list >>= fun s ->
+      if List.mem lexer_keywords s ~equal:String.equal then self ()
+      else return s)
+    ()
 
 let vtype_gen (d : int) : vtype QCheck.Gen.t =
   let open QCheck.Gen in
@@ -108,7 +129,7 @@ end = struct
   type t = (string * vtype) list
 
   let empty = []
-  let add ctx x t = (x, t) :: ctx
+  let add ctx x t = List.Assoc.add ctx x t ~equal:String.equal
   let find ctx x = List.Assoc.find ctx x ~equal:String.equal
 
   let varnames_of_type (t : vtype) (ctx : t) : string list =
@@ -148,13 +169,13 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     self (d - 1, TestingVarCtx.add ctx vname e1t) >|= fun e2 ->
     Let (v, vname, e1, e2)
   and gen_e_app
-      ( (self : int * TestingVarCtx.t -> 'a expr Gen.t),
+      ( (_ : int * TestingVarCtx.t -> 'a expr Gen.t),
         ((d : int), (ctx : TestingVarCtx.t)),
         (v : 'a) ) (t2 : vtype) : 'a expr Gen.t =
     (* Shorthand for generating a function application expression *)
     vtype_gen d >>= fun t1 ->
-    pair (gen_fun (t1, t2) (d - 1, ctx)) (self (d - 1, ctx)) >|= fun (e1, e2) ->
-    App (v, e1, e2)
+    pair (gen_fun (t1, t2) (d - 1, ctx)) (gen (d - 1, ctx) t1)
+    >|= fun (e1, e2) -> App (v, e1, e2)
   and gen_e_let_rec
       ( (self : int * TestingVarCtx.t -> 'a expr Gen.t),
         ((d : int), (ctx : TestingVarCtx.t)),
@@ -166,8 +187,8 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     >>= fun ((fname, xname), (ftype1, ftype2)) ->
     let ctx_with_f = TestingVarCtx.add ctx fname (VTypeFun (ftype1, ftype2)) in
     let ctx_with_fx = TestingVarCtx.add ctx_with_f xname ftype1 in
-    pair (gen_any_of_type (d - 1, ctx_with_fx)) (self (d - 1, ctx_with_fx))
-    >|= fun ((_, e1), e2) ->
+    pair (gen (d - 1, ctx_with_fx) ftype2) (self (d - 1, ctx_with_f))
+    >|= fun (e1, e2) ->
     Let
       ( v,
         fname,
@@ -230,7 +251,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
             >|= fun (e1, e2) -> LtEq (v, e1, e2) (* LTEQ *) );
             gen_e_if (self, (d, ctx), v) (* If-then-else *);
             gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-            gen_e_app (self, (d, ctx), v) VTypeInt (* Function application *);
+            gen_e_app (self, (d, ctx), v) VTypeBool (* Function application *);
             gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
           ]
         in

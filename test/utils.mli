@@ -21,6 +21,7 @@ val override_compare_exec_res :
 
 val show_plain_ast : Ast.plain_expr -> string
 val show_tagged_ast : ('a -> Sexp.t) -> 'a Ast.expr -> string
+val lexer_keywords : string list
 val varname_gen : string QCheck.Gen.t
 val vtype_gen : int -> Vtype.vtype QCheck.Gen.t
 val typed_var_gen : int -> (string * Vtype.vtype) QCheck.Gen.t

@@ -139,6 +139,8 @@ let test_cases_expr_typing : test list =
 
 (* TODO - have tests that start with a variable context *)
 
+(* TODO - tests for the variable context (e.g. that overwriting a variable's typing works) *)
+
 (* TODO - add qcheck tests for testing typing more throughly (e.g. generator for bool-typed expressions, then can check that any `BAdd` node with bool-typed arguments is typed as a bool) *)
 
 let suite = "Typing" >::: [ "Expression typing" >::: test_cases_expr_typing ]

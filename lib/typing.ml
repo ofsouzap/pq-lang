@@ -17,7 +17,7 @@ module ListTypingVarContext : TypingVarContext = struct
   type t = (string * vtype) list
 
   let empty = []
-  let add ctx x t = (x, t) :: ctx
+  let add ctx x t = List.Assoc.add ctx x t ~equal:String.equal
   let find ctx x = List.Assoc.find ctx x ~equal:String.equal
 end
 

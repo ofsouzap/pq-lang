@@ -6,30 +6,23 @@ open Vtype
 open Ast
 open Utils
 
-let create_typed_expr_gen_test_for_base_type (name : string) (t : vtype) : test
-    =
+let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
+  let open QCheck in
   QCheck_runner.to_ounit2_test
-    (QCheck.Test.make ~name ~count:1000
-       (ast_expr_arb ~t PrintExprSource Gen.unit) (fun e ->
-         let typed_result = Typing.type_expr e in
-         match typed_result with
-         | Ok typed_e ->
-             let et = Ast.expr_node_val typed_e |> fst in
-             equal_vtype t et
-         | Error _ -> false))
-
-let create_typed_expr_gen_test_for_compound_type (name : string)
-    (t_gen : vtype Gen.t) : test =
-  QCheck_runner.to_ounit2_test
-    (QCheck.Test.make ~name ~count:1000
+    (Test.make ~name ~count:1000
        (let open QCheck.Gen in
-        let t_arb = make ~print:vtype_to_source_code t_gen in
-        let e_gen =
+        let te_gen =
           t_gen >>= fun t ->
-          QCheck.gen (ast_expr_arb ~t PrintExprSource Gen.unit)
+          QCheck.gen (ast_expr_arb ~t NoPrint Gen.unit) >|= fun e -> (t, e)
         in
-        let e_arb = make ~print:ast_to_source_code e_gen in
-        QCheck.pair t_arb e_arb)
+        let te_arb =
+          make
+            ~print:(fun (t, e) ->
+              sprintf "[type: %s] %s" (vtype_to_source_code t)
+                (ast_to_source_code e))
+            te_gen
+        in
+        te_arb)
        (fun (t, e) ->
          let typed_result = Typing.type_expr e in
          match typed_result with
@@ -38,14 +31,19 @@ let create_typed_expr_gen_test_for_compound_type (name : string)
              equal_vtype t et
          | Error _ -> false))
 
+let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
+  create_typed_expr_gen_test name (Gen.return t)
+
+(* TODO - test that the TestingVarCtx module types things as the actual used one does *)
+
 let suite =
   "Utilities Tests"
   >::: [
          "Typed expression generator"
          >::: [
-                create_typed_expr_gen_test_for_base_type "int" VTypeInt;
-                create_typed_expr_gen_test_for_base_type "bool" VTypeBool;
-                create_typed_expr_gen_test_for_compound_type "'a -> 'b"
+                create_typed_expr_gen_test_for_fixed_type "int" VTypeInt;
+                create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
+                create_typed_expr_gen_test "'a -> 'b"
                   Gen.(
                     pair
                       (vtype_gen default_max_gen_rec_depth)
