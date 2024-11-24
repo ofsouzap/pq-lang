@@ -7,7 +7,7 @@ open Utils
 
 let create_test_for_base_type (name : string) (t : vtype) : test =
   QCheck_runner.to_ounit2_test
-    (QCheck.Test.make ~name ~count:1
+    (QCheck.Test.make ~name ~count:1000
        (ast_expr_arb ~val_sexp:sexp_of_unit ~t Gen.unit) (fun e ->
          let typed_result = Typing.type_expr e in
          match typed_result with
