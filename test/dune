@@ -2,8 +2,9 @@
  (name test_pq_lang)
  (libraries pq_lang.lib ounit2 qcheck)
  (modules
+  utils
   test_pq_lang
-  test_utils
+  ; Tests for the utilities module
   test_ast
   test_typing
   test_frontend

@@ -34,7 +34,7 @@ type 'a expr =
   (* Variables and functions *)
   | Var of 'a * string  (** Variable references *)
   | Let of 'a * string * 'a expr * 'a expr  (** Let binding *)
-  | Fun of 'a * (string * vtype) * 'a expr  (** Function definition *)
+  | Fun of 'a * (string * vtype) * 'a expr  (** Function value *)
   | App of 'a * 'a expr * 'a expr  (** Function application *)
   | Fix of 'a * (string * vtype) * (string * vtype) * 'a expr
       (** Application of fix operator: `((function_name_for_recursion, function_for_recursion_type), (param_name, param_type), expr)` *)

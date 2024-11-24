@@ -2,7 +2,7 @@ open Core
 open OUnit2
 open Pq_lang
 open Ast_executor
-open Test_utils
+open Utils
 
 let create_test ((name : string), (inp : string), (exp : exec_res)) =
   name >:: fun _ ->
