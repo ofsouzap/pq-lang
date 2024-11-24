@@ -5,6 +5,12 @@ open Ast
 open Parser
 open Ast_executor
 
+type 'a ast_print_method =
+  | NoPrint
+  | PrintSexp of ('a -> Sexp.t)
+  | PrintExprSource
+
+let default_ast_print_method : 'a ast_print_method = PrintExprSource
 let max_gen_rec_depth : int = 5
 let default_max_gen_rec_depth : int = max_gen_rec_depth
 
@@ -45,8 +51,8 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string sexp_of_token) tokens)
 
-let ast_printer = Fn.compose Sexp.to_string Ast.sexp_of_plain_expr
-let show_ast = ast_printer
+let ast_sexp_printer = Fn.compose Sexp.to_string Ast.sexp_of_plain_expr
+let show_ast_sexp = ast_sexp_printer
 
 let override_compare_exec_res (a : exec_res) (b : exec_res) : bool =
   match (a, b) with
@@ -112,7 +118,7 @@ end = struct
       ctx
 end
 
-let ast_expr_arb ?(val_sexp : ('a -> Sexp.t) option) ?(t : vtype option)
+let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
   let open QCheck in
   let open QCheck.Gen in
@@ -271,19 +277,17 @@ let ast_expr_arb ?(val_sexp : ('a -> Sexp.t) option) ?(t : vtype option)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
   in
   let make_fn g =
-    match val_sexp with
-    | None -> make g
-    | Some val_sexp -> make ~print:(show_tagged_ast val_sexp) g
+    match print with
+    | NoPrint -> make g
+    | PrintSexp val_sexp -> make ~print:(show_tagged_ast val_sexp) g
+    | PrintExprSource -> make ~print:ast_to_source_code g
   in
   make_fn
     (match t with
     | Some t -> gen (max_gen_rec_depth, TestingVarCtx.empty) t
     | None -> gen_any_of_type (max_gen_rec_depth, TestingVarCtx.empty) >|= snd)
 
-let ast_expr_arb_any ?(val_sexp : ('a -> Sexp.t) option) v_gen =
-  match val_sexp with
-  | None -> ast_expr_arb v_gen
-  | Some x -> ast_expr_arb ~val_sexp:x v_gen
+let ast_expr_arb_any print v_gen = ast_expr_arb print v_gen
 
 let plain_ast_expr_arb_any : unit expr QCheck.arbitrary =
-  ast_expr_arb ~val_sexp:sexp_of_unit QCheck.Gen.unit
+  ast_expr_arb_any PrintExprSource QCheck.Gen.unit

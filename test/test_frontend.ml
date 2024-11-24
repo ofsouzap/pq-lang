@@ -555,7 +555,7 @@ let create_frontend_test ((name, inp, _, exp) : test_case) =
   let out = run_frontend_string inp in
   assert_equal exp out ~printer:(fun x ->
       match x with
-      | Res e -> ast_printer e
+      | Res e -> ast_to_source_code e
       | LexingError c -> sprintf "LexingError %c" c
       | ParsingError -> "ParsingError")
 
@@ -563,7 +563,7 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
   match out with
-  | Res e -> assert_equal exp e ~printer:ast_printer
+  | Res e -> assert_equal exp e ~printer:ast_to_source_code
   | LexingError c -> assert_failure (sprintf "LexingError %c" c)
   | ParsingError -> assert_failure "ParsingError"
 

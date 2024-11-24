@@ -133,10 +133,10 @@ let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
       type_eq (expr_node_val e) x)
 
 let create_test_cases_expr_fmap_root (t1_arb : 'a QCheck.arbitrary)
-    (fn : 'a -> 'b) (t2_eq : 'b -> 'b -> bool) =
+    (t1_sexp : 'a -> Sexp.t) (fn : 'a -> 'b) (t2_eq : 'b -> 'b -> bool) =
   let open QCheck in
   Test.make ~count:100
-    (pair t1_arb (ast_expr_arb_any (QCheck.gen t1_arb)))
+    (pair t1_arb (ast_expr_arb_any (PrintSexp t1_sexp) (QCheck.gen t1_arb)))
     (fun (x, e) ->
       let e' = fmap ~f:(Core.Fn.compose fn (const x)) e in
       t2_eq (expr_node_val e') (fn x))
@@ -174,17 +174,17 @@ let suite =
                   name >::: [ QCheck_runner.to_ounit2_test test ])
                 [
                   ( "unit -> int",
-                    create_test_cases_expr_fmap_root QCheck.unit (Fn.const 1)
-                      equal_int );
+                    create_test_cases_expr_fmap_root QCheck.unit sexp_of_unit
+                      (Fn.const 1) equal_int );
                   ( "int -> string",
-                    create_test_cases_expr_fmap_root QCheck.int string_of_int
-                      equal_string );
+                    create_test_cases_expr_fmap_root QCheck.int sexp_of_int
+                      string_of_int equal_string );
                   ( "bool -> int",
-                    create_test_cases_expr_fmap_root QCheck.bool
+                    create_test_cases_expr_fmap_root QCheck.bool sexp_of_bool
                       (fun b -> if b then 1 else 0)
                       equal_int );
                   ( "string -> int",
-                    create_test_cases_expr_fmap_root QCheck.string String.length
-                      equal_int );
+                    create_test_cases_expr_fmap_root QCheck.string
+                      sexp_of_string String.length equal_int );
                 ];
        ]
