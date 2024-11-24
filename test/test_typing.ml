@@ -3,6 +3,7 @@ open Core
 open Pq_lang
 open Vtype
 open Ast
+open Utils
 
 let test_cases_expr_typing : test list =
   let create_test ((name : string), (e : plain_expr), (t_opt : vtype option)) :
@@ -141,6 +142,118 @@ let test_cases_expr_typing : test list =
 
 (* TODO - tests for the variable context (e.g. that overwriting a variable's typing works) *)
 
-(* TODO - add qcheck tests for testing typing more throughly (e.g. generator for bool-typed expressions, then can check that any `BAdd` node with bool-typed arguments is typed as a bool) *)
+let test_cases_arb_compound_expr_typing : test list =
+  let open QCheck in
+  let open QCheck.Gen in
+  let expr_gen (t : vtype) : unit expr Gen.t =
+    ast_expr_arb ~t NoPrint Gen.unit |> QCheck.gen
+  in
+  let create_test ((name : string), (e_gen : (vtype * plain_expr) Gen.t)) : test
+      =
+    let e_arb =
+      QCheck.make
+        ~print:QCheck.Print.(pair vtype_to_source_code ast_to_source_code)
+        e_gen
+    in
+    QCheck_ounit.to_ounit2_test
+      (Test.make ~name ~count:100 e_arb (fun (exp_t, e) ->
+           let open Result in
+           let out = Typing.type_expr e in
+           match out with
+           | Ok typed_e ->
+               let t = typed_e |> expr_node_val |> fst in
+               equal_vtype exp_t t
+           | Error _ -> false))
+  in
+  List.map ~f:create_test
+    [
+      ( "Add",
+        pair (return VTypeInt)
+          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
+            Add ((), e1, e2) ) );
+      ( "Neg",
+        pair (return VTypeInt) (expr_gen VTypeInt >|= fun e -> Neg ((), e)) );
+      ( "Subtr",
+        pair (return VTypeInt)
+          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
+            Subtr ((), e1, e2) ) );
+      ( "Mult",
+        pair (return VTypeInt)
+          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
+            Mult ((), e1, e2) ) );
+      ( "BNot",
+        pair (return VTypeBool) (expr_gen VTypeBool >|= fun e -> BNot ((), e))
+      );
+      ( "BOr",
+        pair (return VTypeBool)
+          ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
+            BOr ((), e1, e2) ) );
+      ( "BAnd",
+        pair (return VTypeBool)
+          ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
+            BAnd ((), e1, e2) ) );
+      ( "Eq - int",
+        pair (return VTypeBool)
+          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
+            Eq ((), e1, e2) ) );
+      ( "Eq - bool",
+        pair (return VTypeBool)
+          ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
+            Eq ((), e1, e2) ) );
+      ( "Gt",
+        pair (return VTypeBool)
+          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
+            Gt ((), e1, e2) ) );
+      ( "GtEq",
+        pair (return VTypeBool)
+          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
+            GtEq ((), e1, e2) ) );
+      ( "Lt",
+        pair (return VTypeBool)
+          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
+            Lt ((), e1, e2) ) );
+      ( "LtEq",
+        pair (return VTypeBool)
+          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
+            LtEq ((), e1, e2) ) );
+      ( "If",
+        vtype_gen default_max_gen_rec_depth >>= fun t ->
+        triple (expr_gen VTypeBool) (expr_gen t) (expr_gen t)
+        >|= fun (e1, e2, e3) -> (t, If ((), e1, e2, e3)) );
+      ( "Let",
+        vtype_gen default_max_gen_rec_depth >>= fun t ->
+        pair varname_gen (vtype_gen default_max_gen_rec_depth)
+        >>= fun (xname, xtype) ->
+        pair (expr_gen xtype) (expr_gen t) >|= fun (e1, e2) ->
+        (t, Let ((), xname, e1, e2))
+        (* Note, the tests here (and for the Fun and Fix cases) don't work with changing variable contexts. But this should be fine *)
+      );
+      ( "Fun",
+        vtype_gen default_max_gen_rec_depth >>= fun t2 ->
+        pair varname_gen (vtype_gen default_max_gen_rec_depth)
+        >>= fun (xname, t1) ->
+        expr_gen t2 >|= fun e ->
+        (VTypeFun (t1, t2), Ast.Fun ((), (xname, t1), e)) );
+      ( "App",
+        pair
+          (vtype_gen default_max_gen_rec_depth)
+          (vtype_gen default_max_gen_rec_depth)
+        >>= fun (t1, t2) ->
+        pair (expr_gen (VTypeFun (t1, t2))) (expr_gen t1) >|= fun (e1, e2) ->
+        (t2, App ((), e1, e2)) );
+      ( "Fix",
+        pair varname_gen (vtype_gen default_max_gen_rec_depth)
+        >>= fun (fname, t1) ->
+        pair varname_gen (vtype_gen default_max_gen_rec_depth)
+        >>= fun (xname, t2) ->
+        expr_gen t2 >|= fun e ->
+        (VTypeFun (t1, t2), Fix ((), (fname, VTypeFun (t1, t2)), (xname, t1), e))
+      );
+    ]
 
-let suite = "Typing" >::: [ "Expression typing" >::: test_cases_expr_typing ]
+let suite =
+  "Typing"
+  >::: [
+         "Expression typing" >::: test_cases_expr_typing;
+         "Arbitrary expression typing" >::: test_cases_arb_compound_expr_typing;
+       ]
