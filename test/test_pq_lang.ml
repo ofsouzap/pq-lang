@@ -4,6 +4,7 @@ let () =
   let suite =
     "PQ Lang Tests"
     >::: [
+           Test_utils.suite;
            Test_ast.suite;
            Test_frontend.suite;
            Test_ast_executor.suite;

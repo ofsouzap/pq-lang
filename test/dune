@@ -4,7 +4,7 @@
  (modules
   utils
   test_pq_lang
-  ; Tests for the utilities module
+  test_utils
   test_ast
   test_typing
   test_frontend
