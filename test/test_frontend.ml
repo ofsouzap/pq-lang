@@ -452,7 +452,7 @@ let test_cases_recursion : test_case list =
                "f",
                Fix
                  ( (),
-                   ("f", VTypeFun (VTypeInt, VTypeInt)),
+                   ("f", VTypeInt, VTypeInt),
                    ("x", VTypeInt),
                    If
                      ( (),
@@ -516,10 +516,7 @@ let test_cases_recursion : test_case list =
              ( (),
                "f",
                Fix
-                 ( (),
-                   ("f", VTypeFun (VTypeInt, VTypeInt)),
-                   ("y", VTypeInt),
-                   Var ((), "y") ),
+                 ((), ("f", VTypeInt, VTypeInt), ("y", VTypeInt), Var ((), "y")),
                App ((), Var ((), "f"), IntLit ((), 5)) )) );
     ]
 

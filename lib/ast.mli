@@ -36,8 +36,8 @@ type 'a expr =
   | Let of 'a * string * 'a expr * 'a expr  (** Let binding *)
   | Fun of 'a * (string * vtype) * 'a expr  (** Function value *)
   | App of 'a * 'a expr * 'a expr  (** Function application *)
-  | Fix of 'a * (string * vtype) * (string * vtype) * 'a expr
-      (** Application of fix operator: `((function_name_for_recursion, function_for_recursion_type), (param_name, param_type), expr)` *)
+  | Fix of 'a * (string * vtype * vtype) * (string * vtype) * 'a expr
+      (** Application of fix operator: `((function_name_for_recursion, function_for_recursion_type1, function_for_recursion_type2), (param_name, param_type), expr)` *)
 [@@deriving sexp, equal]
 
 (** Extract the value attached to a single node of a tagged AST expression *)
@@ -51,6 +51,12 @@ val ( >|= ) : 'a expr -> ('a -> 'b) -> 'b expr
 
 (** An expression in the language without any tagging data *)
 type plain_expr = unit expr [@@deriving sexp, equal]
+
+(** An expression in the language with typing information *)
+type 'a typed_expr = (vtype * 'a) expr [@@deriving sexp, equal]
+
+(** An expression in the language with typing information *)
+type plain_typed_expr = unit typed_expr [@@deriving sexp, equal]
 
 (** Delete an AST's tagging data to form a plain AST *)
 val expr_to_plain_expr : 'a expr -> plain_expr

@@ -21,7 +21,7 @@ type 'a expr =
   | Let of 'a * string * 'a expr * 'a expr
   | Fun of 'a * (string * vtype) * 'a expr
   | App of 'a * 'a expr * 'a expr
-  | Fix of 'a * (string * vtype) * (string * vtype) * 'a expr
+  | Fix of 'a * (string * vtype * vtype) * (string * vtype) * 'a expr
 [@@deriving sexp, equal]
 
 let expr_node_val : 'a expr -> 'a = function
@@ -72,6 +72,8 @@ let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
 let ( >|= ) (e : 'a expr) (f : 'a -> 'b) = fmap ~f e
 
 type plain_expr = unit expr [@@deriving sexp, equal]
+type 'a typed_expr = (vtype * 'a) expr [@@deriving sexp, equal]
+type plain_typed_expr = unit typed_expr [@@deriving sexp, equal]
 
 let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
   match e with
@@ -136,7 +138,8 @@ let rec ast_to_source_code = function
           (ast_to_source_code e2)
       in
       match e1 with
-      | Fix (_, (xname2, x2type), (yname, ytype), e1') ->
+      | Fix (_, (xname2, x2type1, x2type2), (yname, ytype), e1') ->
+          let x2type = VTypeFun (x2type1, x2type2) in
           if equal_string xname xname2 then
             sprintf "let rec (%s : %s) = fun (%s : %s) -> (%s) end in (%s) end"
               xname

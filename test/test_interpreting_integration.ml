@@ -8,7 +8,12 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
   let ast = Parser.prog Lexer.token lexbuf in
-  let result = Ast_executor.execute ast in
+  let typed_e =
+    match Typing.type_expr ast with
+    | Ok x -> x
+    | Error _ -> failwith "Failed to type expression"
+  in
+  let result = Ast_executor.execute typed_e in
   assert_equal exp result ~cmp:override_compare_exec_res
     ~printer:Ast_executor.show_exec_res
 

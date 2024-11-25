@@ -9,7 +9,7 @@ let () =
            Test_frontend.suite;
            Test_ast_executor.suite;
            Test_ast_executor_store.suite;
-           Test_lexer_parser_ast_executor.suite;
+           Test_interpreting_integration.suite;
            Test_typing.suite;
          ]
   in

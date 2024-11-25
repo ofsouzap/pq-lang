@@ -1,4 +1,5 @@
 open Core
+open Vtype
 
 (* TODO - have backends as a module thing, so that they can more easily be swapped in *)
 
@@ -8,7 +9,8 @@ type varname = string [@@deriving sexp, equal]
 module Varname = String
 module VarnameMap = Map.Make_using_comparator (Varname)
 
-type closure_props = varname * ast_tag Ast.expr * store [@@deriving sexp, equal]
+type closure_props = varname * ast_tag Ast.typed_expr * store
+[@@deriving sexp, equal]
 
 and value = Int of int | Bool of bool | Closure of closure_props
 [@@deriving sexp, equal]
@@ -113,22 +115,22 @@ let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
         (TypingError { empty_typing_error with expected_type = Some "Closure" })
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an integer and give a typing error otherwise *)
-let rec eval_apply_to_int (store : store) (x : ast_tag Ast.expr)
+let rec eval_apply_to_int (store : store) (x : ast_tag Ast.typed_expr)
     (cnt : int -> exec_res) : exec_res =
   eval store x >>= apply_to_int cnt
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an boolean and give a typing error otherwise *)
-and eval_apply_to_bool (store : store) (x : ast_tag Ast.expr)
+and eval_apply_to_bool (store : store) (x : ast_tag Ast.typed_expr)
     (cnt : bool -> exec_res) : exec_res =
   eval store x >>= apply_to_bool cnt
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an function and give a typing error otherwise *)
-and eval_apply_to_closure (store : store) (x : ast_tag Ast.expr)
+and eval_apply_to_closure (store : store) (x : ast_tag Ast.typed_expr)
     (cnt : closure_props -> exec_res) : exec_res =
   eval store x >>= apply_to_closure cnt
 
 (** Evaluate an AST subtree *)
-and eval (store : store) (e : ast_tag Ast.expr) : exec_res =
+and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
   match e with
   | IntLit (_, i) -> Res (Int i)
   | Add (_, e1, e2) ->
@@ -193,17 +195,23 @@ and eval (store : store) (e : ast_tag Ast.expr) : exec_res =
       eval_apply_to_closure store e1 (fun (argname, fe, fs) ->
           eval store e2 >>= fun v2 ->
           eval (store_set fs ~key:argname ~value:v2) fe)
-  | Fix (_, f, ((xname, _) as x), fxbody) ->
+  | Fix (_, (fname, ftype1, ftype2), ((xname, xtype) as x), fxbody) as e ->
       (* fix (\f. \x. e2) ~> \x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
+      let ftype = VTypeFun (ftype1, ftype2) in
       eval store
         (Fun
-           ( (),
+           ( (ftype, ()),
              x,
              App
-               ( (),
+               ( (ftype2, ()),
                  App
-                   ((), Fun ((), f, Fun ((), x, fxbody)), Fix ((), f, x, fxbody)),
-                 Var ((), xname) ) ))
+                   ( (ftype, ()),
+                     Fun
+                       ( (VTypeFun (ftype, ftype), ()),
+                         (fname, ftype),
+                         Fun ((ftype, ()), x, fxbody) ),
+                     e ),
+                 Var ((xtype, ()), xname) ) ))
 
-let execute (e : 'a Ast.expr) =
-  eval (VarnameMap.empty : store) (Ast.expr_to_plain_expr e)
+let execute (e : 'a Ast.typed_expr) =
+  eval (VarnameMap.empty : store) (Ast.fmap ~f:(fun (t, _) -> (t, ())) e)

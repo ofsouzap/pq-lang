@@ -89,11 +89,7 @@ let test_cases_expr_typing : test list =
       ( Let
           ( (),
             "f",
-            Fix
-              ( (),
-                ("f", VTypeFun (VTypeInt, VTypeInt)),
-                ("x", VTypeInt),
-                Var ((), "x") ),
+            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Some VTypeInt );
       ( Let
@@ -101,7 +97,7 @@ let test_cases_expr_typing : test list =
             "f",
             Fix
               ( (),
-                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("f", VTypeInt, VTypeInt),
                 ("x", VTypeInt),
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
@@ -109,21 +105,13 @@ let test_cases_expr_typing : test list =
       ( Let
           ( (),
             "f",
-            Fix
-              ( (),
-                ("f", VTypeFun (VTypeInt, VTypeInt)),
-                ("x", VTypeBool),
-                Var ((), "x") ),
+            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         None );
       ( Let
           ( (),
             "f",
-            Fix
-              ( (),
-                ("f", VTypeFun (VTypeInt, VTypeInt)),
-                ("x", VTypeBool),
-                Var ((), "x") ),
+            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
             App ((), Var ((), "f"), BoolLit ((), false)) ),
         None );
       ( Let
@@ -131,7 +119,7 @@ let test_cases_expr_typing : test list =
             "f",
             Fix
               ( (),
-                ("f", VTypeFun (VTypeInt, VTypeBool)),
+                ("f", VTypeInt, VTypeBool),
                 ("x", VTypeInt),
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
@@ -142,6 +130,7 @@ let test_cases_expr_typing : test list =
 
 (* TODO - tests for the variable context (e.g. that overwriting a variable's typing works) *)
 
+(* TODO - negative test cases (expressions that should fail type checking) *)
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in
@@ -247,13 +236,28 @@ let test_cases_arb_compound_expr_typing : test list =
         pair varname_gen (vtype_gen default_max_gen_rec_depth)
         >>= fun (xname, t2) ->
         expr_gen t2 >|= fun e ->
-        (VTypeFun (t1, t2), Fix ((), (fname, VTypeFun (t1, t2)), (xname, t1), e))
-      );
+        (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );
     ]
+
+let test_cases_typing_maintains_structure : test =
+  let open QCheck in
+  QCheck_ounit.to_ounit2_test
+    (Test.make ~name:"Typing maintains structure" ~count:100
+       (ast_expr_arb PrintExprSource Gen.unit) (fun e ->
+         let open Result in
+         let out = Typing.type_expr e in
+         match out with
+         | Ok typed_e ->
+             let plain_e = expr_to_plain_expr e in
+             let plain_typed_e = expr_to_plain_expr typed_e in
+             equal_plain_expr plain_e plain_typed_e
+         | Error _ -> false))
 
 let suite =
   "Typing"
   >::: [
          "Expression typing" >::: test_cases_expr_typing;
          "Arbitrary expression typing" >::: test_cases_arb_compound_expr_typing;
+         "Typing maintains structure"
+         >::: [ test_cases_typing_maintains_structure ];
        ]

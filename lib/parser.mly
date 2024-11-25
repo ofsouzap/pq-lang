@@ -20,7 +20,7 @@ open Parsing_errors
  *   )
 *)
 
-let create_let_rec (((fname : string), (_ : vtype) as f), (fbody : plain_expr), (subexpr : plain_expr)) : plain_expr =
+let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : plain_expr), (subexpr : plain_expr)) : plain_expr =
   match fbody with
   | Fun (_, x, fbody') -> Let ((), fname, Fix ((), f, x, fbody'), subexpr)
   | _ -> raise CustomError
@@ -47,6 +47,7 @@ let create_let_rec (((fname : string), (_ : vtype) as f), (fbody : plain_expr), 
 
 // Non-terminal typing
 %type <vtype> vtype
+%type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
@@ -59,6 +60,10 @@ vtype:
   | INT { VTypeInt }
   | BOOL { VTypeBool }
   | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
+;
+
+typed_function_name:
+  | n = NAME COLON t1 = vtype ARROW t2 = vtype { (n, t1, t2) }
 ;
 
 typed_name:
@@ -83,7 +88,7 @@ expr:
   | e1 = expr LTEQ e2 = expr { LtEq ((), e1, e2) }  (* e1 <= e2 *)
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }  (* if e1 then e2 else e3 *)
   | LET l = NAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
-  | LET REC LPAREN l = typed_name RPAREN ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
+  | LET REC LPAREN l = typed_function_name RPAREN ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
 ;

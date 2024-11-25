@@ -7,7 +7,8 @@ type ast_tag = unit [@@deriving sexp, equal]
 type varname = string
 
 (** Properties of a closure *)
-type closure_props = varname * ast_tag Ast.expr * store [@@deriving sexp, equal]
+type closure_props = varname * ast_tag Ast.typed_expr * store
+[@@deriving sexp, equal]
 
 (** A resulting value from executing an AST *)
 and value =
@@ -70,4 +71,4 @@ val exec_res_compare : exec_res -> exec_res -> bool
 val show_exec_res : exec_res -> string
 
 (** Execute an AST representation of a program *)
-val execute : 'a Ast.expr -> exec_res
+val execute : 'a Ast.typed_expr -> exec_res

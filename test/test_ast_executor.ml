@@ -10,10 +10,15 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
     ~init:Ast_executor.empty_store
 
-let test_cases_arithmetic : (string * Ast.plain_expr * exec_res) list =
+let type_expr (e : Ast.plain_expr) =
+  match Typing.type_expr e with
+  | Ok x -> x
+  | Error _ -> failwith ("Typing error for: " ^ Ast.ast_to_source_code e)
+
+let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
   let mapf ((x : plain_expr), (y : int)) =
-    (ast_to_source_code x, x, Res (Int y))
+    (ast_to_source_code x, type_expr x, Res (Int y))
   in
   List.map ~f:mapf
     [
@@ -43,10 +48,10 @@ let test_cases_arithmetic : (string * Ast.plain_expr * exec_res) list =
         0 );
     ]
 
-let test_cases_booleans : (string * Ast.plain_expr * exec_res) list =
+let test_cases_booleans : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
   let mapf ((x : plain_expr), (y : bool)) =
-    (ast_to_source_code x, x, Res (Bool y))
+    (ast_to_source_code x, type_expr x, Res (Bool y))
   in
   List.map ~f:mapf
     [
@@ -68,10 +73,11 @@ let test_cases_booleans : (string * Ast.plain_expr * exec_res) list =
       (Eq ((), BoolLit ((), false), BoolLit ((), false)), true);
     ]
 
-let test_cases_integer_comparisons : (string * Ast.plain_expr * exec_res) list =
+let test_cases_integer_comparisons :
+    (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
   let mapf ((x : plain_expr), (y : bool)) =
-    (ast_to_source_code x, x, Res (Bool y))
+    (ast_to_source_code x, type_expr x, Res (Bool y))
   in
   List.map ~f:mapf
     [
@@ -97,9 +103,11 @@ let test_cases_integer_comparisons : (string * Ast.plain_expr * exec_res) list =
       (LtEq ((), IntLit ((), 1), IntLit ((), 1)), true);
     ]
 
-let test_cases_control_flow : (string * Ast.plain_expr * exec_res) list =
+let test_cases_control_flow : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) = (ast_to_source_code x, x, y) in
+  let mapf ((x : plain_expr), (y : exec_res)) =
+    (ast_to_source_code x, type_expr x, y)
+  in
   List.map ~f:mapf
     [
       (If ((), BoolLit ((), true), IntLit ((), 1), IntLit ((), 2)), Res (Int 1));
@@ -116,16 +124,15 @@ let test_cases_control_flow : (string * Ast.plain_expr * exec_res) list =
             IntLit ((), 1),
             Add ((), IntLit ((), 1), IntLit ((), 2)) ),
         Res (Int 3) );
-      ( If ((), IntLit ((), 2), IntLit ((), 1), IntLit ((), 2)),
-        Err (TypingError empty_typing_error) );
     ]
 
-let test_cases_variables : (string * Ast.plain_expr * exec_res) list =
+let test_cases_variables : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) = (ast_to_source_code x, x, y) in
+  let mapf ((x : plain_expr), (y : exec_res)) =
+    (ast_to_source_code x, type_expr x, y)
+  in
   List.map ~f:mapf
     [
-      (Var ((), "x"), Err (UndefinedVarError "x"));
       (Let ((), "x", IntLit ((), 1), Var ((), "x")), Res (Int 1));
       ( Let ((), "x", IntLit ((), 1), Add ((), Var ((), "x"), IntLit ((), 2))),
         Res (Int 3) );
@@ -139,9 +146,6 @@ let test_cases_variables : (string * Ast.plain_expr * exec_res) list =
       ( Let
           ((), "x", IntLit ((), 1), Let ((), "x", IntLit ((), 2), Var ((), "x"))),
         Res (Int 2) );
-      ( Let
-          ((), "x", Let ((), "y", IntLit ((), 1), Var ((), "y")), Var ((), "y")),
-        Err (UndefinedVarError "y") );
       (Let ((), "x", BoolLit ((), true), Var ((), "x")), Res (Bool true));
       ( Let
           ((), "x", BoolLit ((), false), BOr ((), Var ((), "x"), Var ((), "x"))),
@@ -154,17 +158,24 @@ let test_cases_variables : (string * Ast.plain_expr * exec_res) list =
         Res (Int 8) );
     ]
 
-let test_cases_functions : (string * Ast.plain_expr * exec_res) list =
+let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) = (ast_to_source_code x, x, y) in
+  let mapf ((x : plain_expr), (y : exec_res)) =
+    (ast_to_source_code x, type_expr x, y)
+  in
   List.map ~f:mapf
     [
       ( Fun ((), ("x", VTypeInt), Var ((), "x")),
-        Res (Closure ("x", Var ((), "x"), empty_store)) );
-      ( Fun ((), ("x", VTypeInt), BOr ((), Var ((), "x"), BoolLit ((), true))),
+        Res (Closure ("x", Var ((VTypeInt, ()), "x"), empty_store)) );
+      ( Fun ((), ("x", VTypeBool), BOr ((), Var ((), "x"), BoolLit ((), true))),
         Res
           (Closure
-             ("x", BOr ((), Var ((), "x"), BoolLit ((), true)), empty_store)) );
+             ( "x",
+               BOr
+                 ( (VTypeBool, ()),
+                   Var ((VTypeBool, ()), "x"),
+                   BoolLit ((VTypeBool, ()), true) ),
+               empty_store )) );
       ( App
           ( (),
             App
@@ -179,8 +190,6 @@ let test_cases_functions : (string * Ast.plain_expr * exec_res) list =
                 IntLit ((), 3) ),
             IntLit ((), 5) ),
         Res (Int 8) );
-      ( App ((), Fun ((), ("x", VTypeInt), Var ((), "y")), IntLit ((), 3)),
-        Err (UndefinedVarError "y") );
       ( App
           ( (),
             App
@@ -189,7 +198,7 @@ let test_cases_functions : (string * Ast.plain_expr * exec_res) list =
                   ( (),
                     Fun
                       ( (),
-                        ("b", VTypeInt),
+                        ("b", VTypeBool),
                         Fun
                           ( (),
                             ("x", VTypeInt),
@@ -207,9 +216,11 @@ let test_cases_functions : (string * Ast.plain_expr * exec_res) list =
         Res (Int 1) );
     ]
 
-let test_cases_recursion : (string * Ast.plain_expr * exec_res) list =
+let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) = (ast_to_source_code x, x, y) in
+  let mapf ((x : plain_expr), (y : exec_res)) =
+    (ast_to_source_code x, type_expr x, y)
+  in
   List.map ~f:mapf
     [
       ( Let
@@ -217,7 +228,7 @@ let test_cases_recursion : (string * Ast.plain_expr * exec_res) list =
             "f",
             Fix
               ( (),
-                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("f", VTypeInt, VTypeInt),
                 ("x", VTypeInt),
                 If
                   ( (),
@@ -234,7 +245,8 @@ let test_cases_recursion : (string * Ast.plain_expr * exec_res) list =
         Res (Int 15) );
     ]
 
-let create_test ((name : string), (inp : Ast.plain_expr), (exp : exec_res)) =
+let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res))
+    =
   name >:: fun _ ->
   let out = Ast_executor.execute inp in
   assert_equal exp out ~cmp:override_compare_exec_res

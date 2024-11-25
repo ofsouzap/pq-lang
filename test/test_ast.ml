@@ -51,19 +51,19 @@ let test_cases_equality : test list =
         App ((), IntLit ((), 1), IntLit ((), 2)) );
       ( Fix
           ( (),
-            ("f", VTypeFun (VTypeInt, VTypeInt)),
+            ("f", VTypeInt, VTypeInt),
             ("x", VTypeInt),
             App ((), Var ((), "f"), Var ((), "x")) ),
         Fix
           ( (),
-            ("f", VTypeFun (VTypeInt, VTypeInt)),
+            ("f", VTypeInt, VTypeInt),
             ("x", VTypeInt),
             App ((), Var ((), "f"), Var ((), "x")) ) );
       ( App
           ( (),
             Fix
               ( (),
-                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("f", VTypeInt, VTypeInt),
                 ("x", VTypeInt),
                 App ((), Var ((), "f"), Var ((), "x")) ),
             Fun ((), ("x", VTypeInt), Fun ((), ("x", VTypeInt), IntLit ((), 1)))
@@ -72,7 +72,7 @@ let test_cases_equality : test list =
           ( (),
             Fix
               ( (),
-                ("f", VTypeFun (VTypeInt, VTypeInt)),
+                ("f", VTypeInt, VTypeInt),
                 ("x", VTypeInt),
                 App ((), Var ((), "f"), Var ((), "x")) ),
             Fun ((), ("x", VTypeInt), Fun ((), ("x", VTypeInt), IntLit ((), 1)))
@@ -84,7 +84,7 @@ let test_cases_equality : test list =
               ( (),
                 Fix
                   ( (),
-                    ("f", VTypeFun (VTypeInt, VTypeInt)),
+                    ("f", VTypeInt, VTypeInt),
                     ("x", VTypeInt),
                     App ((), Var ((), "f"), Var ((), "x")) ),
                 Fun
@@ -99,7 +99,7 @@ let test_cases_equality : test list =
               ( (),
                 Fix
                   ( (),
-                    ("f", VTypeFun (VTypeInt, VTypeInt)),
+                    ("f", VTypeInt, VTypeInt),
                     ("x", VTypeInt),
                     App ((), Var ((), "f"), Var ((), "x")) ),
                 Fun

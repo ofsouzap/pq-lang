@@ -108,16 +108,14 @@ module TypeExpr (Ctx : TypingVarContext) = struct
         | VTypeFun (t11, t12) ->
             if equal_vtype t11 t2 then Ok (add_type t12 e) else Error ()
         | _ -> Error ())
-    | Fix (_, (fname, ftype), (xname, xtype), e) -> (
-        match ftype with
-        | VTypeFun (ftype_a, ftype_b) ->
-            if equal_vtype ftype_a xtype then
-              type_expr (Ctx.add (Ctx.add ctx fname ftype) xname xtype) e
-              >>= fun e' ->
-              let t = e' |> expr_node_val |> fst in
-              if equal_vtype t ftype_b then Ok (add_type ftype e) else Error ()
-            else Error ()
-        | _ -> Error ())
+    | Fix (_, (fname, ftype1, ftype2), (xname, xtype), e) ->
+        let ftype = VTypeFun (ftype1, ftype2) in
+        if equal_vtype ftype1 xtype then
+          type_expr (Ctx.add (Ctx.add ctx fname ftype) xname xtype) e
+          >>= fun e' ->
+          let t = e' |> expr_node_val |> fst in
+          if equal_vtype t ftype2 then Ok (add_type ftype e) else Error ()
+        else Error ()
 end
 
 module ListTypeExpr = TypeExpr (ListTypingVarContext)
