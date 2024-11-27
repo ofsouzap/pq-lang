@@ -126,6 +126,49 @@ let test_cases_expr_typing : test list =
         Some VTypeBool );
     ]
 
+let test_cases_expr_typing_full_check : test list =
+  let create_test ((name : string), (e : plain_expr), (exp : vtype expr)) : test
+      =
+    name >:: fun _ ->
+    let open Result in
+    let out = Typing.type_expr e in
+    match out with
+    | Ok e' ->
+        let typed_out = e' >|= fst in
+        assert_equal ~cmp:(equal_expr equal_vtype)
+          ~printer:(get_asp_printer (PrintSexp sexp_of_vtype))
+          exp typed_out
+    | Error _ -> assert_failure "Failed to type"
+  in
+  List.map ~f:create_test
+    [
+      ( "Plain Arithmetic 1",
+        Add
+          ( (),
+            Subtr ((), IntLit ((), 3), IntLit ((), 2)),
+            Mult ((), IntLit ((), 2), Neg ((), IntLit ((), 7))) ),
+        Add
+          ( VTypeInt,
+            Subtr (VTypeInt, IntLit (VTypeInt, 3), IntLit (VTypeInt, 2)),
+            Mult
+              ( VTypeInt,
+                IntLit (VTypeInt, 2),
+                Neg (VTypeInt, IntLit (VTypeInt, 7)) ) ) );
+      ( "Mixed Typing 1",
+        Add
+          ( (),
+            IntLit ((), 2),
+            If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)) ),
+        Add
+          ( VTypeInt,
+            IntLit (VTypeInt, 2),
+            If
+              ( VTypeInt,
+                BoolLit (VTypeBool, true),
+                IntLit (VTypeInt, 3),
+                IntLit (VTypeInt, 0) ) ) );
+    ]
+
 (* TODO - have tests that start with a variable context *)
 
 (* TODO - tests for the variable context (e.g. that overwriting a variable's typing works) *)
@@ -257,6 +300,8 @@ let suite =
   "Typing"
   >::: [
          "Expression typing" >::: test_cases_expr_typing;
+         "Expression typing full hierarchy"
+         >::: test_cases_expr_typing_full_check;
          "Arbitrary expression typing" >::: test_cases_arb_compound_expr_typing;
          "Typing maintains structure"
          >::: [ test_cases_typing_maintains_structure ];

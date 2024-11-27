@@ -10,6 +10,15 @@ type 'a ast_print_method =
   | PrintSexp of ('a -> Sexp.t)
   | PrintExprSource
 
+let get_asp_printer_opt : 'a ast_print_method -> ('a expr -> string) option =
+  function
+  | NoPrint -> None
+  | PrintSexp f -> Some (fun e -> Ast.sexp_of_expr f e |> Sexp.to_string)
+  | PrintExprSource -> Some ast_to_source_code
+
+let get_asp_printer (p : 'a ast_print_method) (e : 'a expr) : string =
+  match get_asp_printer_opt p with None -> "" | Some f -> f e
+
 let default_ast_print_method : 'a ast_print_method = PrintExprSource
 let max_gen_rec_depth : int = 10
 let default_max_gen_rec_depth : int = max_gen_rec_depth
@@ -51,9 +60,6 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string sexp_of_token) tokens)
 
-let ast_sexp_printer = Fn.compose Sexp.to_string Ast.sexp_of_plain_expr
-let show_ast_sexp = ast_sexp_printer
-
 let override_compare_exec_res (a : exec_res) (b : exec_res) : bool =
   match (a, b) with
   | Err e1, Err e2 -> (
@@ -61,11 +67,6 @@ let override_compare_exec_res (a : exec_res) (b : exec_res) : bool =
       | TypingError _, TypingError _ -> true
       | _ -> exec_res_compare a b)
   | _ -> exec_res_compare a b
-
-let show_plain_ast = Fn.compose Sexp.to_string sexp_of_plain_expr
-
-let show_tagged_ast (f : 'a -> Sexp.t) =
-  Fn.compose Sexp.to_string (sexp_of_expr f)
 
 let lexer_keywords : string list =
   [
@@ -294,10 +295,9 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
   in
   let make_fn g =
-    match print with
-    | NoPrint -> make g
-    | PrintSexp val_sexp -> make ~print:(show_tagged_ast val_sexp) g
-    | PrintExprSource -> make ~print:ast_to_source_code g
+    match get_asp_printer_opt print with
+    | None -> make g
+    | Some printer -> make ~print:printer g
   in
   make_fn
     (match t with
