@@ -25,6 +25,7 @@ module TypeExpr (Ctx : TypingVarContext) = struct
   let rec type_expr (ctx : Ctx.t) (e : 'a expr) :
       ((vtype * 'a) expr, typing_error) Result.t =
     let open Result in
+    let e_type (e : (vtype * 'a) expr) = e |> expr_node_val |> fst in
     let add_type (t : vtype) (e : 'a expr) : (vtype * 'a) expr =
       e >|= fun x -> (t, x)
     in
@@ -36,11 +37,12 @@ module TypeExpr (Ctx : TypingVarContext) = struct
     in
     let type_binop ?(out_type_f : (vtype -> vtype) option) (e : 'a expr)
         (e1 : 'a expr) (e2 : 'a expr) : ((vtype * 'a) expr, unit) Result.t =
+      (* e1 and e2 should be the two subexpressions of e. If e1 and e2 have the same type, return e typed as that type (with out_type_f applied to it) *)
       let out_type_f = match out_type_f with Some f -> f | None -> Fn.id in
       type_expr ctx e1 >>= fun e1' ->
       type_expr ctx e2 >>= fun e2' ->
-      let t1 = e1' |> expr_node_val |> fst in
-      let t2 = e2' |> expr_node_val |> fst in
+      let t1 = e_type e1' in
+      let t2 = e_type e2' in
       match (t1, t2) with
       | VTypeInt, VTypeInt -> Ok (add_type (out_type_f VTypeInt) e)
       | VTypeInt, _ -> Error ()
@@ -52,22 +54,29 @@ module TypeExpr (Ctx : TypingVarContext) = struct
           else Error ()
       | VTypeFun _, _ -> Error ()
     in
+    let type_unop (e : 'a expr) (e' : 'a expr) :
+        (* e' should be the subexpression of e. Return e typed with the same type as e' *)
+        ((vtype * 'a) expr, unit) Result.t =
+      type_expr ctx e' >>= fun typed_e' ->
+      let t = e_type typed_e' in
+      Ok (add_type t e)
+    in
     match e with
     | IntLit _ as e -> Ok (add_type VTypeInt e)
     | (Add (_, e1, e2) as e)
     | (Subtr (_, e1, e2) as e)
     | (Mult (_, e1, e2) as e) ->
         type_binop e e1 e2 >>= be_of_type VTypeInt
-    | Neg (_, e) -> type_expr ctx e >>= be_of_type VTypeInt
+    | Neg (_, e') as e -> type_unop e e' >>= be_of_type VTypeInt
     | BoolLit _ -> Ok (add_type VTypeBool e)
-    | BNot (_, e) -> type_expr ctx e >>= be_of_type VTypeBool
+    | BNot (_, e') as e -> type_unop e e' >>= be_of_type VTypeBool
     | (BOr (_, e1, e2) as e) | (BAnd (_, e1, e2) as e) ->
         type_binop e e1 e2 >>= be_of_type VTypeBool
     | Eq (_, e1, e2) -> (
         type_expr ctx e1 >>= fun e1' ->
         type_expr ctx e2 >>= fun e2' ->
-        let t1 = e1' |> expr_node_val |> fst in
-        let t2 = e2' |> expr_node_val |> fst in
+        let t1 = e_type e1' in
+        let t2 = e_type e2' in
         match (t1, t2) with
         | VTypeInt, VTypeInt | VTypeBool, VTypeBool -> Ok (add_type VTypeBool e)
         | _, _ -> Error ())
@@ -82,8 +91,8 @@ module TypeExpr (Ctx : TypingVarContext) = struct
         type_expr ctx e1 >>= be_of_type VTypeBool >>= fun _ ->
         type_expr ctx e2 >>= fun e2' ->
         type_expr ctx e3 >>= fun e3' ->
-        let t2 = e2' |> expr_node_val |> fst in
-        let t3 = e3' |> expr_node_val |> fst in
+        let t2 = e_type e2' in
+        let t3 = e_type e3' in
         if equal_vtype t2 t3 then Ok (add_type t2 e) else Error ()
     | Var (_, xname) as e -> (
         match Ctx.find ctx xname with
@@ -91,19 +100,19 @@ module TypeExpr (Ctx : TypingVarContext) = struct
         | None -> Error ())
     | Let (_, xname, e1, e2) as e ->
         type_expr ctx e1 >>= fun e1' ->
-        let t1 = e1' |> expr_node_val |> fst in
+        let t1 = e_type e1' in
         type_expr (Ctx.add ctx xname t1) e2 >>= fun e2' ->
-        let t2 = e2' |> expr_node_val |> fst in
+        let t2 = e_type e2' in
         Ok (add_type t2 e)
     | Fun (_, (xname, xtype), e') as e ->
         type_expr (Ctx.add ctx xname xtype) e' >>= fun e' ->
-        let t = e' |> expr_node_val |> fst in
+        let t = e_type e' in
         Ok (add_type (VTypeFun (xtype, t)) e)
     | App (_, e1, e2) as e -> (
         type_expr ctx e1 >>= fun e1' ->
         type_expr ctx e2 >>= fun e2' ->
-        let t1 = e1' |> expr_node_val |> fst in
-        let t2 = e2' |> expr_node_val |> fst in
+        let t1 = e_type e1' in
+        let t2 = e_type e2' in
         match t1 with
         | VTypeFun (t11, t12) ->
             if equal_vtype t11 t2 then Ok (add_type t12 e) else Error ()
@@ -113,7 +122,7 @@ module TypeExpr (Ctx : TypingVarContext) = struct
         if equal_vtype ftype1 xtype then
           type_expr (Ctx.add (Ctx.add ctx fname ftype) xname xtype) e
           >>= fun e' ->
-          let t = e' |> expr_node_val |> fst in
+          let t = e_type e' in
           if equal_vtype t ftype2 then Ok (add_type ftype e) else Error ()
         else Error ()
 end
