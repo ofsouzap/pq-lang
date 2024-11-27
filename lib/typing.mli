@@ -5,11 +5,15 @@ type typing_error =
   | UndefinedVariable of string
       (** A variable was referenced that isn't defined in the scope *)
   | TypeMismatch of vtype * vtype
-      (** An expression was expected to have the fst type but had the snd *)
+      (** An expression was expected to have the first type but had the second *)
   | EqualOperatorTypeMistmatch of vtype * vtype
       (** An application of the equality operation had a type mismatch as the operands had the specified types instead of compatible ones *)
   | ExpectedFunctionOf of vtype
       (** A value is used as a function but isn't a function. The expected input type of the function is the value *)
+[@@deriving sexp, equal]
+
+val equal_typing_error_variant : typing_error -> typing_error -> bool
+val print_typing_error : typing_error -> string
 
 (** Typing contexts of variables *)
 module type TypingVarContext = sig

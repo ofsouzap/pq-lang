@@ -3,95 +3,104 @@ open Core
 open Pq_lang
 open Vtype
 open Ast
+open Typing
 open Utils
 
 let test_cases_expr_typing : test list =
-  let create_test ((name : string), (e : plain_expr), (t_opt : vtype option)) :
-      test =
+  let open Either in
+  let create_test
+      ((name : string), (e : plain_expr), (t : (vtype, typing_error) Either.t))
+      : test =
     name >:: fun _ ->
     let open Result in
     let out = Typing.type_expr e in
-    match out with
-    | Ok e' -> (
-        let e_t = e' |> expr_node_val |> fst in
-        match t_opt with
-        | Some t -> assert_equal ~cmp:equal_vtype t e_t
-        | None ->
-            assert_failure
-              ("Expected typing error but got type of "
-              ^ (sexp_of_vtype e_t |> Sexp.to_string)))
-    | Error _ -> (
-        match t_opt with
-        | Some t ->
-            assert_failure
-              ("Expected typing judgement of "
-              ^ (sexp_of_vtype t |> Sexp.to_string)
-              ^ " but failed to type")
-        | None -> ())
+    match (out, t) with
+    | Ok e', First exp_t ->
+        let out_t = e' |> expr_node_val |> fst in
+        assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
+    | Ok _, Second _ -> assert_failure "Expected typing error but got type"
+    | Error _, First _ -> assert_failure "Expected type but got typing error"
+    | Error t_err, Second exp_err ->
+        assert_equal ~cmp:equal_typing_error ~printer:print_typing_error exp_err
+          t_err
   in
   List.map
     ~f:Fn.(compose create_test (fun (e, t) -> (ast_to_source_code e, e, t)))
     [
-      (IntLit ((), 1), Some VTypeInt);
-      (Add ((), IntLit ((), 3), IntLit ((), 0)), Some VTypeInt);
-      (Add ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (Neg ((), IntLit ((), 3)), Some VTypeInt);
-      (Neg ((), BoolLit ((), false)), None);
-      (Subtr ((), IntLit ((), 3), IntLit ((), 0)), Some VTypeInt);
-      (Subtr ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (Mult ((), IntLit ((), 3), IntLit ((), 0)), Some VTypeInt);
-      (Mult ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (BoolLit ((), true), Some VTypeBool);
-      (BNot ((), BoolLit ((), false)), Some VTypeBool);
-      (BNot ((), IntLit ((), 3)), None);
-      (BAnd ((), BoolLit ((), false), BoolLit ((), true)), Some VTypeBool);
-      (BAnd ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (BOr ((), BoolLit ((), false), BoolLit ((), true)), Some VTypeBool);
-      (BOr ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (Eq ((), IntLit ((), 3), IntLit ((), 0)), Some VTypeBool);
-      (Eq ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (Eq ((), IntLit ((), 3), BoolLit ((), true)), None);
-      (Eq ((), BoolLit ((), true), BoolLit ((), true)), Some VTypeBool);
-      (GtEq ((), IntLit ((), 3), IntLit ((), 0)), Some VTypeBool);
-      (GtEq ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (Gt ((), IntLit ((), 3), IntLit ((), 0)), Some VTypeBool);
-      (Gt ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (LtEq ((), IntLit ((), 3), IntLit ((), 0)), Some VTypeBool);
-      (LtEq ((), BoolLit ((), true), IntLit ((), 2)), None);
-      (Lt ((), IntLit ((), 3), IntLit ((), 0)), Some VTypeBool);
-      (Lt ((), BoolLit ((), true), IntLit ((), 2)), None);
+      (IntLit ((), 1), First VTypeInt);
+      (Add ((), IntLit ((), 3), IntLit ((), 0)), First VTypeInt);
+      ( Add ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Neg ((), IntLit ((), 3)), First VTypeInt);
+      ( Neg ((), BoolLit ((), false)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Subtr ((), IntLit ((), 3), IntLit ((), 0)), First VTypeInt);
+      ( Subtr ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Mult ((), IntLit ((), 3), IntLit ((), 0)), First VTypeInt);
+      ( Mult ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+      (BoolLit ((), true), First VTypeBool);
+      (BNot ((), BoolLit ((), false)), First VTypeBool);
+      (BNot ((), IntLit ((), 3)), Second (TypeMismatch (VTypeBool, VTypeInt)));
+      (BAnd ((), BoolLit ((), false), BoolLit ((), true)), First VTypeBool);
+      ( BAnd ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeBool, VTypeInt)) );
+      (BOr ((), BoolLit ((), false), BoolLit ((), true)), First VTypeBool);
+      ( BOr ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeBool, VTypeInt)) );
+      (Eq ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+      ( Eq ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (EqualOperatorTypeMistmatch (VTypeBool, VTypeInt)) );
+      ( Eq ((), IntLit ((), 3), BoolLit ((), true)),
+        Second (EqualOperatorTypeMistmatch (VTypeInt, VTypeBool)) );
+      (Eq ((), BoolLit ((), true), BoolLit ((), true)), First VTypeBool);
+      (GtEq ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+      ( GtEq ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Gt ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+      ( Gt ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+      (LtEq ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+      ( LtEq ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Lt ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+      ( Lt ((), BoolLit ((), true), IntLit ((), 2)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
       ( If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
-        Some VTypeInt );
-      (If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)), None);
-      (If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)), None);
+        First VTypeInt );
+      ( If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+      ( If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
       ( If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
-        Some VTypeInt );
-      (Var ((), "x"), None);
+        First VTypeInt );
+      (Var ((), "x"), Second (UndefinedVariable "x"));
       ( Fun ((), ("x", VTypeInt), Var ((), "x")),
-        Some (VTypeFun (VTypeInt, VTypeInt)) );
-      (Let ((), "x", IntLit ((), 3), Var ((), "x")), Some VTypeInt);
-      (Let ((), "x", BoolLit ((), true), Var ((), "x")), Some VTypeBool);
-      (Let ((), "x", IntLit ((), 3), BoolLit ((), true)), Some VTypeBool);
+        First (VTypeFun (VTypeInt, VTypeInt)) );
+      (Let ((), "x", IntLit ((), 3), Var ((), "x")), First VTypeInt);
+      (Let ((), "x", BoolLit ((), true), Var ((), "x")), First VTypeBool);
+      (Let ((), "x", IntLit ((), 3), BoolLit ((), true)), First VTypeBool);
       ( Let
           ( (),
             "f",
             Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Some VTypeInt );
+        First VTypeInt );
       ( Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
-        Some (VTypeFun (VTypeInt, VTypeInt)) );
+        First (VTypeFun (VTypeInt, VTypeInt)) );
       ( Let
           ( (),
             "f",
             Fun ((), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Some VTypeInt );
+        First VTypeInt );
       ( Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Some VTypeInt );
+        First VTypeInt );
       ( Let
           ( (),
             "f",
@@ -101,19 +110,19 @@ let test_cases_expr_typing : test list =
                 ("x", VTypeInt),
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        None );
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
       ( Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        None );
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
       ( Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
             App ((), Var ((), "f"), BoolLit ((), false)) ),
-        None );
+        Second (TypeMismatch (VTypeInt, VTypeBool)) );
       ( Let
           ( (),
             "f",
@@ -123,7 +132,7 @@ let test_cases_expr_typing : test list =
                 ("x", VTypeInt),
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Some VTypeBool );
+        First VTypeBool );
     ]
 
 let test_cases_expr_typing_full_check : test list =
@@ -175,7 +184,6 @@ let test_cases_expr_typing_full_check : test list =
    Do these as a module functor and then have a ground truth of an inefficient, but definitely-correct implementation
    (probably done with functions for context tracking) *)
 
-(* TODO - negative test cases (expressions that should fail type checking) *)
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in

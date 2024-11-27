@@ -7,6 +7,27 @@ type typing_error =
   | TypeMismatch of vtype * vtype
   | EqualOperatorTypeMistmatch of vtype * vtype
   | ExpectedFunctionOf of vtype
+[@@deriving sexp, equal]
+
+let equal_typing_error_variant x y =
+  match (x, y) with
+  | UndefinedVariable _, UndefinedVariable _
+  | TypeMismatch _, TypeMismatch _
+  | EqualOperatorTypeMistmatch _, EqualOperatorTypeMistmatch _
+  | ExpectedFunctionOf _, ExpectedFunctionOf _ ->
+      true
+  | _, _ -> false
+
+let print_typing_error = function
+  | UndefinedVariable x -> "Undefined variable: " ^ x
+  | TypeMismatch (t1, t2) ->
+      sprintf "Type mismatch: expected %s but got %s" (vtype_to_source_code t1)
+        (vtype_to_source_code t2)
+  | EqualOperatorTypeMistmatch (t1, t2) ->
+      sprintf "Trying to apply equality operator to %s and %s"
+        (vtype_to_source_code t1) (vtype_to_source_code t2)
+  | ExpectedFunctionOf t ->
+      "Expected a function taking input of " ^ vtype_to_source_code t
 
 module type TypingVarContext = sig
   type t
@@ -60,7 +81,7 @@ module TypeExpr (Ctx : TypingVarContext) = struct
       match (t1, t2) with
       | VTypeInt, VTypeInt -> Ok (recomp e1' e2')
       | VTypeInt, _ -> Error (TypeMismatch (VTypeInt, t2))
-      | _, _ -> Error (TypeMismatch (t1, VTypeInt))
+      | _, _ -> Error (TypeMismatch (VTypeInt, t1))
     in
     match orig_e with
     | IntLit (v, x) -> Ok (IntLit ((VTypeInt, v), x))
