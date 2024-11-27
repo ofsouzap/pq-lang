@@ -171,7 +171,9 @@ let test_cases_expr_typing_full_check : test list =
 
 (* TODO - have tests that start with a variable context *)
 
-(* TODO - tests for the variable context (e.g. that overwriting a variable's typing works) *)
+(* TODO - tests for the variable context (e.g. that overwriting a variable's typing works).
+   Do these as a module functor and then have a ground truth of an inefficient, but definitely-correct implementation
+   (probably done with functions for context tracking) *)
 
 (* TODO - negative test cases (expressions that should fail type checking) *)
 let test_cases_arb_compound_expr_typing : test list =
