@@ -1,4 +1,15 @@
-type typing_error = unit
+open Vtype
+
+(** Typing errors *)
+type typing_error =
+  | UndefinedVariable of string
+      (** A variable was referenced that isn't defined in the scope *)
+  | TypeMismatch of vtype * vtype
+      (** An expression was expected to have the fst type but had the snd *)
+  | EqualOperatorTypeMistmatch of vtype * vtype
+      (** An application of the equality operation had a type mismatch as the operands had the specified types instead of compatible ones *)
+  | ExpectedFunctionOf of vtype
+      (** A value is used as a function but isn't a function. The expected input type of the function is the value *)
 
 (** Typing contexts of variables *)
 module type TypingVarContext = sig
