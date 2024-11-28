@@ -4,33 +4,39 @@ open Pq_lang
 open Ast
 open Parser
 open Frontend
-open Test_utils
+open Utils
 
 type test_case = string * string * token list * run_frontend_res
-type test_case_precedence = string * string * Ast.expr
+type test_case_precedence = string * string * Ast.plain_expr
 
 let test_cases_arithmetic : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("1", [ INTLIT 1 ], Res (IntLit 1));
-      ("0", [ INTLIT 0 ], Res (IntLit 0));
-      ("-5", [ MINUS; INTLIT 5 ], Res (Neg (IntLit 5)));
-      ("1 + 2", [ INTLIT 1; PLUS; INTLIT 2 ], Res (Add (IntLit 1, IntLit 2)));
-      ("1 - 2", [ INTLIT 1; MINUS; INTLIT 2 ], Res (Subtr (IntLit 1, IntLit 2)));
+      ("1", [ INTLIT 1 ], Res (IntLit ((), 1)));
+      ("0", [ INTLIT 0 ], Res (IntLit ((), 0)));
+      ("-5", [ MINUS; INTLIT 5 ], Res (Neg ((), IntLit ((), 5))));
+      ( "1 + 2",
+        [ INTLIT 1; PLUS; INTLIT 2 ],
+        Res (Add ((), IntLit ((), 1), IntLit ((), 2))) );
+      ( "1 - 2",
+        [ INTLIT 1; MINUS; INTLIT 2 ],
+        Res (Subtr ((), IntLit ((), 1), IntLit ((), 2))) );
       ( "1 + -2",
         [ INTLIT 1; PLUS; MINUS; INTLIT 2 ],
-        Res (Add (IntLit 1, Neg (IntLit 2))) );
+        Res (Add ((), IntLit ((), 1), Neg ((), IntLit ((), 2)))) );
       ( "-1 + 2",
         [ MINUS; INTLIT 1; PLUS; INTLIT 2 ],
-        Res (Add (Neg (IntLit 1), IntLit 2)) );
+        Res (Add ((), Neg ((), IntLit ((), 1)), IntLit ((), 2))) );
       ( "-1 + -2",
         [ MINUS; INTLIT 1; PLUS; MINUS; INTLIT 2 ],
-        Res (Add (Neg (IntLit 1), Neg (IntLit 2))) );
-      ("1 * 2", [ INTLIT 1; TIMES; INTLIT 2 ], Res (Mult (IntLit 1, IntLit 2)));
+        Res (Add ((), Neg ((), IntLit ((), 1)), Neg ((), IntLit ((), 2)))) );
+      ( "1 * 2",
+        [ INTLIT 1; TIMES; INTLIT 2 ],
+        Res (Mult ((), IntLit ((), 1), IntLit ((), 2))) );
       ( "1 * -2",
         [ INTLIT 1; TIMES; MINUS; INTLIT 2 ],
-        Res (Mult (IntLit 1, Neg (IntLit 2))) );
+        Res (Mult ((), IntLit ((), 1), Neg ((), IntLit ((), 2)))) );
       ( "1    + 4 * (1+2 )",
         [
           INTLIT 1;
@@ -43,10 +49,18 @@ let test_cases_arithmetic : test_case list =
           INTLIT 2;
           RPAREN;
         ],
-        Res (Add (IntLit 1, Mult (IntLit 4, Add (IntLit 1, IntLit 2)))) );
+        Res
+          (Add
+             ( (),
+               IntLit ((), 1),
+               Mult
+                 ((), IntLit ((), 4), Add ((), IntLit ((), 1), IntLit ((), 2)))
+             )) );
       ( "(1 + 2) * 3",
         [ LPAREN; INTLIT 1; PLUS; INTLIT 2; RPAREN; TIMES; INTLIT 3 ],
-        Res (Mult (Add (IntLit 1, IntLit 2), IntLit 3)) );
+        Res
+          (Mult ((), Add ((), IntLit ((), 1), IntLit ((), 2)), IntLit ((), 3)))
+      );
       ( "(1 + 2) * (3 + 4)",
         [
           LPAREN;
@@ -61,7 +75,11 @@ let test_cases_arithmetic : test_case list =
           INTLIT 4;
           RPAREN;
         ],
-        Res (Mult (Add (IntLit 1, IntLit 2), Add (IntLit 3, IntLit 4))) );
+        Res
+          (Mult
+             ( (),
+               Add ((), IntLit ((), 1), IntLit ((), 2)),
+               Add ((), IntLit ((), 3), IntLit ((), 4)) )) );
       ("+**+", [ PLUS; TIMES; TIMES; PLUS ], ParsingError);
     ]
 
@@ -69,32 +87,46 @@ let test_cases_booleans : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("true", [ TRUE ], Res (BoolLit true));
-      ("false", [ FALSE ], Res (BoolLit false));
-      ("~true", [ BNOT; TRUE ], Res (BNot (BoolLit true)));
+      ("true", [ TRUE ], Res (BoolLit ((), true)));
+      ("false", [ FALSE ], Res (BoolLit ((), false)));
+      ("~true", [ BNOT; TRUE ], Res (BNot ((), BoolLit ((), true))));
       ( "true && false",
         [ TRUE; BAND; FALSE ],
-        Res (BAnd (BoolLit true, BoolLit false)) );
+        Res (BAnd ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true || false",
         [ TRUE; BOR; FALSE ],
-        Res (BOr (BoolLit true, BoolLit false)) );
+        Res (BOr ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true == false",
         [ TRUE; EQ; FALSE ],
-        Res (Eq (BoolLit true, BoolLit false)) );
+        Res (Eq ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true == false || true",
         [ TRUE; EQ; FALSE; BOR; TRUE ],
-        Res (BOr (Eq (BoolLit true, BoolLit false), BoolLit true)) );
+        Res
+          (BOr
+             ( (),
+               Eq ((), BoolLit ((), true), BoolLit ((), false)),
+               BoolLit ((), true) )) );
     ]
 
 let test_cases_integer_comparisons : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("0 == 0", [ INTLIT 0; EQ; INTLIT 0 ], Res (Eq (IntLit 0, IntLit 0)));
-      ("1 > 0", [ INTLIT 1; GT; INTLIT 0 ], Res (Gt (IntLit 1, IntLit 0)));
-      ("0 >= 0", [ INTLIT 0; GTEQ; INTLIT 0 ], Res (GtEq (IntLit 0, IntLit 0)));
-      ("0 < 0", [ INTLIT 0; LT; INTLIT 0 ], Res (Lt (IntLit 0, IntLit 0)));
-      ("0 <= 1", [ INTLIT 0; LTEQ; INTLIT 1 ], Res (LtEq (IntLit 0, IntLit 1)));
+      ( "0 == 0",
+        [ INTLIT 0; EQ; INTLIT 0 ],
+        Res (Eq ((), IntLit ((), 0), IntLit ((), 0))) );
+      ( "1 > 0",
+        [ INTLIT 1; GT; INTLIT 0 ],
+        Res (Gt ((), IntLit ((), 1), IntLit ((), 0))) );
+      ( "0 >= 0",
+        [ INTLIT 0; GTEQ; INTLIT 0 ],
+        Res (GtEq ((), IntLit ((), 0), IntLit ((), 0))) );
+      ( "0 < 0",
+        [ INTLIT 0; LT; INTLIT 0 ],
+        Res (Lt ((), IntLit ((), 0), IntLit ((), 0))) );
+      ( "0 <= 1",
+        [ INTLIT 0; LTEQ; INTLIT 1 ],
+        Res (LtEq ((), IntLit ((), 0), IntLit ((), 1))) );
       ("== <=", [ EQ; LTEQ ], ParsingError);
     ]
 
@@ -104,7 +136,7 @@ let test_cases_if_then_else : test_case list =
     [
       ( "if true then 1 else 2 end",
         [ IF; TRUE; THEN; INTLIT 1; ELSE; INTLIT 2; END ],
-        Res (If (BoolLit true, IntLit 1, IntLit 2)) );
+        Res (If ((), BoolLit ((), true), IntLit ((), 1), IntLit ((), 2))) );
       ( "if true then 1 else if false then 2 else 3 end end",
         [
           IF;
@@ -122,7 +154,11 @@ let test_cases_if_then_else : test_case list =
           END;
         ],
         Res
-          (If (BoolLit true, IntLit 1, If (BoolLit false, IntLit 2, IntLit 3)))
+          (If
+             ( (),
+               BoolLit ((), true),
+               IntLit ((), 1),
+               If ((), BoolLit ((), false), IntLit ((), 2), IntLit ((), 3)) ))
       );
       ( "if true then (if false then 1 else 2 end) else 3 end",
         [
@@ -143,8 +179,11 @@ let test_cases_if_then_else : test_case list =
           END;
         ],
         Res
-          (If (BoolLit true, If (BoolLit false, IntLit 1, IntLit 2), IntLit 3))
-      );
+          (If
+             ( (),
+               BoolLit ((), true),
+               If ((), BoolLit ((), false), IntLit ((), 1), IntLit ((), 2)),
+               IntLit ((), 3) )) );
       ( "if true then if false then 1 else 2 end else 3 end",
         [
           IF;
@@ -162,33 +201,40 @@ let test_cases_if_then_else : test_case list =
           END;
         ],
         Res
-          (If (BoolLit true, If (BoolLit false, IntLit 1, IntLit 2), IntLit 3))
-      );
+          (If
+             ( (),
+               BoolLit ((), true),
+               If ((), BoolLit ((), false), IntLit ((), 1), IntLit ((), 2)),
+               IntLit ((), 3) )) );
     ]
 
 let test_cases_variables : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("x", [ NAME "x" ], Res (Var "x"));
+      ("x", [ NAME "x" ], Res (Var ((), "x")));
       ( "let x = 1 in x end",
         [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
-        Res (Let ("x", IntLit 1, Var "x")) );
+        Res (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
       ( "let x = 1 in x end",
         [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
-        Res (Let ("x", IntLit 1, Var "x")) );
+        Res (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
       ( "let x = 1 in let y in x end",
         [
           LET; NAME "x"; ASSIGN; INTLIT 1; IN; LET; NAME "y"; IN; NAME "x"; END;
         ],
         ParsingError );
-      ( "let f = fun x -> true end in f 1 end",
+      ( "let f = fun (x : int) -> true end in f 1 end",
         [
           LET;
           NAME "f";
           ASSIGN;
           FUN;
+          LPAREN;
           NAME "x";
+          COLON;
+          INT;
+          RPAREN;
           ARROW;
           TRUE;
           END;
@@ -197,26 +243,52 @@ let test_cases_variables : test_case list =
           INTLIT 1;
           END;
         ],
-        Res (Let ("f", Fun ("x", BoolLit true), App (Var "f", IntLit 1))) );
+        Res
+          (Let
+             ( (),
+               "f",
+               Fun ((), ("x", VTypeInt), BoolLit ((), true)),
+               App ((), Var ((), "f"), IntLit ((), 1)) )) );
     ]
 
 let test_cases_functions : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ( "fun x -> x end",
-        [ FUN; NAME "x"; ARROW; NAME "x"; END ],
-        Res (Fun ("x", Var "x")) );
-      ( "fun x -> x + 1 end",
-        [ FUN; NAME "x"; ARROW; NAME "x"; PLUS; INTLIT 1; END ],
-        Res (Fun ("x", Add (Var "x", IntLit 1))) );
-      ( "fun x -> fun y -> x + y end end",
+      ( "fun (x : int) -> x end",
+        [ FUN; LPAREN; NAME "x"; COLON; INT; RPAREN; ARROW; NAME "x"; END ],
+        Res (Fun ((), ("x", VTypeInt), Var ((), "x"))) );
+      ( "fun (x : int) -> x + 1 end",
         [
           FUN;
+          LPAREN;
           NAME "x";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "x";
+          PLUS;
+          INTLIT 1;
+          END;
+        ],
+        Res (Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))))
+      );
+      ( "fun (x : int) -> fun (y : int) -> x + y end end",
+        [
+          FUN;
+          LPAREN;
+          NAME "x";
+          COLON;
+          INT;
+          RPAREN;
           ARROW;
           FUN;
+          LPAREN;
           NAME "y";
+          COLON;
+          INT;
+          RPAREN;
           ARROW;
           NAME "x";
           PLUS;
@@ -224,12 +296,21 @@ let test_cases_functions : test_case list =
           END;
           END;
         ],
-        Res (Fun ("x", Fun ("y", Add (Var "x", Var "y")))) );
-      ( "(fun x -> x + 1 end) 4",
+        Res
+          (Fun
+             ( (),
+               ("x", VTypeInt),
+               Fun ((), ("y", VTypeInt), Add ((), Var ((), "x"), Var ((), "y")))
+             )) );
+      ( "(fun (x : int) -> x + 1 end) 4",
         [
           LPAREN;
           FUN;
+          LPAREN;
           NAME "x";
+          COLON;
+          INT;
+          RPAREN;
           ARROW;
           NAME "x";
           PLUS;
@@ -238,21 +319,41 @@ let test_cases_functions : test_case list =
           RPAREN;
           INTLIT 4;
         ],
-        Res (App (Fun ("x", Add (Var "x", IntLit 1)), IntLit 4)) );
-      ("x 5", [ NAME "x"; INTLIT 5 ], Res (App (Var "x", IntLit 5)));
-      ("x y", [ NAME "x"; NAME "y" ], Res (App (Var "x", Var "y")));
-      ( "(fun b -> fun x -> fun y -> if b then x else y end end end end ) true \
-         1 2",
+        Res
+          (App
+             ( (),
+               Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
+               IntLit ((), 4) )) );
+      ( "x 5",
+        [ NAME "x"; INTLIT 5 ],
+        Res (App ((), Var ((), "x"), IntLit ((), 5))) );
+      ( "x y",
+        [ NAME "x"; NAME "y" ],
+        Res (App ((), Var ((), "x"), Var ((), "y"))) );
+      ( "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x else \
+         y end end end end ) true 1 2",
         [
           LPAREN;
           FUN;
+          LPAREN;
           NAME "b";
+          COLON;
+          BOOL;
+          RPAREN;
           ARROW;
           FUN;
+          LPAREN;
           NAME "x";
+          COLON;
+          INT;
+          RPAREN;
           ARROW;
           FUN;
+          LPAREN;
           NAME "y";
+          COLON;
+          INT;
+          RPAREN;
           ARROW;
           IF;
           NAME "b";
@@ -271,33 +372,57 @@ let test_cases_functions : test_case list =
         ],
         Res
           (App
-             ( App
-                 ( App
-                     ( Fun
-                         ( "b",
-                           Fun ("x", Fun ("y", If (Var "b", Var "x", Var "y")))
-                         ),
-                       BoolLit true ),
-                   IntLit 1 ),
-               IntLit 2 )) );
+             ( (),
+               App
+                 ( (),
+                   App
+                     ( (),
+                       Fun
+                         ( (),
+                           ("b", VTypeBool),
+                           Fun
+                             ( (),
+                               ("x", VTypeInt),
+                               Fun
+                                 ( (),
+                                   ("y", VTypeInt),
+                                   If
+                                     ( (),
+                                       Var ((), "b"),
+                                       Var ((), "x"),
+                                       Var ((), "y") ) ) ) ),
+                       BoolLit ((), true) ),
+                   IntLit ((), 1) ),
+               IntLit ((), 2) )) );
       ( "f1 f2 f3",
         [ NAME "f1"; NAME "f2"; NAME "f3" ],
-        Res (App (App (Var "f1", Var "f2"), Var "f3")) );
+        Res (App ((), App ((), Var ((), "f1"), Var ((), "f2")), Var ((), "f3")))
+      );
     ]
 
 let test_cases_recursion : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ( "let rec f = fun x -> if x == 0 then 0 else x + f (x - 1) end end in f \
-         5 end",
+      ( "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x + \
+         f (x - 1) end end in f 5 end",
         [
           LET;
           REC;
+          LPAREN;
           NAME "f";
+          COLON;
+          INT;
+          ARROW;
+          INT;
+          RPAREN;
           ASSIGN;
           FUN;
+          LPAREN;
           NAME "x";
+          COLON;
+          INT;
+          RPAREN;
           ARROW;
           IF;
           NAME "x";
@@ -323,27 +448,61 @@ let test_cases_recursion : test_case list =
         ],
         Res
           (Let
-             ( "f",
+             ( (),
+               "f",
                Fix
-                 ( "f",
-                   "x",
+                 ( (),
+                   ("f", VTypeInt, VTypeInt),
+                   ("x", VTypeInt),
                    If
-                     ( Eq (Var "x", IntLit 0),
-                       IntLit 0,
-                       Add (Var "x", App (Var "f", Subtr (Var "x", IntLit 1)))
-                     ) ),
-               App (Var "f", IntLit 5) )) );
-      ( "let rec f = 2 in f end",
-        [ LET; REC; NAME "f"; ASSIGN; INTLIT 2; IN; NAME "f"; END ],
-        ParsingError );
-      ( "let rec f = fun y -> y end in f 5 end",
+                     ( (),
+                       Eq ((), Var ((), "x"), IntLit ((), 0)),
+                       IntLit ((), 0),
+                       Add
+                         ( (),
+                           Var ((), "x"),
+                           App
+                             ( (),
+                               Var ((), "f"),
+                               Subtr ((), Var ((), "x"), IntLit ((), 1)) ) ) )
+                 ),
+               App ((), Var ((), "f"), IntLit ((), 5)) )) );
+      ( "let rec (f : int -> int) = 2 in f end",
         [
           LET;
           REC;
+          LPAREN;
           NAME "f";
+          COLON;
+          INT;
+          ARROW;
+          INT;
+          RPAREN;
+          ASSIGN;
+          INTLIT 2;
+          IN;
+          NAME "f";
+          END;
+        ],
+        ParsingError );
+      ( "let rec (f : int -> int) = fun (y : int) -> y end in f 5 end",
+        [
+          LET;
+          REC;
+          LPAREN;
+          NAME "f";
+          COLON;
+          INT;
+          ARROW;
+          INT;
+          RPAREN;
           ASSIGN;
           FUN;
+          LPAREN;
           NAME "y";
+          COLON;
+          INT;
+          RPAREN;
           ARROW;
           NAME "y";
           END;
@@ -352,18 +511,29 @@ let test_cases_recursion : test_case list =
           INTLIT 5;
           END;
         ],
-        Res (Let ("f", Fix ("f", "y", Var "y"), App (Var "f", IntLit 5))) );
+        Res
+          (Let
+             ( (),
+               "f",
+               Fix
+                 ((), ("f", VTypeInt, VTypeInt), ("y", VTypeInt), Var ((), "y")),
+               App ((), Var ((), "f"), IntLit ((), 5)) )) );
     ]
 
 let test_cases_precedence : test_case_precedence list =
   List.map
     ~f:(fun (x, z) -> (x, x, z))
     [
-      ("x + y * z", Add (Var "x", Mult (Var "y", Var "z")));
-      ("x + y < z", Lt (Add (Var "x", Var "y"), Var "z"));
-      ("x >= y - z", GtEq (Var "x", Subtr (Var "y", Var "z")));
-      ("x + f y", Add (Var "x", App (Var "f", Var "y")));
-      ("f x + y", Add (App (Var "f", Var "x"), Var "y"));
+      ( "x + y * z",
+        Add ((), Var ((), "x"), Mult ((), Var ((), "y"), Var ((), "z"))) );
+      ( "x + y < z",
+        Lt ((), Add ((), Var ((), "x"), Var ((), "y")), Var ((), "z")) );
+      ( "x >= y - z",
+        GtEq ((), Var ((), "x"), Subtr ((), Var ((), "y"), Var ((), "z"))) );
+      ( "x + f y",
+        Add ((), Var ((), "x"), App ((), Var ((), "f"), Var ((), "y"))) );
+      ( "f x + y",
+        Add ((), App ((), Var ((), "f"), Var ((), "x")), Var ((), "y")) );
     ]
 
 let create_lexer_test ((name, inp, exp, _) : test_case) =
@@ -382,7 +552,7 @@ let create_frontend_test ((name, inp, _, exp) : test_case) =
   let out = run_frontend_string inp in
   assert_equal exp out ~printer:(fun x ->
       match x with
-      | Res e -> ast_printer e
+      | Res e -> ast_to_source_code e
       | LexingError c -> sprintf "LexingError %c" c
       | ParsingError -> "ParsingError")
 
@@ -390,7 +560,7 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
   match out with
-  | Res e -> assert_equal exp e ~printer:ast_printer
+  | Res e -> assert_equal exp e ~printer:ast_to_source_code
   | LexingError c -> assert_failure (sprintf "LexingError %c" c)
   | ParsingError -> assert_failure "ParsingError"
 

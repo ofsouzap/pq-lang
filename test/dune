@@ -2,10 +2,12 @@
  (name test_pq_lang)
  (libraries pq_lang.lib ounit2 qcheck)
  (modules
+  utils
   test_pq_lang
   test_utils
   test_ast
+  test_typing
   test_frontend
   test_ast_executor
   test_ast_executor_store
-  test_lexer_parser_ast_executor))
+  test_interpreting_integration))

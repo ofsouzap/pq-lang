@@ -1,6 +1,9 @@
 open Core
 
-type run_frontend_res = Res of Ast.expr | LexingError of char | ParsingError
+type run_frontend_res =
+  | Res of Ast.plain_expr
+  | LexingError of char
+  | ParsingError
 
 let lex_parse_from_lexbuf (lexbuf : Lexing.lexbuf) : run_frontend_res =
   try Res (Parser.prog Lexer.token lexbuf) with

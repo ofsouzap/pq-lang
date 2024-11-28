@@ -1,10 +1,14 @@
 (** This module provides functionality for directly executing an AST of a program. *)
 
+(** The data that the executor tags the interpreted AST with *)
+type ast_tag = unit [@@deriving sexp, equal]
+
 (** The type of a variable's name in the store *)
 type varname = string
 
 (** Properties of a closure *)
-type closure_props = varname * Ast.expr * store [@@deriving sexp, equal]
+type closure_props = varname * ast_tag Ast.typed_expr * store
+[@@deriving sexp, equal]
 
 (** A resulting value from executing an AST *)
 and value =
@@ -67,4 +71,4 @@ val exec_res_compare : exec_res -> exec_res -> bool
 val show_exec_res : exec_res -> string
 
 (** Execute an AST representation of a program *)
-val execute : Ast.expr -> exec_res
+val execute : 'a Ast.typed_expr -> exec_res

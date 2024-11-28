@@ -1,13 +1,16 @@
 open Core
+open Vtype
 
 (* TODO - have backends as a module thing, so that they can more easily be swapped in *)
 
+type ast_tag = unit [@@deriving sexp, equal]
 type varname = string [@@deriving sexp, equal]
 
 module Varname = String
 module VarnameMap = Map.Make_using_comparator (Varname)
 
-type closure_props = varname * Ast.expr * store [@@deriving sexp, equal]
+type closure_props = varname * ast_tag Ast.typed_expr * store
+[@@deriving sexp, equal]
 
 and value = Int of int | Bool of bool | Closure of closure_props
 [@@deriving sexp, equal]
@@ -112,43 +115,43 @@ let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
         (TypingError { empty_typing_error with expected_type = Some "Closure" })
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an integer and give a typing error otherwise *)
-let rec eval_apply_to_int (store : store) (x : Ast.expr) (cnt : int -> exec_res)
-    : exec_res =
+let rec eval_apply_to_int (store : store) (x : ast_tag Ast.typed_expr)
+    (cnt : int -> exec_res) : exec_res =
   eval store x >>= apply_to_int cnt
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an boolean and give a typing error otherwise *)
-and eval_apply_to_bool (store : store) (x : Ast.expr) (cnt : bool -> exec_res) :
-    exec_res =
+and eval_apply_to_bool (store : store) (x : ast_tag Ast.typed_expr)
+    (cnt : bool -> exec_res) : exec_res =
   eval store x >>= apply_to_bool cnt
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an function and give a typing error otherwise *)
-and eval_apply_to_closure (store : store) (x : Ast.expr)
+and eval_apply_to_closure (store : store) (x : ast_tag Ast.typed_expr)
     (cnt : closure_props -> exec_res) : exec_res =
   eval store x >>= apply_to_closure cnt
 
 (** Evaluate an AST subtree *)
-and eval (store : store) (e : Ast.expr) : exec_res =
+and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
   match e with
-  | IntLit i -> Res (Int i)
-  | Add (e1, e2) ->
+  | IntLit (_, i) -> Res (Int i)
+  | Add (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Int (i1 + i2))))
-  | Neg e -> eval_apply_to_int store e (fun i -> Res (Int (-i)))
-  | Subtr (e1, e2) ->
+  | Neg (_, e) -> eval_apply_to_int store e (fun i -> Res (Int (-i)))
+  | Subtr (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Int (i1 - i2))))
-  | Mult (e1, e2) ->
+  | Mult (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Int (i1 * i2))))
-  | BoolLit b -> Res (Bool b)
-  | BNot e -> eval_apply_to_bool store e (fun b -> Res (Bool (not b)))
-  | BOr (e1, e2) ->
+  | BoolLit (_, b) -> Res (Bool b)
+  | BNot (_, e) -> eval_apply_to_bool store e (fun b -> Res (Bool (not b)))
+  | BOr (_, e1, e2) ->
       eval_apply_to_bool store e1 (fun b1 ->
           eval_apply_to_bool store e2 (fun b2 -> Res (Bool (b1 || b2))))
-  | BAnd (e1, e2) ->
+  | BAnd (_, e1, e2) ->
       eval_apply_to_bool store e1 (fun b1 ->
           eval_apply_to_bool store e2 (fun b2 -> Res (Bool (b1 && b2))))
-  | Eq (e1, e2) -> (
+  | Eq (_, e1, e2) -> (
       eval store e1 >>= fun v1 ->
       eval store e2 >>= fun v2 ->
       match (v1, v2) with
@@ -164,42 +167,51 @@ and eval (store : store) (e : Ast.expr) : exec_res =
                      "Left and right sides of equality must be of the same, \
                       compatible type";
                }))
-  | Gt (e1, e2) ->
+  | Gt (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 > i2))))
-  | GtEq (e1, e2) ->
+  | GtEq (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 >= i2))))
-  | Lt (e1, e2) ->
+  | Lt (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 < i2))))
-  | LtEq (e1, e2) ->
+  | LtEq (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
           eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 <= i2))))
-  | If (e_cond, e_then, e_else) ->
+  | If (_, e_cond, e_then, e_else) ->
       eval_apply_to_bool store e_cond (fun b ->
           let next_e = if b then e_then else e_else in
           eval store next_e)
-  | Var x ->
+  | Var (_, x) ->
       store_get store x
       |> Option.value_map ~default:(Err (UndefinedVarError x)) ~f:(fun v ->
              Res v)
-  | Let (xname, e1, e2) ->
+  | Let (_, xname, e1, e2) ->
       eval store e1 >>= fun v -> eval (store_set store ~key:xname ~value:v) e2
-  | Fun (xname, e) -> Res (Closure (xname, e, store))
-  | App (e1, e2) ->
+  | Fun (_, (xname, _), e) -> Res (Closure (xname, e, store))
+  | App (_, e1, e2) ->
       (* This uses call-by-value semantics *)
       eval_apply_to_closure store e1 (fun (argname, fe, fs) ->
           eval store e2 >>= fun v2 ->
           eval (store_set fs ~key:argname ~value:v2) fe)
-  | Fix (fname, xname, fxbody) ->
+  | Fix (_, (fname, ftype1, ftype2), ((xname, xtype) as x), fxbody) as e ->
       (* fix (\f. \x. e2) ~> \x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
+      let ftype = VTypeFun (ftype1, ftype2) in
       eval store
         (Fun
-           ( xname,
+           ( (ftype, ()),
+             x,
              App
-               ( App
-                   (Fun (fname, Fun (xname, fxbody)), Fix (fname, xname, fxbody)),
-                 Var xname ) ))
+               ( (ftype2, ()),
+                 App
+                   ( (ftype, ()),
+                     Fun
+                       ( (VTypeFun (ftype, ftype), ()),
+                         (fname, ftype),
+                         Fun ((ftype, ()), x, fxbody) ),
+                     e ),
+                 Var ((xtype, ()), xname) ) ))
 
-let execute = eval (VarnameMap.empty : store)
+let execute (e : 'a Ast.typed_expr) =
+  eval (VarnameMap.empty : store) (Ast.fmap ~f:(fun (t, _) -> (t, ())) e)
