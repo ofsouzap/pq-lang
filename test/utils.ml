@@ -260,6 +260,23 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
         in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
+  and gen_pair ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
+      'a expr Gen.t =
+    (* Generate an expression that types as a pair of the provided types *)
+    let t = VTypePair (t1, t2) in
+    fix
+      (fun self (d, ctx) ->
+        v_gen >>= fun v ->
+        let base_cases =
+          [
+            ( pair (gen (d - 1, ctx) t1) (gen (d - 1, ctx) t2)
+            >|= fun (e1, e2) -> Ast.Pair (v, e1, e2) );
+          ]
+          @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+        in
+        let rec_cases = standard_gen_e_cases (self, (d, ctx), v) t in
+        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
+      param
   and gen_fun ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
       'a expr Gen.t =
     (* Generate an expression that has type of t1 -> t2
@@ -279,21 +296,16 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
         let rec_cases = standard_gen_e_cases (self, (d, ctx), v) t in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
-  and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
-      (vtype * 'a expr) Gen.t =
-    vtype_gen d >>= fun t ->
-    (match t with
-    | VTypeInt -> gen_int (d, ctx)
-    | VTypeBool -> gen_bool (d, ctx)
-    | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
-    | VTypePair _ -> failwith "TODO")
-    >|= fun e -> (t, e)
   and gen ((d : int), (ctx : TestingVarCtx.t)) (t : vtype) : 'a expr Gen.t =
     match t with
     | VTypeInt -> gen_int (d, ctx)
     | VTypeBool -> gen_bool (d, ctx)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
-    | VTypePair _ -> failwith "TODO"
+    | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
+  and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
+      (vtype * 'a expr) Gen.t =
+    vtype_gen d >>= fun t ->
+    gen (d, ctx) t >|= fun e -> (t, e)
   in
   let make_fn g =
     match get_asp_printer_opt print with
