@@ -108,6 +108,21 @@ let test_cases_booleans : test_case list =
                BoolLit ((), true) )) );
     ]
 
+let test_cases_pairs : test_case list =
+  List.map
+    ~f:(fun (x, y, z) -> (x, x, y, z))
+    [
+      ( "(1,2)",
+        [ LPAREN; INTLIT 1; COMMA; INTLIT 2; RPAREN ],
+        Res (Pair ((), IntLit ((), 1), IntLit ((), 2))) );
+      ( "(true, 1)",
+        [ LPAREN; TRUE; COMMA; INTLIT 1; RPAREN ],
+        Res (Pair ((), BoolLit ((), true), IntLit ((), 1))) );
+      ( "(3, false)",
+        [ LPAREN; INTLIT 3; COMMA; FALSE; RPAREN ],
+        Res (Pair ((), IntLit ((), 3), BoolLit ((), false))) );
+    ]
+
 let test_cases_integer_comparisons : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
@@ -568,6 +583,7 @@ let test_suites test_create_func =
   [
     "Arithmetic" >::: List.map ~f:test_create_func test_cases_arithmetic;
     "Booleans" >::: List.map ~f:test_create_func test_cases_booleans;
+    "Pairs" >::: List.map ~f:test_create_func test_cases_pairs;
     "Integer Comparisons"
     >::: List.map ~f:test_create_func test_cases_integer_comparisons;
     "If-Then-Else" >::: List.map ~f:test_create_func test_cases_if_then_else;

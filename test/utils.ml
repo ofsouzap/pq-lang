@@ -52,6 +52,7 @@ let sexp_of_token = function
   | LTEQ -> Sexp.Atom "LTEQ"
   | ARROW -> Sexp.Atom "ARROW"
   | COLON -> Sexp.Atom "COLON"
+  | COMMA -> Sexp.Atom "COMMA"
   | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
   | NAME n -> Sexp.List [ Sexp.Atom "NAME"; Sexp.Atom n ]
   | EOF -> Sexp.Atom "EOF"
@@ -286,13 +287,15 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     (match t with
     | VTypeInt -> gen_int (d, ctx)
     | VTypeBool -> gen_bool (d, ctx)
-    | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx))
+    | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
+    | VTypePair _ -> failwith "TODO")
     >|= fun e -> (t, e)
   and gen ((d : int), (ctx : TestingVarCtx.t)) (t : vtype) : 'a expr Gen.t =
     match t with
     | VTypeInt -> gen_int (d, ctx)
     | VTypeBool -> gen_bool (d, ctx)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
+    | VTypePair _ -> failwith "TODO"
   in
   let make_fn g =
     match get_asp_printer_opt print with

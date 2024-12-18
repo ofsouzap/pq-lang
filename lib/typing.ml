@@ -98,6 +98,12 @@ module TypeExpr (Ctx : TypingVarContext) = struct
         type_binop (fun e1' e2' t -> BOr ((t, v), e1', e2')) e1 e2 VTypeBool
     | BAnd (v, e1, e2) ->
         type_binop (fun e1' e2' t -> BAnd ((t, v), e1', e2')) e1 e2 VTypeBool
+    | Pair (v, e1, e2) ->
+        type_expr ctx e1 >>= fun e1' ->
+        type_expr ctx e2 >>= fun e2' ->
+        let t1 = e_type e1' in
+        let t2 = e_type e2' in
+        Ok (Pair ((VTypePair (t1, t2), v), e1', e2'))
     | Eq (v, e1, e2) -> (
         type_expr ctx e1 >>= fun e1' ->
         type_expr ctx e2 >>= fun e2' ->
