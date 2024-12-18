@@ -23,7 +23,7 @@ rule token = parse
   (* Operators and symbols *)
   | '+' { PLUS }
   | '-' { MINUS }
-  | '*' { TIMES }
+  | '*' { STAR }
   | '(' { LPAREN }
   | ')' { RPAREN }
   | '~' { BNOT }

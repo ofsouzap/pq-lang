@@ -32,17 +32,17 @@ let test_cases_arithmetic : test_case list =
         [ MINUS; INTLIT 1; PLUS; MINUS; INTLIT 2 ],
         Res (Add ((), Neg ((), IntLit ((), 1)), Neg ((), IntLit ((), 2)))) );
       ( "1 * 2",
-        [ INTLIT 1; TIMES; INTLIT 2 ],
+        [ INTLIT 1; STAR; INTLIT 2 ],
         Res (Mult ((), IntLit ((), 1), IntLit ((), 2))) );
       ( "1 * -2",
-        [ INTLIT 1; TIMES; MINUS; INTLIT 2 ],
+        [ INTLIT 1; STAR; MINUS; INTLIT 2 ],
         Res (Mult ((), IntLit ((), 1), Neg ((), IntLit ((), 2)))) );
       ( "1    + 4 * (1+2 )",
         [
           INTLIT 1;
           PLUS;
           INTLIT 4;
-          TIMES;
+          STAR;
           LPAREN;
           INTLIT 1;
           PLUS;
@@ -57,7 +57,7 @@ let test_cases_arithmetic : test_case list =
                  ((), IntLit ((), 4), Add ((), IntLit ((), 1), IntLit ((), 2)))
              )) );
       ( "(1 + 2) * 3",
-        [ LPAREN; INTLIT 1; PLUS; INTLIT 2; RPAREN; TIMES; INTLIT 3 ],
+        [ LPAREN; INTLIT 1; PLUS; INTLIT 2; RPAREN; STAR; INTLIT 3 ],
         Res
           (Mult ((), Add ((), IntLit ((), 1), IntLit ((), 2)), IntLit ((), 3)))
       );
@@ -68,7 +68,7 @@ let test_cases_arithmetic : test_case list =
           PLUS;
           INTLIT 2;
           RPAREN;
-          TIMES;
+          STAR;
           LPAREN;
           INTLIT 3;
           PLUS;
@@ -80,7 +80,7 @@ let test_cases_arithmetic : test_case list =
              ( (),
                Add ((), IntLit ((), 1), IntLit ((), 2)),
                Add ((), IntLit ((), 3), IntLit ((), 4)) )) );
-      ("+**+", [ PLUS; TIMES; TIMES; PLUS ], ParsingError);
+      ("+**+", [ PLUS; STAR; STAR; PLUS ], ParsingError);
     ]
 
 let test_cases_booleans : test_case list =

@@ -38,7 +38,7 @@ let sexp_of_token = function
   | BOOL -> Sexp.Atom "BOOL"
   | PLUS -> Sexp.Atom "PLUS"
   | MINUS -> Sexp.Atom "MINUS"
-  | TIMES -> Sexp.Atom "TIMES"
+  | STAR -> Sexp.Atom "STAR"
   | LPAREN -> Sexp.Atom "LPAREN"
   | RPAREN -> Sexp.Atom "RPAREN"
   | BNOT -> Sexp.Atom "BNOT"
