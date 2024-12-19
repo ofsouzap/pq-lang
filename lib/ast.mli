@@ -23,6 +23,8 @@ type 'a expr =
   | BNot of 'a * 'a expr  (** Boolean negation *)
   | BOr of 'a * 'a expr * 'a expr  (** Boolean OR *)
   | BAnd of 'a * 'a expr * 'a expr  (** Boolean AND *)
+  (* Pairs *)
+  | Pair of 'a * 'a expr * 'a expr  (** Pair *)
   (* Comparisons *)
   | Eq of 'a * 'a expr * 'a expr  (** Equality *)
   | Gt of 'a * 'a expr * 'a expr  (** Greater than *)

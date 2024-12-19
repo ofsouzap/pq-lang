@@ -23,7 +23,7 @@ rule token = parse
   (* Operators and symbols *)
   | '+' { PLUS }
   | '-' { MINUS }
-  | '*' { TIMES }
+  | '*' { STAR }
   | '(' { LPAREN }
   | ')' { RPAREN }
   | '~' { BNOT }
@@ -37,6 +37,7 @@ rule token = parse
   | "<=" { LTEQ }
   | "->" { ARROW }
   | ":" { COLON }
+  | "," { COMMA }
   (* Literals and names *)
   | ['0'-'9']+ as n { INTLIT (int_of_string n) }
   | ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9']* as name { NAME name }

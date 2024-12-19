@@ -12,7 +12,11 @@ module VarnameMap = Map.Make_using_comparator (Varname)
 type closure_props = varname * ast_tag Ast.typed_expr * store
 [@@deriving sexp, equal]
 
-and value = Int of int | Bool of bool | Closure of closure_props
+and value =
+  | Int of int
+  | Bool of bool
+  | Closure of closure_props
+  | Pair of value * value
 [@@deriving sexp, equal]
 
 and store = value VarnameMap.t [@@deriving sexp, equal]
@@ -151,6 +155,9 @@ and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
   | BAnd (_, e1, e2) ->
       eval_apply_to_bool store e1 (fun b1 ->
           eval_apply_to_bool store e2 (fun b2 -> Res (Bool (b1 && b2))))
+  | Pair (_, e1, e2) ->
+      eval store e1 >>= fun v1 ->
+      eval store e2 >>= fun v2 -> Res (Pair (v1, v2))
   | Eq (_, e1, e2) -> (
       eval store e1 >>= fun v1 ->
       eval store e2 >>= fun v2 ->

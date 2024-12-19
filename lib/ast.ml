@@ -11,6 +11,7 @@ type 'a expr =
   | BNot of 'a * 'a expr
   | BOr of 'a * 'a expr * 'a expr
   | BAnd of 'a * 'a expr * 'a expr
+  | Pair of 'a * 'a expr * 'a expr
   | Eq of 'a * 'a expr * 'a expr
   | Gt of 'a * 'a expr * 'a expr
   | GtEq of 'a * 'a expr * 'a expr
@@ -34,6 +35,7 @@ let expr_node_val : 'a expr -> 'a = function
   | BNot (x, _) -> x
   | BOr (x, _, _) -> x
   | BAnd (x, _, _) -> x
+  | Pair (x, _, _) -> x
   | Eq (x, _, _) -> x
   | Gt (x, _, _) -> x
   | GtEq (x, _, _) -> x
@@ -57,6 +59,7 @@ let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
   | BNot (a, e) -> BNot (f a, fmap ~f e)
   | BOr (a, e1, e2) -> BOr (f a, fmap ~f e1, fmap ~f e2)
   | BAnd (a, e1, e2) -> BAnd (f a, fmap ~f e1, fmap ~f e2)
+  | Pair (a, e1, e2) -> Pair (f a, fmap ~f e1, fmap ~f e2)
   | Eq (a, e1, e2) -> Eq (f a, fmap ~f e1, fmap ~f e2)
   | Gt (a, e1, e2) -> Gt (f a, fmap ~f e1, fmap ~f e2)
   | GtEq (a, e1, e2) -> GtEq (f a, fmap ~f e1, fmap ~f e2)
@@ -86,6 +89,7 @@ let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
   | BNot (_, e) -> BNot ((), expr_to_plain_expr e)
   | BOr (_, e1, e2) -> BOr ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
   | BAnd (_, e1, e2) -> BAnd ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
+  | Pair (_, e1, e2) -> Pair ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
   | Eq (_, e1, e2) -> Eq ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
   | Gt (_, e1, e2) -> Gt ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
   | GtEq (_, e1, e2) -> GtEq ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
@@ -118,6 +122,8 @@ let rec ast_to_source_code = function
       sprintf "(%s) || (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | BAnd (_, e1, e2) ->
       sprintf "(%s) && (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+  | Pair (_, e1, e2) ->
+      sprintf "(%s, %s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | Eq (_, e1, e2) ->
       sprintf "(%s) == (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | Gt (_, e1, e2) ->

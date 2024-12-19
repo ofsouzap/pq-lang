@@ -38,7 +38,7 @@ let sexp_of_token = function
   | BOOL -> Sexp.Atom "BOOL"
   | PLUS -> Sexp.Atom "PLUS"
   | MINUS -> Sexp.Atom "MINUS"
-  | TIMES -> Sexp.Atom "TIMES"
+  | STAR -> Sexp.Atom "STAR"
   | LPAREN -> Sexp.Atom "LPAREN"
   | RPAREN -> Sexp.Atom "RPAREN"
   | BNOT -> Sexp.Atom "BNOT"
@@ -52,6 +52,7 @@ let sexp_of_token = function
   | LTEQ -> Sexp.Atom "LTEQ"
   | ARROW -> Sexp.Atom "ARROW"
   | COLON -> Sexp.Atom "COLON"
+  | COMMA -> Sexp.Atom "COMMA"
   | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
   | NAME n -> Sexp.List [ Sexp.Atom "NAME"; Sexp.Atom n ]
   | EOF -> Sexp.Atom "EOF"
@@ -191,6 +192,17 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     pair (gen (d - 1, ctx_with_fx) ftype2) (self (d - 1, ctx_with_f))
     >|= fun (e1, e2) ->
     Let (v, fname, Fix (v, (fname, ftype1, ftype2), (xname, ftype1), e1), e2)
+  and standard_gen_e_cases
+      ( (self : int * TestingVarCtx.t -> 'a expr Gen.t),
+        ((d : int), (ctx : TestingVarCtx.t)),
+        (v : 'a) ) (t : vtype) : 'a expr Gen.t list =
+    (* The standard recursive generator cases for some provided type *)
+    [
+      gen_e_if (self, (d, ctx), v) (* If-then-else *);
+      gen_e_let_in (self, (d, ctx), v) (* Let-in *);
+      gen_e_app (self, (d, ctx), v) t (* Function application *);
+      gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
+    ]
   and gen_int (param : int * TestingVarCtx.t) : 'a expr Gen.t =
     (* Generate an expression that types as integer *)
     fix
@@ -209,11 +221,8 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
               (* Subtraction *) );
             ( pair self' self' >|= fun (e1, e2) -> Mult (v, e1, e2)
               (* Multiplication *) );
-            gen_e_if (self, (d, ctx), v) (* If-then-else *);
-            gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-            gen_e_app (self, (d, ctx), v) VTypeInt (* Function application *);
-            gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
           ]
+          @ standard_gen_e_cases (self, (d, ctx), v) VTypeInt
         in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
@@ -246,12 +255,26 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
             >|= fun (e1, e2) -> Lt (v, e1, e2) (* LT *) );
             ( pair (gen_int (d - 1, ctx)) (gen_int (d - 1, ctx))
             >|= fun (e1, e2) -> LtEq (v, e1, e2) (* LTEQ *) );
-            gen_e_if (self, (d, ctx), v) (* If-then-else *);
-            gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-            gen_e_app (self, (d, ctx), v) VTypeBool (* Function application *);
-            gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
           ]
+          @ standard_gen_e_cases (self, (d, ctx), v) VTypeBool
         in
+        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
+      param
+  and gen_pair ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
+      'a expr Gen.t =
+    (* Generate an expression that types as a pair of the provided types *)
+    let t = VTypePair (t1, t2) in
+    fix
+      (fun self (d, ctx) ->
+        v_gen >>= fun v ->
+        let base_cases =
+          [
+            ( pair (gen (d - 1, ctx) t1) (gen (d - 1, ctx) t2)
+            >|= fun (e1, e2) -> Ast.Pair (v, e1, e2) );
+          ]
+          @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+        in
+        let rec_cases = standard_gen_e_cases (self, (d, ctx), v) t in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
   and gen_fun ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
@@ -270,29 +293,19 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
           ]
           @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
         in
-        let rec_cases =
-          [
-            gen_e_if (self, (d, ctx), v) (* If-then-else *);
-            gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-            gen_e_app (self, (d, ctx), v) t (* Function application *);
-            gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
-          ]
-        in
+        let rec_cases = standard_gen_e_cases (self, (d, ctx), v) t in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
-  and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
-      (vtype * 'a expr) Gen.t =
-    vtype_gen d >>= fun t ->
-    (match t with
-    | VTypeInt -> gen_int (d, ctx)
-    | VTypeBool -> gen_bool (d, ctx)
-    | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx))
-    >|= fun e -> (t, e)
   and gen ((d : int), (ctx : TestingVarCtx.t)) (t : vtype) : 'a expr Gen.t =
     match t with
     | VTypeInt -> gen_int (d, ctx)
     | VTypeBool -> gen_bool (d, ctx)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
+    | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
+  and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
+      (vtype * 'a expr) Gen.t =
+    vtype_gen d >>= fun t ->
+    gen (d, ctx) t >|= fun e -> (t, e)
   in
   let make_fn g =
     match get_asp_printer_opt print with

@@ -12,9 +12,10 @@ type closure_props = varname * ast_tag Ast.typed_expr * store
 
 (** A resulting value from executing an AST *)
 and value =
-  | Int of int  (** An integer values *)
+  | Int of int  (** An integer value *)
   | Bool of bool  (** A boolean value *)
   | Closure of closure_props  (** A function closure *)
+  | Pair of value * value  (** A pair value *)
 [@@deriving sexp, equal]
 
 (** A store, containing the values of variables under the current context *)

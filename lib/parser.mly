@@ -28,7 +28,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 
 // Tokens
 %token END IF THEN ELSE LET IN TRUE FALSE FUN REC INT BOOL
-%token PLUS MINUS TIMES LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON
+%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA
 %token <int> INTLIT
 %token <string> NAME
 %token EOF
@@ -41,7 +41,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %nonassoc EQ // =
 %nonassoc GT GTEQ LT LTEQ // > >= < <=
 %left PLUS MINUS // + -
-%left TIMES // *
+%left STAR // *
 %nonassoc INTLIT NAME TRUE FALSE // literals
 %nonassoc LPAREN // (
 
@@ -60,6 +60,7 @@ vtype:
   | INT { VTypeInt }
   | BOOL { VTypeBool }
   | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
+  | t1 = vtype STAR t2 = vtype { VTypePair (t1, t2) }
 ;
 
 typed_function_name:
@@ -77,7 +78,7 @@ expr:
   | e1 = expr PLUS e2 = expr { Add ((), e1, e2) }  (* e1 + e2 *)
   | MINUS e = expr { Neg ((), e) }  (* - e *)
   | e1 = expr MINUS e2 = expr { Subtr ((), e1, e2) }  (* e1 - e2 *)
-  | e1 = expr TIMES e2 = expr { Mult ((), e1, e2) }  (* e1 * e2 *)
+  | e1 = expr STAR e2 = expr { Mult ((), e1, e2) }  (* e1 * e2 *)
   | BNOT e = expr { BNot ((), e) }  (* ~ e *)
   | e1 = expr BOR e2 = expr { BOr ((), e1, e2) }  (* e1 || e2 *)
   | e1 = expr BAND e2 = expr { BAnd ((), e1, e2) }  (* e1 && e2 *)
@@ -91,6 +92,7 @@ expr:
   | LET REC LPAREN l = typed_function_name RPAREN ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
+  | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
 ;
 
 contained_expr:

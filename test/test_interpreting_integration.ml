@@ -37,4 +37,7 @@ let suite =
              "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 \
               else x + f (x - 1) end end in f 5 end",
              Res (Int 15) );
+           ( "Program Pairs0",
+             "let x = 4 in (x + 1, if false then x else x * 2 end) end",
+             Res (Pair (Int 5, Int 8)) );
          ]
