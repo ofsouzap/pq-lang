@@ -121,6 +121,21 @@ let test_cases_pairs : test_case list =
       ( "(3, false)",
         [ LPAREN; INTLIT 3; COMMA; FALSE; RPAREN ],
         Res (Pair ((), IntLit ((), 3), BoolLit ((), false))) );
+      ( "((3, 4), 5)",
+        [
+          LPAREN;
+          LPAREN;
+          INTLIT 3;
+          COMMA;
+          INTLIT 4;
+          RPAREN;
+          COMMA;
+          INTLIT 5;
+          RPAREN;
+        ],
+        Res
+          (Pair ((), Pair ((), IntLit ((), 3), IntLit ((), 4)), IntLit ((), 5)))
+      );
     ]
 
 let test_cases_integer_comparisons : test_case list =

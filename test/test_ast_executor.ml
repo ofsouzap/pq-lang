@@ -73,6 +73,22 @@ let test_cases_booleans : (string * Ast.plain_typed_expr * exec_res) list =
       (Eq ((), BoolLit ((), false), BoolLit ((), false)), true);
     ]
 
+let test_cases_pairs : (string * Ast.plain_typed_expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : plain_expr), (y : value)) =
+    (ast_to_source_code x, type_expr x, Res y)
+  in
+  List.map ~f:mapf
+    [
+      ( Pair ((), IntLit ((), 1), BoolLit ((), true)),
+        Ast_executor.Pair (Int 1, Bool true) );
+      ( Pair
+          ( (),
+            Add ((), IntLit ((), 2), IntLit ((), 4)),
+            BOr ((), BoolLit ((), true), BoolLit ((), false)) ),
+        Ast_executor.Pair (Int 6, Bool true) );
+    ]
+
 let test_cases_integer_comparisons :
     (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
@@ -257,6 +273,7 @@ let suite =
   >::: [
          "Arithmetic" >::: List.map ~f:create_test test_cases_arithmetic;
          "Booleans" >::: List.map ~f:create_test test_cases_booleans;
+         "Pairs" >::: List.map ~f:create_test test_cases_pairs;
          "Integer Comparisons"
          >::: List.map ~f:create_test test_cases_integer_comparisons;
          "Control Flow" >::: List.map ~f:create_test test_cases_control_flow;
