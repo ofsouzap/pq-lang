@@ -161,6 +161,7 @@ module TypeExpr (Ctx : TypingVarContext) = struct
           be_of_type ftype2 e' >>= fun _ ->
           Ok (Fix ((ftype, v), fvals, xvals, e'))
         else Error (TypeMismatch (ftype1, xtype))
+    | Match _ -> failwith "TODO"
 end
 
 module ListTypeExpr = TypeExpr (ListTypingVarContext)

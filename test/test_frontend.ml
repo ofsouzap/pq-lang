@@ -4,7 +4,7 @@ open Pq_lang
 open Ast
 open Parser
 open Frontend
-open Utils
+open Testing_utils
 
 type test_case = string * string * token list * run_frontend_res
 type test_case_precedence = string * string * Ast.plain_expr

@@ -1,4 +1,5 @@
 open Core
+open Utils
 open Vtype
 open Pattern
 
@@ -24,7 +25,7 @@ type 'a expr =
   | Fun of 'a * (string * vtype) * 'a expr
   | App of 'a * 'a expr * 'a expr
   | Fix of 'a * (string * vtype * vtype) * (string * vtype) * 'a expr
-  | Match of 'a * 'a expr * (pattern * 'a expr) list
+  | Match of 'a * 'a expr * (pattern * 'a expr) Nonempty_list.t
 [@@deriving sexp, equal]
 
 let expr_node_val : 'a expr -> 'a = function
@@ -75,7 +76,10 @@ let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
   | App (a, e1, e2) -> App (f a, fmap ~f e1, fmap ~f e2)
   | Fix (a, xname, yname, e) -> Fix (f a, xname, yname, fmap ~f e)
   | Match (a, e, cs) ->
-      Match (f a, fmap ~f e, List.map ~f:(fun (p, c_e) -> (p, fmap ~f c_e)) cs)
+      Match
+        ( f a,
+          fmap ~f e,
+          Nonempty_list.map ~f:(fun (p, c_e) -> (p, fmap ~f c_e)) cs )
 
 let ( >|= ) (e : 'a expr) (f : 'a -> 'b) = fmap ~f e
 
@@ -113,7 +117,8 @@ let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
       Match
         ( (),
           expr_to_plain_expr e,
-          List.map ~f:(fun (p, c_e) -> (p, expr_to_plain_expr c_e)) cs )
+          Nonempty_list.map ~f:(fun (p, c_e) -> (p, expr_to_plain_expr c_e)) cs
+        )
 
 exception AstConverionFixError
 
@@ -175,7 +180,7 @@ let rec ast_to_source_code = function
   | Match (_, e, cs) ->
       sprintf "match (%s) with %s end" (ast_to_source_code e)
         (cs
-        |> List.map ~f:(fun (p, c_e) ->
+        |> Nonempty_list.map ~f:(fun (p, c_e) ->
                sprintf "| %s -> (%s)" (pattern_to_source_code p)
                  (ast_to_source_code c_e))
-        |> List.to_string ~f:Fun.id)
+        |> Nonempty_list.to_string ~f:Fun.id)

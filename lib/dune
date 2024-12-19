@@ -3,6 +3,7 @@
  (name pq_lang)
  (libraries core)
  (modules
+  utils
   vtype
   pattern
   ast

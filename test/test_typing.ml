@@ -4,7 +4,7 @@ open Pq_lang
 open Vtype
 open Ast
 open Typing
-open Utils
+open Testing_utils
 
 let test_cases_expr_typing : test list =
   let open Either in

@@ -2,7 +2,7 @@ open Core
 open OUnit2
 open Pq_lang
 open Ast_executor
-open Utils
+open Testing_utils
 
 let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     =

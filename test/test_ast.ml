@@ -3,7 +3,7 @@ open OUnit2
 open Pq_lang
 open Ast
 open Vtype
-open Utils
+open Testing_utils
 
 let test_cases_equality : test list =
   let create_positive_test ((x : plain_expr), (y : plain_expr)) =

@@ -1,4 +1,5 @@
 %{
+open Utils
 open Vtype
 open Pattern
 open Ast
@@ -52,7 +53,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %type <string * vtype> typed_name
 %type <pattern> pattern
 %type <pattern * plain_expr> match_case
-%type <(pattern * plain_expr) list> match_cases
+%type <(pattern * plain_expr) Nonempty_list.t> match_cases
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
 %start <plain_expr> prog
@@ -86,8 +87,8 @@ match_case:
 ;
 
 match_cases:
-  | c = match_case { [c] }
-  | c = match_case PIPE cs_tail = match_cases { c :: cs_tail }
+  | c = match_case { (c, []) }
+  | c = match_case PIPE cs_tail = match_cases { Nonempty_list.cons c cs_tail }
 ;
 
 (* TODO - make brackets optional in "fun (x : int) -> ..." if using a non-function type *)
