@@ -333,3 +333,9 @@ let nonempty_list_arb (v_arb : 'a QCheck.arbitrary) :
     ~rev:(fun xs -> Nonempty_list.(head xs, tail xs))
     (fun (h, ts) -> Nonempty_list.make (h, ts))
     QCheck.(pair v_arb (list v_arb))
+
+let result_arb (x_arb : 'a QCheck.arbitrary) (y_arb : 'b QCheck.arbitrary) :
+    ('a, 'b) Result.t QCheck.arbitrary =
+  QCheck.map
+    (fun (b, x, y) -> if b then Ok x else Error y)
+    (QCheck.triple QCheck.bool x_arb y_arb)

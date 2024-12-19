@@ -9,6 +9,9 @@ module type Nonempty_list_sig = sig
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
   val to_string : f:('a -> string) -> 'a t -> string
+
+  val fold_result :
+    'a t -> init:'b -> f:('b -> 'a -> ('b, 'c) result) -> ('b, 'c) result
 end
 
 module Nonempty_list : Nonempty_list_sig

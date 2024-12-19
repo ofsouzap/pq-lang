@@ -38,3 +38,8 @@ val plain_ast_expr_arb_any : unit expr QCheck.arbitrary
 
 val nonempty_list_arb :
   'a QCheck.arbitrary -> 'a Nonempty_list.t QCheck.arbitrary
+
+val result_arb :
+  'a QCheck.arbitrary ->
+  'b QCheck.arbitrary ->
+  ('a, 'b) Result.t QCheck.arbitrary
