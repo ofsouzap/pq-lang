@@ -1,6 +1,7 @@
 module type Nonempty_list_sig = sig
   type 'a t = 'a * 'a list [@@deriving sexp, equal]
 
+  val make : 'a * 'a list -> 'a t
   val to_list : 'a t -> 'a list
   val head : 'a t -> 'a
   val tail : 'a t -> 'a list

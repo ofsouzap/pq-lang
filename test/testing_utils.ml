@@ -1,5 +1,6 @@
 open Core
 open Pq_lang
+open Utils
 open Vtype
 open Ast
 open Parser
@@ -325,3 +326,10 @@ let ast_expr_arb_any print v_gen = ast_expr_arb print v_gen
 
 let plain_ast_expr_arb_any : unit expr QCheck.arbitrary =
   ast_expr_arb_any PrintExprSource QCheck.Gen.unit
+
+let nonempty_list_arb (v_arb : 'a QCheck.arbitrary) :
+    'a Nonempty_list.t QCheck.arbitrary =
+  QCheck.map
+    ~rev:(fun xs -> Nonempty_list.(head xs, tail xs))
+    (fun (h, ts) -> Nonempty_list.make (h, ts))
+    QCheck.(pair v_arb (list v_arb))

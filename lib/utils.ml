@@ -3,6 +3,7 @@ open Core
 module type Nonempty_list_sig = sig
   type 'a t = 'a * 'a list [@@deriving sexp, equal]
 
+  val make : 'a * 'a list -> 'a t
   val to_list : 'a t -> 'a list
   val head : 'a t -> 'a
   val tail : 'a t -> 'a list
@@ -15,6 +16,7 @@ end
 module Nonempty_list : Nonempty_list_sig = struct
   type 'a t = 'a * 'a list [@@deriving sexp, equal]
 
+  let make = Fn.id
   let to_list ((h, ts) : 'a t) = h :: ts
   let head (h, _) = h
   let tail (_, ts) = ts

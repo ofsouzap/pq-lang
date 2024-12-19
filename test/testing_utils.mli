@@ -1,5 +1,6 @@
 open Core
 open Pq_lang
+open Utils
 open Vtype
 open Ast
 
@@ -34,3 +35,6 @@ val ast_expr_arb_any :
   'a ast_print_method -> 'a QCheck.Gen.t -> 'a expr QCheck.arbitrary
 
 val plain_ast_expr_arb_any : unit expr QCheck.arbitrary
+
+val nonempty_list_arb :
+  'a QCheck.arbitrary -> 'a Nonempty_list.t QCheck.arbitrary
