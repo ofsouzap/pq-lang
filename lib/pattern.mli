@@ -1,4 +1,3 @@
-open Core
 open Vtype
 
 (** A pattern in the language *)
