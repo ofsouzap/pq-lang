@@ -1,6 +1,8 @@
+open Core
 open Vtype
 
 type pattern = PatName of string * vtype | PatPair of pattern * pattern
+[@@deriving sexp, equal]
 
 let rec pattern_vtype = function
   | PatName (_, t) -> t
