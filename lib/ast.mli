@@ -3,6 +3,7 @@
 *)
 
 open Vtype
+open Pattern
 
 (* TODO - have programs composed of optional custom type defintions then a concluding expression to evaluate, instead of just allowing a single main expression to evaluate.
    Defining functions can just be done with "let f = ... in" *)
@@ -40,6 +41,8 @@ type 'a expr =
   | App of 'a * 'a expr * 'a expr  (** Function application *)
   | Fix of 'a * (string * vtype * vtype) * (string * vtype) * 'a expr
       (** Application of fix operator: `((function_name_for_recursion, function_for_recursion_type1, function_for_recursion_type2), (param_name, param_type), expr)` *)
+  (* Pattern matching *)
+  | Match of 'a * 'a expr * (pattern * 'a expr) list  (** Match expression *)
 [@@deriving sexp, equal]
 
 (** Extract the value attached to a single node of a tagged AST expression *)

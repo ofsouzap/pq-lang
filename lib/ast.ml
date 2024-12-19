@@ -1,5 +1,6 @@
 open Core
 open Vtype
+open Pattern
 
 type 'a expr =
   | IntLit of 'a * int
@@ -23,6 +24,7 @@ type 'a expr =
   | Fun of 'a * (string * vtype) * 'a expr
   | App of 'a * 'a expr * 'a expr
   | Fix of 'a * (string * vtype * vtype) * (string * vtype) * 'a expr
+  | Match of 'a * 'a expr * (pattern * 'a expr) list
 [@@deriving sexp, equal]
 
 let expr_node_val : 'a expr -> 'a = function
@@ -47,6 +49,7 @@ let expr_node_val : 'a expr -> 'a = function
   | Fun (x, _, _) -> x
   | App (x, _, _) -> x
   | Fix (x, _, _, _) -> x
+  | Match (x, _, _) -> x
 
 let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
   match e with
@@ -71,6 +74,8 @@ let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
   | Fun (a, (xname, xtype), e) -> Fun (f a, (xname, xtype), fmap ~f e)
   | App (a, e1, e2) -> App (f a, fmap ~f e1, fmap ~f e2)
   | Fix (a, xname, yname, e) -> Fix (f a, xname, yname, fmap ~f e)
+  | Match (a, e, cs) ->
+      Match (f a, fmap ~f e, List.map ~f:(fun (p, c_e) -> (p, fmap ~f c_e)) cs)
 
 let ( >|= ) (e : 'a expr) (f : 'a -> 'b) = fmap ~f e
 
@@ -104,6 +109,11 @@ let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
   | Fun (_, xname, e) -> Fun ((), xname, expr_to_plain_expr e)
   | App (_, e1, e2) -> App ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
   | Fix (_, xname, yname, e) -> Fix ((), xname, yname, expr_to_plain_expr e)
+  | Match (_, e, cs) ->
+      Match
+        ( (),
+          expr_to_plain_expr e,
+          List.map ~f:(fun (p, c_e) -> (p, expr_to_plain_expr c_e)) cs )
 
 exception AstConverionFixError
 
@@ -162,3 +172,10 @@ let rec ast_to_source_code = function
   | App (_, e1, e2) ->
       sprintf "(%s) (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | Fix _ -> raise AstConverionFixError
+  | Match (_, e, cs) ->
+      sprintf "match (%s) with %s end" (ast_to_source_code e)
+        (cs
+        |> List.map ~f:(fun (p, c_e) ->
+               sprintf "| %s -> (%s)" (pattern_to_source_code p)
+                 (ast_to_source_code c_e))
+        |> List.to_string ~f:Fun.id)

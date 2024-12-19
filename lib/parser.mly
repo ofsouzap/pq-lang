@@ -74,6 +74,7 @@ typed_name:
 ;
 
 pattern:
+  | LPAREN p = pattern RPAREN { p }
   | n = NAME COLON t = vtype { PatName (n, t) }
   | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
 ;
