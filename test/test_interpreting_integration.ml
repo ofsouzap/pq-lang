@@ -40,4 +40,5 @@ let suite =
            ( "Program Pairs0",
              "let x = 4 in (x + 1, if false then x else x * 2 end) end",
              Res (Pair (Int 5, Int 8)) );
+           (* TODO - test cases for pattern matching *)
          ]

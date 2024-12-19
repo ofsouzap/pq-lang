@@ -261,6 +261,8 @@ let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
         Res (Int 15) );
     ]
 
+(* TODO - test cases for pattern matching *)
+
 let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res))
     =
   name >:: fun _ ->

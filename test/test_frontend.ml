@@ -550,6 +550,8 @@ let test_cases_recursion : test_case list =
                App ((), Var ((), "f"), IntLit ((), 5)) )) );
     ]
 
+(* TODO - test cases for pattern matching *)
+
 let test_cases_precedence : test_case_precedence list =
   List.map
     ~f:(fun (x, z) -> (x, x, z))
