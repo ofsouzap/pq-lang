@@ -1,5 +1,6 @@
 %{
 open Vtype
+open Pattern
 open Ast
 open Parsing_errors
 
@@ -49,6 +50,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %type <vtype> vtype
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
+%type <pattern> pattern
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
 %start <plain_expr> prog
@@ -69,6 +71,11 @@ typed_function_name:
 
 typed_name:
   | n = NAME COLON t = vtype { (n, t) }
+;
+
+pattern:
+  | n = NAME COLON t = vtype { PatName (n, t) }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
 ;
 
 (* TODO - make brackets optional in "fun (x : int) -> ..." if using a non-function type *)

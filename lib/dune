@@ -2,7 +2,16 @@
  (public_name pq_lang.lib)
  (name pq_lang)
  (libraries core)
- (modules vtype ast typing parsing_errors parser lexer frontend ast_executor)
+ (modules
+  vtype
+  pattern
+  ast
+  typing
+  parsing_errors
+  parser
+  lexer
+  frontend
+  ast_executor)
  (preprocess
   (pps ppx_jane)))
 
