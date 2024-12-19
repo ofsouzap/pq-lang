@@ -20,6 +20,8 @@ rule token = parse
   | "fun" { FUN }
   | "int" { INT }
   | "bool" { BOOL }
+  | "match" { MATCH }
+  | "with" { WITH }
   (* Operators and symbols *)
   | '+' { PLUS }
   | '-' { MINUS }
@@ -38,6 +40,7 @@ rule token = parse
   | "->" { ARROW }
   | ":" { COLON }
   | "," { COMMA }
+  | "|" { PIPE }
   (* Literals and names *)
   | ['0'-'9']+ as n { INTLIT (int_of_string n) }
   | ['a'-'z' 'A'-'Z']['a'-'z' 'A'-'Z' '0'-'9']* as name { NAME name }

@@ -28,8 +28,8 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %}
 
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE FUN REC INT BOOL
-%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA
+%token END IF THEN ELSE LET IN TRUE FALSE FUN REC INT BOOL MATCH WITH
+%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA PIPE
 %token <int> INTLIT
 %token <string> NAME
 %token EOF
@@ -51,6 +51,8 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
 %type <pattern> pattern
+%type <pattern * plain_expr> match_case
+%type <(pattern * plain_expr) list> match_cases
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
 %start <plain_expr> prog
@@ -75,8 +77,17 @@ typed_name:
 
 pattern:
   | LPAREN p = pattern RPAREN { p }
-  | n = NAME COLON t = vtype { PatName (n, t) }
+  | LPAREN n = NAME COLON t = vtype RPAREN { PatName (n, t) }
   | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
+;
+
+match_case:
+  | p = pattern ARROW e = expr { (p, e) }
+;
+
+match_cases:
+  | c = match_case { [c] }
+  | c = match_case PIPE cs_tail = match_cases { c :: cs_tail }
 ;
 
 (* TODO - make brackets optional in "fun (x : int) -> ..." if using a non-function type *)
@@ -101,6 +112,7 @@ expr:
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
   | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
+  | MATCH e = expr WITH cs = match_cases END { Match ((), e, cs) }  (* match e with cs end *)
 ;
 
 contained_expr:
