@@ -211,6 +211,7 @@ let pattern_arb ~(t : vtype) :
 
 let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
+  (* TODO - add match construct to generation cases *)
   let open QCheck in
   let open QCheck.Gen in
   let rec gen_e_var_of_type
