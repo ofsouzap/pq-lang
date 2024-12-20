@@ -1,12 +1,28 @@
 open Core
+open Utils
 open Vtype
+open Pattern
 open Ast
+
+type pattern_typing_error = MultipleVariableDefinitions of string
+[@@deriving sexp, equal]
+
+let equal_pattern_typing_error_variant x y =
+  match (x, y) with
+  | MultipleVariableDefinitions _, MultipleVariableDefinitions _ -> true
+
+let print_pattern_typing_error = function
+  | MultipleVariableDefinitions xname ->
+      sprintf "Variable named \"%s\" has been defined twice in the pattern"
+        xname
 
 type typing_error =
   | UndefinedVariable of string
   | TypeMismatch of vtype * vtype
+  | PatternTypeMismatch of pattern * vtype * vtype
   | EqualOperatorTypeMistmatch of vtype * vtype
   | ExpectedFunctionOf of vtype
+  | PatternTypingError of pattern_typing_error
 [@@deriving sexp, equal]
 
 let equal_typing_error_variant x y =
@@ -23,11 +39,17 @@ let print_typing_error = function
   | TypeMismatch (t1, t2) ->
       sprintf "Type mismatch: expected %s but got %s" (vtype_to_source_code t1)
         (vtype_to_source_code t2)
+  | PatternTypeMismatch (p, t1, t2) ->
+      sprintf "Type mismatch in pattern \"%s\": expected %s but got %s"
+        (pattern_to_source_code p) (vtype_to_source_code t1)
+        (vtype_to_source_code t2)
   | EqualOperatorTypeMistmatch (t1, t2) ->
       sprintf "Trying to apply equality operator to %s and %s"
         (vtype_to_source_code t1) (vtype_to_source_code t2)
   | ExpectedFunctionOf t ->
       "Expected a function taking input of " ^ vtype_to_source_code t
+  | PatternTypingError err ->
+      sprintf "Error typing pattern: %s" (print_pattern_typing_error err)
 
 module type TypingVarContext = sig
   type t
@@ -35,6 +57,9 @@ module type TypingVarContext = sig
   val empty : t
   val add : t -> string -> vtype -> t
   val find : t -> string -> vtype option
+  val singleton : string -> vtype -> t
+  val append : t -> t -> t
+  val exists : t -> string -> bool
 end
 
 module ListTypingVarContext : TypingVarContext = struct
@@ -43,9 +68,27 @@ module ListTypingVarContext : TypingVarContext = struct
   let empty = []
   let add ctx x t = List.Assoc.add ctx x t ~equal:String.equal
   let find ctx x = List.Assoc.find ctx x ~equal:String.equal
+  let singleton = add empty
+
+  let append ctx1 =
+    List.fold ~init:ctx1 ~f:(fun ctx_acc (x, t) -> add ctx_acc x t)
+
+  let exists ctx x = match find ctx x with None -> false | Some _ -> true
 end
 
-module TypeExpr (Ctx : TypingVarContext) = struct
+module TypeChecker (Ctx : TypingVarContext) = struct
+  let rec type_pattern (ctx : Ctx.t) (orig_p : pattern) :
+      (vtype * Ctx.t, pattern_typing_error) Result.t =
+    let open Result in
+    match orig_p with
+    | PatName (x_name, x_t) ->
+        if Ctx.exists ctx x_name then Error (MultipleVariableDefinitions x_name)
+        else Ok (x_t, Ctx.singleton x_name x_t)
+    | PatPair (p1, p2) ->
+        type_pattern ctx p1 >>= fun (p1_t, ctx_from_p1) ->
+        type_pattern ctx_from_p1 p2 >>= fun (p2_t, ctx_final) ->
+        Ok (VTypePair (p1_t, p2_t), ctx_final)
+
   let rec type_expr (ctx : Ctx.t) (orig_e : 'a expr) :
       ((vtype * 'a) expr, typing_error) Result.t =
     let open Result in
@@ -161,11 +204,46 @@ module TypeExpr (Ctx : TypingVarContext) = struct
           be_of_type ftype2 e' >>= fun _ ->
           Ok (Fix ((ftype, v), fvals, xvals, e'))
         else Error (TypeMismatch (ftype1, xtype))
-    | Match _ -> failwith "TODO"
+    | Match (v, e, cs) ->
+        type_expr ctx e >>= fun e' ->
+        let t_in = e_type e' in
+        (* Type the cases and check them against each other, as well as determining the type of the output *)
+        Nonempty_list.fold_result_consume_init ~init:()
+          ~f:(fun
+              (acc :
+                ( unit,
+                  vtype * (pattern * (vtype * 'a) expr) Nonempty_list.t )
+                Either.t)
+              ((p : pattern), (c_e : 'a expr))
+            ->
+            (* First, try type the pattern *)
+            match type_pattern Ctx.empty p with
+            | Ok (p_t, p_ctx) ->
+                (* Check the pattern's type *)
+                if equal_vtype t_in p_t then
+                  let case_ctx = Ctx.append ctx p_ctx in
+                  (* Then, type the case's expression using the extended context *)
+                  type_expr case_ctx c_e >>= fun c_e' ->
+                  let t_c_e = e_type c_e' in
+                  match acc with
+                  | First _ ->
+                      (* If this is the first case, use this as the output type *)
+                      Ok (t_c_e, Nonempty_list.singleton (p, c_e'))
+                  | Second (t_out, cs_prev_rev) ->
+                      (* If this isn't the first case, check the case's expression's type *)
+                      if equal_vtype t_out t_c_e then
+                        Ok (t_out, Nonempty_list.cons (p, c_e') cs_prev_rev)
+                      else Error (TypeMismatch (t_out, t_c_e))
+                else Error (PatternTypeMismatch (p, t_in, p_t))
+            | Error err -> Error (PatternTypingError err))
+          cs
+        >>| fun ( (t_out : vtype),
+                  (cs_typed_rev : (pattern * (vtype * 'a) expr) Nonempty_list.t)
+                ) -> Match ((t_out, v), e', Nonempty_list.rev cs_typed_rev)
 end
 
-module ListTypeExpr = TypeExpr (ListTypingVarContext)
+module ListTypeChecker = TypeChecker (ListTypingVarContext)
 
 let type_expr (e : 'a Ast.expr) :
     ((Vtype.vtype * 'a) Ast.expr, typing_error) result =
-  ListTypeExpr.type_expr ListTypingVarContext.empty e
+  ListTypeChecker.type_expr ListTypingVarContext.empty e

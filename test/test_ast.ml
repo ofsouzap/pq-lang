@@ -140,8 +140,21 @@ let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
       let e = fmap ~f:(const x) e_raw in
       type_eq (expr_node_val e) x)
 
+let create_test_cases_expr_node_map_val (t1_arb : 'a QCheck.arbitrary)
+    (t1_obs : 'a QCheck.Observable.t) (t1_sexp : 'a -> Sexp.t)
+    (t1_eq : 'b -> 'b -> bool) =
+  let open QCheck in
+  Test.make ~count:100
+    (pair (fun1 t1_obs t1_arb)
+       (ast_expr_arb_any (PrintSexp t1_sexp) (QCheck.gen t1_arb)))
+    (fun (f_, e) ->
+      let f = QCheck.Fn.apply f_ in
+      let e' = expr_node_map_val ~f e in
+      t1_eq (expr_node_val e') (e |> expr_node_val |> f))
+
 let create_test_cases_expr_fmap_root (t1_arb : 'a QCheck.arbitrary)
     (t1_sexp : 'a -> Sexp.t) (fn : 'a -> 'b) (t2_eq : 'b -> 'b -> bool) =
+  (* TODO - change this test to use QCheck.fun1 instead *)
   let open QCheck in
   Test.make ~count:100
     (pair t1_arb (ast_expr_arb_any (PrintSexp t1_sexp) (QCheck.gen t1_arb)))
@@ -175,6 +188,21 @@ let suite =
                     create_test_cases_expr_node_val
                       QCheck.(list int)
                       (equal_list equal_int) );
+                ];
+         "AST expr node map val"
+         >::: List.map
+                ~f:(fun (name, test) ->
+                  name >::: [ QCheck_runner.to_ounit2_test test ])
+                [
+                  ( "unit",
+                    create_test_cases_expr_node_map_val QCheck.unit
+                      QCheck.Observable.unit sexp_of_unit equal_unit );
+                  ( "int",
+                    create_test_cases_expr_node_map_val QCheck.int
+                      QCheck.Observable.int sexp_of_int equal_int );
+                  ( "string",
+                    create_test_cases_expr_node_map_val QCheck.string
+                      QCheck.Observable.string sexp_of_string equal_string );
                 ];
          "AST fmap root"
          >::: List.map

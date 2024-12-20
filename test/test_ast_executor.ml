@@ -262,6 +262,7 @@ let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
     ]
 
 (* TODO - test cases for pattern matching *)
+(* TODO - pattern maching tests where the case evaluation order makes a difference and is checked *)
 
 let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res))
     =

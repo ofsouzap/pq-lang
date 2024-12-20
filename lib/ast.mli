@@ -50,7 +50,10 @@ type 'a expr =
 (** Extract the value attached to a single node of a tagged AST expression *)
 val expr_node_val : 'a expr -> 'a
 
-(** Map a function onto values in an expression *)
+(** Map a function onto the value of a single node of a tagged AST expression *)
+val expr_node_map_val : f:('a -> 'a) -> 'a expr -> 'a expr
+
+(** Map a function onto all values in an entire tagged AST expression *)
 val fmap : f:('a -> 'b) -> 'a expr -> 'b expr
 
 (** Map a function onto values in an expression *)

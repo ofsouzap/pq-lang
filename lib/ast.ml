@@ -28,29 +28,36 @@ type 'a expr =
   | Match of 'a * 'a expr * (pattern * 'a expr) Nonempty_list.t
 [@@deriving sexp, equal]
 
-let expr_node_val : 'a expr -> 'a = function
-  | IntLit (x, _) -> x
-  | Add (x, _, _) -> x
-  | Neg (x, _) -> x
-  | Subtr (x, _, _) -> x
-  | Mult (x, _, _) -> x
-  | BoolLit (x, _) -> x
-  | BNot (x, _) -> x
-  | BOr (x, _, _) -> x
-  | BAnd (x, _, _) -> x
-  | Pair (x, _, _) -> x
-  | Eq (x, _, _) -> x
-  | Gt (x, _, _) -> x
-  | GtEq (x, _, _) -> x
-  | Lt (x, _, _) -> x
-  | LtEq (x, _, _) -> x
-  | If (x, _, _, _) -> x
-  | Var (x, _) -> x
-  | Let (x, _, _, _) -> x
-  | Fun (x, _, _) -> x
-  | App (x, _, _) -> x
-  | Fix (x, _, _, _) -> x
-  | Match (x, _, _) -> x
+let expr_node_map_val_with_result ~(f : 'a -> 'a) : 'a expr -> 'a * 'a expr =
+  function
+  | IntLit (v, x) -> (f v, IntLit (f v, x))
+  | Add (v, e1, e2) -> (f v, Add (f v, e1, e2))
+  | Neg (v, e1) -> (f v, Neg (f v, e1))
+  | Subtr (v, e1, e2) -> (f v, Subtr (f v, e1, e2))
+  | Mult (v, e1, e2) -> (f v, Mult (f v, e1, e2))
+  | BoolLit (v, b) -> (f v, BoolLit (f v, b))
+  | BNot (v, e1) -> (f v, BNot (f v, e1))
+  | BOr (v, e1, e2) -> (f v, BOr (f v, e1, e2))
+  | BAnd (v, e1, e2) -> (f v, BAnd (f v, e1, e2))
+  | Pair (v, e1, e2) -> (f v, Pair (f v, e1, e2))
+  | Eq (v, e1, e2) -> (f v, Eq (f v, e1, e2))
+  | Gt (v, e1, e2) -> (f v, Gt (f v, e1, e2))
+  | GtEq (v, e1, e2) -> (f v, GtEq (f v, e1, e2))
+  | Lt (v, e1, e2) -> (f v, Lt (f v, e1, e2))
+  | LtEq (v, e1, e2) -> (f v, LtEq (f v, e1, e2))
+  | If (v, e1, e2, e3) -> (f v, If (f v, e1, e2, e3))
+  | Var (v, xname) -> (f v, Var (f v, xname))
+  | Let (v, e1, e2, e3) -> (f v, Let (f v, e1, e2, e3))
+  | Fun (v, xname, e1) -> (f v, Fun (f v, xname, e1))
+  | App (v, e1, e2) -> (f v, App (f v, e1, e2))
+  | Fix (v, fname, xname, e1) -> (f v, Fix (f v, fname, xname, e1))
+  | Match (v, e1, cs) -> (f v, Match (f v, e1, cs))
+
+let expr_node_val (e : 'a expr) : 'a =
+  expr_node_map_val_with_result ~f:Fn.id e |> fst
+
+let expr_node_map_val ~(f : 'a -> 'a) : 'a expr -> 'a expr =
+  Fn.compose snd (expr_node_map_val_with_result ~f)
 
 let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
   match e with

@@ -137,6 +137,12 @@ end = struct
   let empty = []
   let add ctx x t = List.Assoc.add ctx x t ~equal:String.equal
   let find ctx x = List.Assoc.find ctx x ~equal:String.equal
+  let singleton x t = add empty x t
+
+  let append ctx1 =
+    List.fold ~init:ctx1 ~f:(fun ctx_acc (x, t) -> add ctx_acc x t)
+
+  let exists ctx x = match find ctx x with None -> false | Some _ -> true
 
   let varnames_of_type (t : vtype) (ctx : t) : string list =
     List.filter_map

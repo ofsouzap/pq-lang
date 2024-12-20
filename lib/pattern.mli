@@ -8,6 +8,3 @@ type pattern =
 
 (** Convert a pattern to a source code representation *)
 val pattern_to_source_code : pattern -> string
-
-(** Get the type of a pattern *)
-val pattern_vtype : pattern -> vtype
