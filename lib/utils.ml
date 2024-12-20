@@ -12,7 +12,6 @@ module type Nonempty_list_sig = sig
   val cons : 'a -> 'a t -> 'a t
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
-  val to_string : f:('a -> string) -> 'a t -> string
   val rev : 'a t -> 'a t
 
   val fold_result :
@@ -40,7 +39,6 @@ module Nonempty_list : Nonempty_list_sig = struct
   let cons (h : 'a) (ts : 'a t) = (h, to_list ts)
   let map ~(f : 'a -> 'b) ((h, ts) : 'a t) : 'b t = (f h, List.map ~f ts)
   let fold (xs : 'a t) = List.fold (to_list xs)
-  let to_string ~(f : 'a -> string) (xs : 'a t) = List.to_string ~f (to_list xs)
 
   let rev (xs : 'a t) =
     match tail xs with

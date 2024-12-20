@@ -53,6 +53,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %type <string * vtype> typed_name
 %type <pattern> pattern
 %type <pattern * plain_expr> match_case
+%type <(pattern * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
 %type <(pattern * plain_expr) Nonempty_list.t> match_cases
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
@@ -86,9 +87,14 @@ match_case:
   | p = pattern ARROW e = expr { (p, e) }
 ;
 
-match_cases:
+match_cases_no_leading_pipe:
   | c = match_case { (c, []) }
   | c = match_case PIPE cs_tail = match_cases { Nonempty_list.cons c cs_tail }
+;
+
+match_cases:
+  | PIPE cs = match_cases_no_leading_pipe { cs }
+  | cs = match_cases_no_leading_pipe { cs }
 ;
 
 (* TODO - make brackets optional in "fun (x : int) -> ..." if using a non-function type *)

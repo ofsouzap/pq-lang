@@ -12,7 +12,6 @@ module type Nonempty_list_sig = sig
   val cons : 'a -> 'a t -> 'a t
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
-  val to_string : f:('a -> string) -> 'a t -> string
   val rev : 'a t -> 'a t
 
   val fold_result :

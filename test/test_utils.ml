@@ -70,18 +70,6 @@ let nonempty_list_test_fold =
          in
          equal_int exp out))
 
-let nonempty_list_test_to_string =
-  let open QCheck in
-  QCheck_runner.to_ounit2_test
-    (Test.make ~name:"To String" ~count:100
-       (pair (fun1 QCheck.Observable.int string) (nonempty_list_arb int))
-       (fun (f_, xs) ->
-         let out = xs |> Nonempty_list.to_string ~f:(QCheck.Fn.apply f_) in
-         let exp =
-           xs |> Nonempty_list.to_list |> List.to_string ~f:(QCheck.Fn.apply f_)
-         in
-         equal_string exp out))
-
 let nonempty_list_test_fold_result =
   let open QCheck in
   QCheck_runner.to_ounit2_test
@@ -128,7 +116,6 @@ let nonempty_list_tests =
     nonempty_list_test_cons;
     nonempty_list_test_map;
     nonempty_list_test_fold;
-    nonempty_list_test_to_string;
     nonempty_list_test_fold_result;
     nonempty_list_test_fold_result_consume_init;
   ]

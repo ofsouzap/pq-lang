@@ -188,6 +188,6 @@ let rec ast_to_source_code = function
       sprintf "match (%s) with %s end" (ast_to_source_code e)
         (cs
         |> Nonempty_list.map ~f:(fun (p, c_e) ->
-               sprintf "| %s -> (%s)" (pattern_to_source_code p)
+               sprintf "| (%s) -> (%s)" (pattern_to_source_code p)
                  (ast_to_source_code c_e))
-        |> Nonempty_list.to_string ~f:Fun.id)
+        |> Nonempty_list.to_list |> String.concat ~sep:" ")
