@@ -125,6 +125,26 @@ let nonempty_list_test_fold_result =
          in
          (equal_result equal_int equal_int) exp out))
 
+let nonempty_list_test_fold_result_consume_init =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name:"Fold result consume init" ~count:1000
+       (triple int
+          (fun2 QCheck.Observable.int QCheck.Observable.int
+             (result_arb QCheck.int QCheck.int))
+          (nonempty_list_arb int))
+       (fun (init, f_, xs) ->
+         let out =
+           xs
+           |> Nonempty_list.fold_result_consume_init ~init ~f:(fun x ->
+                  match x with First x | Second x -> (QCheck.Fn.apply f_) x)
+         in
+         let exp =
+           xs |> Nonempty_list.to_list
+           |> List.fold_result ~init ~f:(QCheck.Fn.apply f_)
+         in
+         (equal_result equal_int equal_int) exp out))
+
 let nonempty_list_tests =
   [
     nonempty_list_test_head;
