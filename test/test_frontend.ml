@@ -13,30 +13,30 @@ let test_cases_arithmetic : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("1", [ INTLIT 1 ], Res (IntLit ((), 1)));
-      ("0", [ INTLIT 0 ], Res (IntLit ((), 0)));
-      ("-5", [ MINUS; INTLIT 5 ], Res (Neg ((), IntLit ((), 5))));
+      ("1", [ INTLIT 1 ], Ok (IntLit ((), 1)));
+      ("0", [ INTLIT 0 ], Ok (IntLit ((), 0)));
+      ("-5", [ MINUS; INTLIT 5 ], Ok (Neg ((), IntLit ((), 5))));
       ( "1 + 2",
         [ INTLIT 1; PLUS; INTLIT 2 ],
-        Res (Add ((), IntLit ((), 1), IntLit ((), 2))) );
+        Ok (Add ((), IntLit ((), 1), IntLit ((), 2))) );
       ( "1 - 2",
         [ INTLIT 1; MINUS; INTLIT 2 ],
-        Res (Subtr ((), IntLit ((), 1), IntLit ((), 2))) );
+        Ok (Subtr ((), IntLit ((), 1), IntLit ((), 2))) );
       ( "1 + -2",
         [ INTLIT 1; PLUS; MINUS; INTLIT 2 ],
-        Res (Add ((), IntLit ((), 1), Neg ((), IntLit ((), 2)))) );
+        Ok (Add ((), IntLit ((), 1), Neg ((), IntLit ((), 2)))) );
       ( "-1 + 2",
         [ MINUS; INTLIT 1; PLUS; INTLIT 2 ],
-        Res (Add ((), Neg ((), IntLit ((), 1)), IntLit ((), 2))) );
+        Ok (Add ((), Neg ((), IntLit ((), 1)), IntLit ((), 2))) );
       ( "-1 + -2",
         [ MINUS; INTLIT 1; PLUS; MINUS; INTLIT 2 ],
-        Res (Add ((), Neg ((), IntLit ((), 1)), Neg ((), IntLit ((), 2)))) );
+        Ok (Add ((), Neg ((), IntLit ((), 1)), Neg ((), IntLit ((), 2)))) );
       ( "1 * 2",
         [ INTLIT 1; STAR; INTLIT 2 ],
-        Res (Mult ((), IntLit ((), 1), IntLit ((), 2))) );
+        Ok (Mult ((), IntLit ((), 1), IntLit ((), 2))) );
       ( "1 * -2",
         [ INTLIT 1; STAR; MINUS; INTLIT 2 ],
-        Res (Mult ((), IntLit ((), 1), Neg ((), IntLit ((), 2)))) );
+        Ok (Mult ((), IntLit ((), 1), Neg ((), IntLit ((), 2)))) );
       ( "1    + 4 * (1+2 )",
         [
           INTLIT 1;
@@ -49,7 +49,7 @@ let test_cases_arithmetic : test_case list =
           INTLIT 2;
           RPAREN;
         ],
-        Res
+        Ok
           (Add
              ( (),
                IntLit ((), 1),
@@ -58,8 +58,7 @@ let test_cases_arithmetic : test_case list =
              )) );
       ( "(1 + 2) * 3",
         [ LPAREN; INTLIT 1; PLUS; INTLIT 2; RPAREN; STAR; INTLIT 3 ],
-        Res
-          (Mult ((), Add ((), IntLit ((), 1), IntLit ((), 2)), IntLit ((), 3)))
+        Ok (Mult ((), Add ((), IntLit ((), 1), IntLit ((), 2)), IntLit ((), 3)))
       );
       ( "(1 + 2) * (3 + 4)",
         [
@@ -75,33 +74,33 @@ let test_cases_arithmetic : test_case list =
           INTLIT 4;
           RPAREN;
         ],
-        Res
+        Ok
           (Mult
              ( (),
                Add ((), IntLit ((), 1), IntLit ((), 2)),
                Add ((), IntLit ((), 3), IntLit ((), 4)) )) );
-      ("+**+", [ PLUS; STAR; STAR; PLUS ], ParsingError);
+      ("+**+", [ PLUS; STAR; STAR; PLUS ], Error ParsingError);
     ]
 
 let test_cases_booleans : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("true", [ TRUE ], Res (BoolLit ((), true)));
-      ("false", [ FALSE ], Res (BoolLit ((), false)));
-      ("~true", [ BNOT; TRUE ], Res (BNot ((), BoolLit ((), true))));
+      ("true", [ TRUE ], Ok (BoolLit ((), true)));
+      ("false", [ FALSE ], Ok (BoolLit ((), false)));
+      ("~true", [ BNOT; TRUE ], Ok (BNot ((), BoolLit ((), true))));
       ( "true && false",
         [ TRUE; BAND; FALSE ],
-        Res (BAnd ((), BoolLit ((), true), BoolLit ((), false))) );
+        Ok (BAnd ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true || false",
         [ TRUE; BOR; FALSE ],
-        Res (BOr ((), BoolLit ((), true), BoolLit ((), false))) );
+        Ok (BOr ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true == false",
         [ TRUE; EQ; FALSE ],
-        Res (Eq ((), BoolLit ((), true), BoolLit ((), false))) );
+        Ok (Eq ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true == false || true",
         [ TRUE; EQ; FALSE; BOR; TRUE ],
-        Res
+        Ok
           (BOr
              ( (),
                Eq ((), BoolLit ((), true), BoolLit ((), false)),
@@ -114,13 +113,13 @@ let test_cases_pairs : test_case list =
     [
       ( "(1,2)",
         [ LPAREN; INTLIT 1; COMMA; INTLIT 2; RPAREN ],
-        Res (Pair ((), IntLit ((), 1), IntLit ((), 2))) );
+        Ok (Pair ((), IntLit ((), 1), IntLit ((), 2))) );
       ( "(true, 1)",
         [ LPAREN; TRUE; COMMA; INTLIT 1; RPAREN ],
-        Res (Pair ((), BoolLit ((), true), IntLit ((), 1))) );
+        Ok (Pair ((), BoolLit ((), true), IntLit ((), 1))) );
       ( "(3, false)",
         [ LPAREN; INTLIT 3; COMMA; FALSE; RPAREN ],
-        Res (Pair ((), IntLit ((), 3), BoolLit ((), false))) );
+        Ok (Pair ((), IntLit ((), 3), BoolLit ((), false))) );
       ( "((3, 4), 5)",
         [
           LPAREN;
@@ -133,7 +132,7 @@ let test_cases_pairs : test_case list =
           INTLIT 5;
           RPAREN;
         ],
-        Res
+        Ok
           (Pair ((), Pair ((), IntLit ((), 3), IntLit ((), 4)), IntLit ((), 5)))
       );
     ]
@@ -144,20 +143,20 @@ let test_cases_integer_comparisons : test_case list =
     [
       ( "0 == 0",
         [ INTLIT 0; EQ; INTLIT 0 ],
-        Res (Eq ((), IntLit ((), 0), IntLit ((), 0))) );
+        Ok (Eq ((), IntLit ((), 0), IntLit ((), 0))) );
       ( "1 > 0",
         [ INTLIT 1; GT; INTLIT 0 ],
-        Res (Gt ((), IntLit ((), 1), IntLit ((), 0))) );
+        Ok (Gt ((), IntLit ((), 1), IntLit ((), 0))) );
       ( "0 >= 0",
         [ INTLIT 0; GTEQ; INTLIT 0 ],
-        Res (GtEq ((), IntLit ((), 0), IntLit ((), 0))) );
+        Ok (GtEq ((), IntLit ((), 0), IntLit ((), 0))) );
       ( "0 < 0",
         [ INTLIT 0; LT; INTLIT 0 ],
-        Res (Lt ((), IntLit ((), 0), IntLit ((), 0))) );
+        Ok (Lt ((), IntLit ((), 0), IntLit ((), 0))) );
       ( "0 <= 1",
         [ INTLIT 0; LTEQ; INTLIT 1 ],
-        Res (LtEq ((), IntLit ((), 0), IntLit ((), 1))) );
-      ("== <=", [ EQ; LTEQ ], ParsingError);
+        Ok (LtEq ((), IntLit ((), 0), IntLit ((), 1))) );
+      ("== <=", [ EQ; LTEQ ], Error ParsingError);
     ]
 
 let test_cases_if_then_else : test_case list =
@@ -166,7 +165,7 @@ let test_cases_if_then_else : test_case list =
     [
       ( "if true then 1 else 2 end",
         [ IF; TRUE; THEN; INTLIT 1; ELSE; INTLIT 2; END ],
-        Res (If ((), BoolLit ((), true), IntLit ((), 1), IntLit ((), 2))) );
+        Ok (If ((), BoolLit ((), true), IntLit ((), 1), IntLit ((), 2))) );
       ( "if true then 1 else if false then 2 else 3 end end",
         [
           IF;
@@ -183,7 +182,7 @@ let test_cases_if_then_else : test_case list =
           END;
           END;
         ],
-        Res
+        Ok
           (If
              ( (),
                BoolLit ((), true),
@@ -208,7 +207,7 @@ let test_cases_if_then_else : test_case list =
           INTLIT 3;
           END;
         ],
-        Res
+        Ok
           (If
              ( (),
                BoolLit ((), true),
@@ -230,7 +229,7 @@ let test_cases_if_then_else : test_case list =
           INTLIT 3;
           END;
         ],
-        Res
+        Ok
           (If
              ( (),
                BoolLit ((), true),
@@ -242,18 +241,18 @@ let test_cases_variables : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("x", [ NAME "x" ], Res (Var ((), "x")));
+      ("x", [ NAME "x" ], Ok (Var ((), "x")));
       ( "let x = 1 in x end",
         [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
-        Res (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
+        Ok (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
       ( "let x = 1 in x end",
         [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
-        Res (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
+        Ok (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
       ( "let x = 1 in let y in x end",
         [
           LET; NAME "x"; ASSIGN; INTLIT 1; IN; LET; NAME "y"; IN; NAME "x"; END;
         ],
-        ParsingError );
+        Error ParsingError );
       ( "let f = fun (x : int) -> true end in f 1 end",
         [
           LET;
@@ -273,7 +272,7 @@ let test_cases_variables : test_case list =
           INTLIT 1;
           END;
         ],
-        Res
+        Ok
           (Let
              ( (),
                "f",
@@ -287,7 +286,7 @@ let test_cases_functions : test_case list =
     [
       ( "fun (x : int) -> x end",
         [ FUN; LPAREN; NAME "x"; COLON; INT; RPAREN; ARROW; NAME "x"; END ],
-        Res (Fun ((), ("x", VTypeInt), Var ((), "x"))) );
+        Ok (Fun ((), ("x", VTypeInt), Var ((), "x"))) );
       ( "fun (x : int) -> x + 1 end",
         [
           FUN;
@@ -302,7 +301,7 @@ let test_cases_functions : test_case list =
           INTLIT 1;
           END;
         ],
-        Res (Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))))
+        Ok (Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))))
       );
       ( "fun (x : int) -> fun (y : int) -> x + y end end",
         [
@@ -326,7 +325,7 @@ let test_cases_functions : test_case list =
           END;
           END;
         ],
-        Res
+        Ok
           (Fun
              ( (),
                ("x", VTypeInt),
@@ -349,17 +348,17 @@ let test_cases_functions : test_case list =
           RPAREN;
           INTLIT 4;
         ],
-        Res
+        Ok
           (App
              ( (),
                Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
                IntLit ((), 4) )) );
       ( "x 5",
         [ NAME "x"; INTLIT 5 ],
-        Res (App ((), Var ((), "x"), IntLit ((), 5))) );
+        Ok (App ((), Var ((), "x"), IntLit ((), 5))) );
       ( "x y",
         [ NAME "x"; NAME "y" ],
-        Res (App ((), Var ((), "x"), Var ((), "y"))) );
+        Ok (App ((), Var ((), "x"), Var ((), "y"))) );
       ( "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x else \
          y end end end end ) true 1 2",
         [
@@ -400,7 +399,7 @@ let test_cases_functions : test_case list =
           INTLIT 1;
           INTLIT 2;
         ],
-        Res
+        Ok
           (App
              ( (),
                App
@@ -426,7 +425,7 @@ let test_cases_functions : test_case list =
                IntLit ((), 2) )) );
       ( "f1 f2 f3",
         [ NAME "f1"; NAME "f2"; NAME "f3" ],
-        Res (App ((), App ((), Var ((), "f1"), Var ((), "f2")), Var ((), "f3")))
+        Ok (App ((), App ((), Var ((), "f1"), Var ((), "f2")), Var ((), "f3")))
       );
     ]
 
@@ -476,7 +475,7 @@ let test_cases_recursion : test_case list =
           INTLIT 5;
           END;
         ],
-        Res
+        Ok
           (Let
              ( (),
                "f",
@@ -514,7 +513,7 @@ let test_cases_recursion : test_case list =
           NAME "f";
           END;
         ],
-        ParsingError );
+        Error ParsingError );
       ( "let rec (f : int -> int) = fun (y : int) -> y end in f 5 end",
         [
           LET;
@@ -541,7 +540,7 @@ let test_cases_recursion : test_case list =
           INTLIT 5;
           END;
         ],
-        Res
+        Ok
           (Let
              ( (),
                "f",
@@ -584,17 +583,17 @@ let create_frontend_test ((name, inp, _, exp) : test_case) =
   let out = run_frontend_string inp in
   assert_equal exp out ~printer:(fun x ->
       match x with
-      | Res e -> ast_to_source_code e
-      | LexingError c -> sprintf "LexingError %c" c
-      | ParsingError -> "ParsingError")
+      | Ok e -> ast_to_source_code e
+      | Error (LexingError c) -> sprintf "LexingError %c" c
+      | Error ParsingError -> "ParsingError")
 
 let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
   match out with
-  | Res e -> assert_equal exp e ~printer:ast_to_source_code
-  | LexingError c -> assert_failure (sprintf "LexingError %c" c)
-  | ParsingError -> assert_failure "ParsingError"
+  | Ok e -> assert_equal exp e ~printer:ast_to_source_code
+  | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
+  | Error ParsingError -> assert_failure "ParsingError"
 
 let test_suites test_create_func =
   [
