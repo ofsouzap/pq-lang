@@ -203,6 +203,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     pair (gen (d - 1, ctx_with_fx) ftype2) (self (d - 1, ctx_with_f))
     >|= fun (e1, e2) ->
     Let (v, fname, Fix (v, (fname, ftype1, ftype2), (xname, ftype1), e1), e2)
+    (* TODO - case for match construct *)
   and standard_gen_e_cases
       ( (self : int * TestingVarCtx.t -> 'a expr Gen.t),
         ((d : int), (ctx : TestingVarCtx.t)),
@@ -213,6 +214,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
       gen_e_let_in (self, (d, ctx), v) (* Let-in *);
       gen_e_app (self, (d, ctx), v) t (* Function application *);
       gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
+      (* TODO - case for match construct *)
     ]
   and gen_int (param : int * TestingVarCtx.t) : 'a expr Gen.t =
     (* Generate an expression that types as integer *)
