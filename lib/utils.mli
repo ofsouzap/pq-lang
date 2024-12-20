@@ -5,6 +5,7 @@ module type Nonempty_list_sig = sig
 
   val make : 'a * 'a list -> 'a t
   val to_list : 'a t -> 'a list
+  val from_list_unsafe : 'a list -> 'a t
   val head : 'a t -> 'a
   val tail : 'a t -> 'a list
   val singleton : 'a -> 'a t

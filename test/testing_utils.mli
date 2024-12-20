@@ -2,6 +2,7 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
+open Pattern
 open Ast
 
 (* TODO - doc comments *)
@@ -24,6 +25,9 @@ val lexer_keywords : string list
 val varname_gen : string QCheck.Gen.t
 val vtype_gen : int -> Vtype.vtype QCheck.Gen.t
 val typed_var_gen : int -> (string * Vtype.vtype) QCheck.Gen.t
+
+(** Arbitrary pattern generator that generates a pattern of the specified type as well as a list of the variables it defines *)
+val pattern_arb : t:vtype -> (pattern * (string * vtype) list) QCheck.arbitrary
 
 val ast_expr_arb :
   ?t:vtype ->

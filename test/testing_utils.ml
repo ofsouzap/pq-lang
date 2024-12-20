@@ -2,6 +2,7 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
+open Pattern
 open Ast
 open Parser
 open Ast_executor
@@ -131,6 +132,12 @@ module TestingVarCtx : sig
 
   (** Get a list of all the variables who have the given type *)
   val varnames_of_type : vtype -> t -> string list
+
+  (** Get the context as a list *)
+  val to_list : t -> (string * vtype) list
+
+  (** Creates a context from a list *)
+  val from_list : (string * vtype) list -> t
 end = struct
   type t = (string * vtype) list
 
@@ -149,11 +156,61 @@ end = struct
       ~f:(fun (vname, vtype) ->
         if equal_vtype vtype t then Some vname else None)
       ctx
+
+  let to_list = Fn.id
+  let from_list = Fn.id
 end
+
+let pattern_arb ~(t : vtype) :
+    (pattern * (string * vtype) list) QCheck.arbitrary =
+  let open QCheck in
+  let open QCheck.Gen in
+  let rec gen_new_varname (ctx : TestingVarCtx.t) : string Gen.t =
+    (* Generate a new variable name that is not already in the context *)
+    varname_gen >>= fun vname ->
+    if TestingVarCtx.exists ctx vname then gen_new_varname ctx else return vname
+  in
+  let named_var (ctx : TestingVarCtx.t) (t : vtype) :
+      (pattern * TestingVarCtx.t) Gen.t =
+    gen_new_varname ctx >|= fun vname ->
+    (PatName (vname, t), TestingVarCtx.singleton vname t)
+  in
+  let rec gen_int (ctx : TestingVarCtx.t) : (pattern * TestingVarCtx.t) Gen.t =
+    (* Generate a pattern that types as integer *)
+    named_var ctx VTypeInt
+  and gen_bool (ctx : TestingVarCtx.t) : (pattern * TestingVarCtx.t) Gen.t =
+    (* Generate a pattern that types as boolean *)
+    named_var ctx VTypeBool
+  and gen_fun ((t1 : vtype), (t2 : vtype)) (ctx : TestingVarCtx.t) :
+      (pattern * TestingVarCtx.t) Gen.t =
+    (* Generate a pattern that types as a function *)
+    named_var ctx (VTypeFun (t1, t2))
+  and gen_pair ((t1 : vtype), (t2 : vtype)) (ctx : TestingVarCtx.t) :
+      (pattern * TestingVarCtx.t) Gen.t =
+    (* Generate a pattern that types as a pair *)
+    oneof
+      [
+        named_var ctx (VTypePair (t1, t2));
+        ( gen t1 ctx >>= fun (p1, ctx1) ->
+          gen t2 ctx1 >|= fun (p2, ctx2) -> (PatPair (p1, p2), ctx2) );
+      ]
+  and gen (t : vtype) : TestingVarCtx.t -> (pattern * TestingVarCtx.t) Gen.t =
+    (* Generate a pattern of a specified type *)
+    match t with
+    | VTypeInt -> gen_int
+    | VTypeBool -> gen_bool
+    | VTypeFun (t1, t2) -> gen_fun (t1, t2)
+    | VTypePair (t1, t2) -> gen_pair (t1, t2)
+  in
+  QCheck.make
+    ~print:
+      (Print.pair pattern_to_source_code
+         (Print.list (Print.pair Print.string vtype_to_source_code)))
+    ( gen t TestingVarCtx.empty >|= fun (p, ctx) ->
+      (p, TestingVarCtx.to_list ctx) )
 
 let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
-  (* TODO - add match construct to generation cases *)
   let open QCheck in
   let open QCheck.Gen in
   let rec gen_e_var_of_type
@@ -203,19 +260,37 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     pair (gen (d - 1, ctx_with_fx) ftype2) (self (d - 1, ctx_with_f))
     >|= fun (e1, e2) ->
     Let (v, fname, Fix (v, (fname, ftype1, ftype2), (xname, ftype1), e1), e2)
-    (* TODO - case for match construct *)
-  and standard_gen_e_cases
+  and gen_e_match
+      ( (self : int * TestingVarCtx.t -> 'a expr Gen.t),
+        ((d : int), (ctx : TestingVarCtx.t)),
+        (v : 'a) ) : 'a expr Gen.t =
+    (* Shorthand for generating a match expression *)
+    gen_any_of_type (d - 1, ctx) >>= fun (e1_t, e1) ->
+    let pat_gen = pattern_arb ~t:e1_t |> QCheck.get_gen in
+    let case_and_pat_gen =
+      pat_gen >>= fun (p, p_ctx_list) ->
+      let case_ctx =
+        TestingVarCtx.append ctx (TestingVarCtx.from_list p_ctx_list)
+      in
+      self (d - 1, case_ctx) >|= fun e -> (p, e)
+    in
+    list_size (int_range 1 4) case_and_pat_gen
+    >|= Nonempty_list.from_list_unsafe
+    >|= fun cs -> Match (v, e1, cs)
+  and standard_rec_gen_cases
       ( (self : int * TestingVarCtx.t -> 'a expr Gen.t),
         ((d : int), (ctx : TestingVarCtx.t)),
         (v : 'a) ) (t : vtype) : 'a expr Gen.t list =
     (* The standard recursive generator cases for some provided type *)
-    [
-      gen_e_if (self, (d, ctx), v) (* If-then-else *);
-      gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-      gen_e_app (self, (d, ctx), v) t (* Function application *);
-      gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
-      (* TODO - case for match construct *)
-    ]
+    const
+      [ gen_e_match (self, (d, ctx), v) (* Match *) ]
+      [
+        gen_e_if (self, (d, ctx), v) (* If-then-else *);
+        gen_e_let_in (self, (d, ctx), v) (* Let-in *);
+        gen_e_app (self, (d, ctx), v) t (* Function application *);
+        gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
+        gen_e_match (self, (d, ctx), v) (* Match *);
+      ]
   and gen_int (param : int * TestingVarCtx.t) : 'a expr Gen.t =
     (* Generate an expression that types as integer *)
     fix
@@ -235,7 +310,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
             ( pair self' self' >|= fun (e1, e2) -> Mult (v, e1, e2)
               (* Multiplication *) );
           ]
-          @ standard_gen_e_cases (self, (d, ctx), v) VTypeInt
+          @ standard_rec_gen_cases (self, (d, ctx), v) VTypeInt
         in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
@@ -269,7 +344,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
             ( pair (gen_int (d - 1, ctx)) (gen_int (d - 1, ctx))
             >|= fun (e1, e2) -> LtEq (v, e1, e2) (* LTEQ *) );
           ]
-          @ standard_gen_e_cases (self, (d, ctx), v) VTypeBool
+          @ standard_rec_gen_cases (self, (d, ctx), v) VTypeBool
         in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
@@ -287,7 +362,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
           ]
           @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
         in
-        let rec_cases = standard_gen_e_cases (self, (d, ctx), v) t in
+        let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
   and gen_fun ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
@@ -306,7 +381,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
           ]
           @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
         in
-        let rec_cases = standard_gen_e_cases (self, (d, ctx), v) t in
+        let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
   and gen ((d : int), (ctx : TestingVarCtx.t)) (t : vtype) : 'a expr Gen.t =

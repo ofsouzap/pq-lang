@@ -5,6 +5,7 @@ module type Nonempty_list_sig = sig
 
   val make : 'a * 'a list -> 'a t
   val to_list : 'a t -> 'a list
+  val from_list_unsafe : 'a list -> 'a t
   val head : 'a t -> 'a
   val tail : 'a t -> 'a list
   val singleton : 'a -> 'a t
@@ -29,6 +30,10 @@ module Nonempty_list : Nonempty_list_sig = struct
 
   let make = Fn.id
   let to_list ((h, ts) : 'a t) = h :: ts
+
+  let from_list_unsafe (xs : 'a list) =
+    match xs with [] -> failwith "Empty list" | h :: ts -> (h, ts)
+
   let head (h, _) = h
   let tail (_, ts) = ts
   let singleton (h : 'a) = (h, [])
