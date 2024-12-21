@@ -83,7 +83,7 @@ module TypeChecker (Ctx : TypingVarContext) = struct
     match orig_p with
     | PatName (x_name, x_t) ->
         if Ctx.exists ctx x_name then Error (MultipleVariableDefinitions x_name)
-        else Ok (x_t, Ctx.singleton x_name x_t)
+        else Ok (x_t, Ctx.add ctx x_name x_t)
     | PatPair (p1, p2) ->
         type_pattern ctx p1 >>= fun (p1_t, ctx_from_p1) ->
         type_pattern ctx_from_p1 p2 >>= fun (p2_t, ctx_final) ->
