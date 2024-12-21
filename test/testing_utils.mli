@@ -18,7 +18,7 @@ val default_ast_print_method : 'a ast_print_method
 val default_max_gen_rec_depth : int
 val token_printer : Parser.token list -> string
 
-val override_compare_exec_res :
+val override_equal_exec_res :
   Ast_executor.exec_res -> Ast_executor.exec_res -> bool
 
 val lexer_keywords : string list

@@ -66,13 +66,13 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string sexp_of_token) tokens)
 
-let override_compare_exec_res (a : exec_res) (b : exec_res) : bool =
+let override_equal_exec_res (a : exec_res) (b : exec_res) : bool =
   match (a, b) with
-  | Err e1, Err e2 -> (
+  | Error e1, Error e2 -> (
       match (e1, e2) with
       | TypingError _, TypingError _ -> true
-      | _ -> exec_res_compare a b)
-  | _ -> exec_res_compare a b
+      | _ -> equal_exec_res a b)
+  | _ -> equal_exec_res a b
 
 let lexer_keywords : string list =
   [

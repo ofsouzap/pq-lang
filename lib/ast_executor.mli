@@ -50,7 +50,7 @@ val empty_typing_error : typing_error
 type exec_err =
   | TypingError of typing_error
       (** Execution was halted due to a typing error *)
-  | UndefinedVarError of string
+  | UndefinedVarError of varname
       (** Execution was halted due to usage of an undefined variable of the provided name *)
   | MisplacedFixError  (** Fix node was inappropriately used in the AST *)
   | FixApplicationError
@@ -59,14 +59,10 @@ type exec_err =
       (** The maximum recursion depth of the execution has been exceeded so the program was terminated *)
 
 (** The result of executing an AST *)
-type exec_res =
-  | Res of value  (** The execution terminated with the provided value *)
-  | Err of exec_err  (** The execution terminated with an error *)
-
-(* TODO - use the Result module here instead of exec_res *)
+type exec_res = (value, exec_err) Result.t
 
 (** Check if two execution results are equal *)
-val exec_res_compare : exec_res -> exec_res -> bool
+val equal_exec_res : exec_res -> exec_res -> bool
 
 (** String representation of an execution result *)
 val show_exec_res : exec_res -> string

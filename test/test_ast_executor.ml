@@ -18,7 +18,7 @@ let type_expr (e : Ast.plain_expr) =
 let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
   let mapf ((x : plain_expr), (y : int)) =
-    (ast_to_source_code x, type_expr x, Res (Int y))
+    (ast_to_source_code x, type_expr x, Ok (Int y))
   in
   List.map ~f:mapf
     [
@@ -51,7 +51,7 @@ let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
 let test_cases_booleans : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
   let mapf ((x : plain_expr), (y : bool)) =
-    (ast_to_source_code x, type_expr x, Res (Bool y))
+    (ast_to_source_code x, type_expr x, Ok (Bool y))
   in
   List.map ~f:mapf
     [
@@ -76,7 +76,7 @@ let test_cases_booleans : (string * Ast.plain_typed_expr * exec_res) list =
 let test_cases_pairs : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
   let mapf ((x : plain_expr), (y : value)) =
-    (ast_to_source_code x, type_expr x, Res y)
+    (ast_to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
     [
@@ -93,7 +93,7 @@ let test_cases_integer_comparisons :
     (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
   let mapf ((x : plain_expr), (y : bool)) =
-    (ast_to_source_code x, type_expr x, Res (Bool y))
+    (ast_to_source_code x, type_expr x, Ok (Bool y))
   in
   List.map ~f:mapf
     [
@@ -126,20 +126,20 @@ let test_cases_control_flow : (string * Ast.plain_typed_expr * exec_res) list =
   in
   List.map ~f:mapf
     [
-      (If ((), BoolLit ((), true), IntLit ((), 1), IntLit ((), 2)), Res (Int 1));
-      (If ((), BoolLit ((), false), IntLit ((), 1), IntLit ((), 2)), Res (Int 2));
+      (If ((), BoolLit ((), true), IntLit ((), 1), IntLit ((), 2)), Ok (Int 1));
+      (If ((), BoolLit ((), false), IntLit ((), 1), IntLit ((), 2)), Ok (Int 2));
       ( If
           ( (),
             BoolLit ((), true),
             IntLit ((), 1),
             Add ((), IntLit ((), 1), IntLit ((), 2)) ),
-        Res (Int 1) );
+        Ok (Int 1) );
       ( If
           ( (),
             BoolLit ((), false),
             IntLit ((), 1),
             Add ((), IntLit ((), 1), IntLit ((), 2)) ),
-        Res (Int 3) );
+        Ok (Int 3) );
     ]
 
 let test_cases_variables : (string * Ast.plain_typed_expr * exec_res) list =
@@ -149,29 +149,29 @@ let test_cases_variables : (string * Ast.plain_typed_expr * exec_res) list =
   in
   List.map ~f:mapf
     [
-      (Let ((), "x", IntLit ((), 1), Var ((), "x")), Res (Int 1));
+      (Let ((), "x", IntLit ((), 1), Var ((), "x")), Ok (Int 1));
       ( Let ((), "x", IntLit ((), 1), Add ((), Var ((), "x"), IntLit ((), 2))),
-        Res (Int 3) );
+        Ok (Int 3) );
       ( Let
           ( (),
             "x",
             IntLit ((), 1),
             Let ((), "y", IntLit ((), 2), Add ((), Var ((), "x"), Var ((), "y")))
           ),
-        Res (Int 3) );
+        Ok (Int 3) );
       ( Let
           ((), "x", IntLit ((), 1), Let ((), "x", IntLit ((), 2), Var ((), "x"))),
-        Res (Int 2) );
-      (Let ((), "x", BoolLit ((), true), Var ((), "x")), Res (Bool true));
+        Ok (Int 2) );
+      (Let ((), "x", BoolLit ((), true), Var ((), "x")), Ok (Bool true));
       ( Let
           ((), "x", BoolLit ((), false), BOr ((), Var ((), "x"), Var ((), "x"))),
-        Res (Bool false) );
+        Ok (Bool false) );
       ( Let
           ( (),
             "f",
             Fun ((), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 8)) ),
-        Res (Int 8) );
+        Ok (Int 8) );
     ]
 
 let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
@@ -182,9 +182,9 @@ let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
   List.map ~f:mapf
     [
       ( Fun ((), ("x", VTypeInt), Var ((), "x")),
-        Res (Closure ("x", Var ((VTypeInt, ()), "x"), empty_store)) );
+        Ok (Closure ("x", Var ((VTypeInt, ()), "x"), empty_store)) );
       ( Fun ((), ("x", VTypeBool), BOr ((), Var ((), "x"), BoolLit ((), true))),
-        Res
+        Ok
           (Closure
              ( "x",
                BOr
@@ -205,7 +205,7 @@ let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
                         Add ((), Var ((), "a"), Var ((), "b")) ) ),
                 IntLit ((), 3) ),
             IntLit ((), 5) ),
-        Res (Int 8) );
+        Ok (Int 8) );
       ( App
           ( (),
             App
@@ -229,7 +229,7 @@ let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
                     BoolLit ((), true) ),
                 IntLit ((), 1) ),
             IntLit ((), 2) ),
-        Res (Int 1) );
+        Ok (Int 1) );
     ]
 
 let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
@@ -258,7 +258,7 @@ let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
                             Var ((), "f"),
                             Subtr ((), Var ((), "x"), IntLit ((), 1)) ) ) ) ),
             App ((), Var ((), "f"), IntLit ((), 5)) ),
-        Res (Int 15) );
+        Ok (Int 15) );
     ]
 
 (* TODO - test cases for pattern matching *)
@@ -268,7 +268,7 @@ let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res)
     =
   name >:: fun _ ->
   let out = Ast_executor.execute inp in
-  assert_equal exp out ~cmp:override_compare_exec_res
+  assert_equal exp out ~cmp:override_equal_exec_res
     ~printer:Ast_executor.show_exec_res
 
 let suite =

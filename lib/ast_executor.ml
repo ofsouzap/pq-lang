@@ -66,26 +66,33 @@ let typing_error_compare (a : typing_error) (b : typing_error) : bool =
 
 type exec_err =
   | TypingError of typing_error
-  | UndefinedVarError of string
+  | UndefinedVarError of varname
   | MisplacedFixError
   | FixApplicationError
   | MaxRecursionDepthExceeded
 
-type exec_res = Res of value | Err of exec_err
+type exec_res = (value, exec_err) Result.t
 
-let exec_res_compare a b =
+let equal_exec_res a b =
   match (a, b) with
-  | Res v1, Res v2 -> equal_value v1 v2
-  | Err e1, Err e2 -> (
+  | Ok v1, Ok v2 -> equal_value v1 v2
+  | Error e1, Error e2 -> (
       match (e1, e2) with
       | TypingError terr1, TypingError terr2 -> typing_error_compare terr1 terr2
+      | TypingError _, _ -> false
       | UndefinedVarError x, UndefinedVarError y -> equal_varname x y
-      | _ -> false)
+      | UndefinedVarError _, _ -> false
+      | MisplacedFixError, MisplacedFixError -> true
+      | MisplacedFixError, _ -> false
+      | FixApplicationError, FixApplicationError -> true
+      | FixApplicationError, _ -> false
+      | MaxRecursionDepthExceeded, MaxRecursionDepthExceeded -> true
+      | MaxRecursionDepthExceeded, _ -> false)
   | _ -> false
 
 let show_exec_res = function
-  | Res v -> sexp_of_value v |> Sexp.to_string
-  | Err e -> (
+  | Ok v -> sexp_of_value v |> Sexp.to_string
+  | Error e -> (
       match e with
       | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
       | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
@@ -93,79 +100,81 @@ let show_exec_res = function
       | FixApplicationError -> "[Fix APPLICATION ERROR]"
       | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]")
 
-let ( >>= ) (x : exec_res) (f : value -> exec_res) : exec_res =
-  match x with Res v -> f v | _ -> x
-
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
   match x with
   | Int i -> cnt i
   | _ ->
-      Err (TypingError { empty_typing_error with expected_type = Some "Int" })
+      Error (TypingError { empty_typing_error with expected_type = Some "Int" })
 
 (** Apply a function to the execution value if it is a boolean, otherwise return a typing error *)
 let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
   match x with
   | Bool b -> cnt b
   | _ ->
-      Err (TypingError { empty_typing_error with expected_type = Some "Bool" })
+      Error
+        (TypingError { empty_typing_error with expected_type = Some "Bool" })
 
 (** Apply a function to the execution value if it is a function, otherwise return a typing error *)
 let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
   match x with
   | Closure x -> cnt x
   | _ ->
-      Err
+      Error
         (TypingError { empty_typing_error with expected_type = Some "Closure" })
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an integer and give a typing error otherwise *)
 let rec eval_apply_to_int (store : store) (x : ast_tag Ast.typed_expr)
     (cnt : int -> exec_res) : exec_res =
+  let open Result in
   eval store x >>= apply_to_int cnt
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an boolean and give a typing error otherwise *)
 and eval_apply_to_bool (store : store) (x : ast_tag Ast.typed_expr)
     (cnt : bool -> exec_res) : exec_res =
+  let open Result in
   eval store x >>= apply_to_bool cnt
 
 (** Evaluate a subexpression, then apply a continuation function to the result if it an function and give a typing error otherwise *)
 and eval_apply_to_closure (store : store) (x : ast_tag Ast.typed_expr)
     (cnt : closure_props -> exec_res) : exec_res =
+  let open Result in
   eval store x >>= apply_to_closure cnt
 
 (** Evaluate an AST subtree *)
 and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
+  let open Result in
   match e with
-  | IntLit (_, i) -> Res (Int i)
+  | IntLit (_, i) -> Ok (Int i)
   | Add (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
-          eval_apply_to_int store e2 (fun i2 -> Res (Int (i1 + i2))))
-  | Neg (_, e) -> eval_apply_to_int store e (fun i -> Res (Int (-i)))
+          eval_apply_to_int store e2 (fun i2 -> Ok (Int (i1 + i2))))
+  | Neg (_, e) -> eval_apply_to_int store e (fun i -> Ok (Int (-i)))
   | Subtr (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
-          eval_apply_to_int store e2 (fun i2 -> Res (Int (i1 - i2))))
+          eval_apply_to_int store e2 (fun i2 -> Ok (Int (i1 - i2))))
   | Mult (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
-          eval_apply_to_int store e2 (fun i2 -> Res (Int (i1 * i2))))
-  | BoolLit (_, b) -> Res (Bool b)
-  | BNot (_, e) -> eval_apply_to_bool store e (fun b -> Res (Bool (not b)))
+          eval_apply_to_int store e2 (fun i2 -> Ok (Int (i1 * i2))))
+  | BoolLit (_, b) -> Ok (Bool b)
+  | BNot (_, e) -> eval_apply_to_bool store e (fun b -> Ok (Bool (not b)))
   | BOr (_, e1, e2) ->
       eval_apply_to_bool store e1 (fun b1 ->
-          eval_apply_to_bool store e2 (fun b2 -> Res (Bool (b1 || b2))))
+          eval_apply_to_bool store e2 (fun b2 -> Ok (Bool (b1 || b2))))
   | BAnd (_, e1, e2) ->
       eval_apply_to_bool store e1 (fun b1 ->
-          eval_apply_to_bool store e2 (fun b2 -> Res (Bool (b1 && b2))))
+          eval_apply_to_bool store e2 (fun b2 -> Ok (Bool (b1 && b2))))
   | Pair (_, e1, e2) ->
       eval store e1 >>= fun v1 ->
-      eval store e2 >>= fun v2 -> Res (Pair (v1, v2))
+      eval store e2 >>= fun v2 -> Ok (Pair (v1, v2))
   | Eq (_, e1, e2) -> (
       eval store e1 >>= fun v1 ->
       eval store e2 >>= fun v2 ->
       match (v1, v2) with
-      | Int i1, Int i2 -> Res (Bool (i1 = i2))
-      | Bool b1, Bool b2 -> Res (Bool (equal_bool b1 b2))
+      | Int i1, Int i2 -> Ok (Bool (i1 = i2))
+      | Bool b1, Bool b2 -> Ok (Bool (equal_bool b1 b2))
       | _ ->
-          Err
+          Error
             (TypingError
                {
                  empty_typing_error with
@@ -176,27 +185,27 @@ and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
                }))
   | Gt (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
-          eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 > i2))))
+          eval_apply_to_int store e2 (fun i2 -> Ok (Bool (i1 > i2))))
   | GtEq (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
-          eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 >= i2))))
+          eval_apply_to_int store e2 (fun i2 -> Ok (Bool (i1 >= i2))))
   | Lt (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
-          eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 < i2))))
+          eval_apply_to_int store e2 (fun i2 -> Ok (Bool (i1 < i2))))
   | LtEq (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->
-          eval_apply_to_int store e2 (fun i2 -> Res (Bool (i1 <= i2))))
+          eval_apply_to_int store e2 (fun i2 -> Ok (Bool (i1 <= i2))))
   | If (_, e_cond, e_then, e_else) ->
       eval_apply_to_bool store e_cond (fun b ->
           let next_e = if b then e_then else e_else in
           eval store next_e)
   | Var (_, x) ->
       store_get store x
-      |> Option.value_map ~default:(Err (UndefinedVarError x)) ~f:(fun v ->
-             Res v)
+      |> Option.value_map ~default:(Error (UndefinedVarError x)) ~f:(fun v ->
+             Ok v)
   | Let (_, xname, e1, e2) ->
       eval store e1 >>= fun v -> eval (store_set store ~key:xname ~value:v) e2
-  | Fun (_, (xname, _), e) -> Res (Closure (xname, e, store))
+  | Fun (_, (xname, _), e) -> Ok (Closure (xname, e, store))
   | App (_, e1, e2) ->
       (* This uses call-by-value semantics *)
       eval_apply_to_closure store e1 (fun (argname, fe, fs) ->
