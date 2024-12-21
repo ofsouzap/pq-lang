@@ -128,6 +128,11 @@ let rec match_pattern (p : pattern) (v : value) : (varname * value) list option
       match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)
   | PatPair _, _ -> None
 
+(* let rec match_pattern (p : pattern) (v : value) :
+     ((varname * value) list, unit) Result.t =
+   let open Result in
+   failwith "TODO" *)
+
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
   match x with
