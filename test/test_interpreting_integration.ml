@@ -40,5 +40,8 @@ let suite =
            ( "Program Pairs0",
              "let x = 4 in (x + 1, if false then x else x * 2 end) end",
              Ok (Pair (Int 5, Int 8)) );
-           (* TODO - test cases for pattern matching *)
+           ( "Program Match Pairs",
+             "let p = (true, 1) in match p with | ((b : bool), (x : int)) -> \
+              if b then x else 0 end end end",
+             Ok (Int 1) );
          ]
