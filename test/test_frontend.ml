@@ -1,6 +1,8 @@
 open Core
 open OUnit2
 open Pq_lang
+open Utils
+open Pattern
 open Ast
 open Parser
 open Frontend
@@ -549,7 +551,205 @@ let test_cases_recursion : test_case list =
                App ((), Var ((), "f"), IntLit ((), 5)) )) );
     ]
 
-(* TODO - test cases for pattern matching *)
+let test_cases_match : test_case list =
+  List.map
+    ~f:(fun (x, y, z) -> (x, x, y, z))
+    [
+      ( (* Simple match without leading pipe *)
+        "match x with (y : int) -> y end",
+        [
+          MATCH;
+          NAME "x";
+          WITH;
+          LPAREN;
+          NAME "y";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "y";
+          END;
+        ],
+        Ok
+          (Match
+             ( (),
+               Var ((), "x"),
+               Nonempty_list.from_list_unsafe
+                 [ (PatName ("y", VTypeInt), Var ((), "y")) ] )) );
+      ( (* Simple match with leading pipe *)
+        "match x with | (y : int) -> y end",
+        [
+          MATCH;
+          NAME "x";
+          WITH;
+          PIPE;
+          LPAREN;
+          NAME "y";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "y";
+          END;
+        ],
+        Ok
+          (Match
+             ( (),
+               Var ((), "x"),
+               Nonempty_list.from_list_unsafe
+                 [ (PatName ("y", VTypeInt), Var ((), "y")) ] )) );
+      ( (* Match with compound inner expression *)
+        "match (1 + (if true then x else 4 end)) with (y : int) -> y end",
+        [
+          MATCH;
+          LPAREN;
+          INTLIT 1;
+          PLUS;
+          LPAREN;
+          IF;
+          TRUE;
+          THEN;
+          NAME "x";
+          ELSE;
+          INTLIT 4;
+          END;
+          RPAREN;
+          RPAREN;
+          WITH;
+          LPAREN;
+          NAME "y";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "y";
+          END;
+        ],
+        Ok
+          (Match
+             ( (),
+               Add
+                 ( (),
+                   IntLit ((), 1),
+                   If ((), BoolLit ((), true), Var ((), "x"), IntLit ((), 4)) ),
+               Nonempty_list.from_list_unsafe
+                 [ (PatName ("y", VTypeInt), Var ((), "y")) ] )) );
+      ( (* Match with multiple patterns *)
+        "match x with (y : int) -> y | (z : int) -> z end",
+        [
+          MATCH;
+          NAME "x";
+          WITH;
+          LPAREN;
+          NAME "y";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "y";
+          PIPE;
+          LPAREN;
+          NAME "z";
+          COLON;
+          INT;
+          RPAREN;
+          ARROW;
+          NAME "z";
+          END;
+        ],
+        Ok
+          (Match
+             ( (),
+               Var ((), "x"),
+               Nonempty_list.from_list_unsafe
+                 [
+                   (PatName ("y", VTypeInt), Var ((), "y"));
+                   (PatName ("z", VTypeInt), Var ((), "z"));
+                 ] )) );
+      ( (* Matching pair *)
+        "match x with ((y : int), (z : bool)) -> y end",
+        [
+          MATCH;
+          NAME "x";
+          WITH;
+          LPAREN;
+          LPAREN;
+          NAME "y";
+          COLON;
+          INT;
+          RPAREN;
+          COMMA;
+          LPAREN;
+          NAME "z";
+          COLON;
+          BOOL;
+          RPAREN;
+          RPAREN;
+          ARROW;
+          NAME "y";
+          END;
+        ],
+        Ok
+          (Match
+             ( (),
+               Var ((), "x"),
+               Nonempty_list.from_list_unsafe
+                 [
+                   ( PatPair (PatName ("y", VTypeInt), PatName ("z", VTypeBool)),
+                     Var ((), "y") );
+                 ] )) );
+      ( (* Matching nested pair *)
+        "match x with ((y : bool), ((z1 : bool), (z2 : bool))) -> if y then z1 \
+         else z2 end end",
+        [
+          MATCH;
+          NAME "x";
+          WITH;
+          LPAREN;
+          LPAREN;
+          NAME "y";
+          COLON;
+          BOOL;
+          RPAREN;
+          COMMA;
+          LPAREN;
+          LPAREN;
+          NAME "z1";
+          COLON;
+          BOOL;
+          RPAREN;
+          COMMA;
+          LPAREN;
+          NAME "z2";
+          COLON;
+          BOOL;
+          RPAREN;
+          RPAREN;
+          RPAREN;
+          ARROW;
+          IF;
+          NAME "y";
+          THEN;
+          NAME "z1";
+          ELSE;
+          NAME "z2";
+          END;
+          END;
+        ],
+        Ok
+          (Match
+             ( (),
+               Var ((), "x"),
+               Nonempty_list.from_list_unsafe
+                 [
+                   ( PatPair
+                       ( PatName ("y", VTypeBool),
+                         PatPair
+                           (PatName ("z1", VTypeBool), PatName ("z2", VTypeBool))
+                       ),
+                     If ((), Var ((), "y"), Var ((), "z1"), Var ((), "z2")) );
+                 ] )) );
+    ]
 
 let test_cases_precedence : test_case_precedence list =
   List.map
@@ -606,6 +806,7 @@ let test_suites test_create_func =
     "Variables" >::: List.map ~f:test_create_func test_cases_variables;
     "Functions" >::: List.map ~f:test_create_func test_cases_functions;
     "Recursion" >::: List.map ~f:test_create_func test_cases_recursion;
+    "Match" >::: List.map ~f:test_create_func test_cases_match;
   ]
 
 let suite =
