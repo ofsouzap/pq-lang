@@ -118,7 +118,6 @@ expr:
   | LET REC LPAREN l = typed_function_name RPAREN ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
-  | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
   | MATCH e = expr WITH cs = match_cases END { Match ((), e, cs) }  (* match e with cs end *)
 ;
 
@@ -127,6 +126,7 @@ contained_expr:
   | i = INTLIT { IntLit ((), i) }
   | TRUE { BoolLit ((), true) }
   | FALSE { BoolLit ((), false) }
+  | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
   | n = NAME { Var ((), n) }
 ;
 
