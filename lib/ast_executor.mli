@@ -1,5 +1,7 @@
 (** This module provides functionality for directly executing an AST of a program. *)
 
+open Vtype
+
 (** The data that the executor tags the interpreted AST with *)
 type ast_tag = unit [@@deriving sexp, equal]
 
@@ -7,7 +9,12 @@ type ast_tag = unit [@@deriving sexp, equal]
 type varname = string
 
 (** Properties of a closure *)
-type closure_props = varname * ast_tag Ast.typed_expr * store
+type closure_props = {
+  param : varname * vtype;  (** The function's parameter's name and type *)
+  out_type : vtype;  (** The output type of the function *)
+  body : ast_tag Ast.typed_expr;  (** The body of the function *)
+  store : store;  (** The store to use when executing the function *)
+}
 [@@deriving sexp, equal]
 
 (** A resulting value from executing an AST *)

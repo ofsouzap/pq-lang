@@ -182,16 +182,27 @@ let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
   List.map ~f:mapf
     [
       ( Fun ((), ("x", VTypeInt), Var ((), "x")),
-        Ok (Closure ("x", Var ((VTypeInt, ()), "x"), empty_store)) );
+        Ok
+          (Closure
+             {
+               param = ("x", VTypeInt);
+               out_type = VTypeInt;
+               body = Var ((VTypeInt, ()), "x");
+               store = empty_store;
+             }) );
       ( Fun ((), ("x", VTypeBool), BOr ((), Var ((), "x"), BoolLit ((), true))),
         Ok
           (Closure
-             ( "x",
-               BOr
-                 ( (VTypeBool, ()),
-                   Var ((VTypeBool, ()), "x"),
-                   BoolLit ((VTypeBool, ()), true) ),
-               empty_store )) );
+             {
+               param = ("x", VTypeBool);
+               out_type = VTypeBool;
+               body =
+                 BOr
+                   ( (VTypeBool, ()),
+                     Var ((VTypeBool, ()), "x"),
+                     BoolLit ((VTypeBool, ()), true) );
+               store = empty_store;
+             }) );
       ( App
           ( (),
             App

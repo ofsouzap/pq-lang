@@ -9,7 +9,12 @@ type varname = string [@@deriving sexp, equal]
 module Varname = String
 module VarnameMap = Map.Make_using_comparator (Varname)
 
-type closure_props = varname * ast_tag Ast.typed_expr * store
+type closure_props = {
+  param : varname * vtype;
+  out_type : vtype;
+  body : ast_tag Ast.typed_expr;
+  store : store;
+}
 [@@deriving sexp, equal]
 
 and value =
@@ -26,6 +31,12 @@ let store_get store key = Map.find store key
 let store_set store ~key ~value = Map.set store ~key ~data:value
 let store_compare = equal_store
 let store_traverse = Map.to_alist ~key_order:`Increasing
+
+(* let rec value_type = function
+   | Int _ -> VTypeInt
+   | Bool _ -> VTypeBool
+   | Closure closure -> failwith "TODO"
+   | Pair (v1, v2) -> VTypePair (value_type v1, value_type v2) *)
 
 type typing_error = {
   expected_type : string option;
@@ -99,6 +110,11 @@ let show_exec_res = function
       | MisplacedFixError -> "[MISPLACED FIX NODE]"
       | FixApplicationError -> "[Fix APPLICATION ERROR]"
       | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]")
+
+(* let rec match_pattern (p : pattern) (v : value) :
+     ((varname * value) list, unit) Result.t =
+   let open Result in
+   failwith "TODO" *)
 
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
@@ -205,12 +221,22 @@ and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
              Ok v)
   | Let (_, xname, e1, e2) ->
       eval store e1 >>= fun v -> eval (store_set store ~key:xname ~value:v) e2
-  | Fun (_, (xname, _), e) -> Ok (Closure (xname, e, store))
+  | Fun (_, (xname, xtype), e) ->
+      Ok
+        (Closure
+           {
+             param = (xname, xtype);
+             out_type = Ast.expr_node_val e |> fst;
+             body = e;
+             store;
+           })
   | App (_, e1, e2) ->
       (* This uses call-by-value semantics *)
-      eval_apply_to_closure store e1 (fun (argname, fe, fs) ->
+      eval_apply_to_closure store e1 (fun closure ->
           eval store e2 >>= fun v2 ->
-          eval (store_set fs ~key:argname ~value:v2) fe)
+          eval
+            (store_set closure.store ~key:(closure.param |> fst) ~value:v2)
+            closure.body)
   | Fix (_, (fname, ftype1, ftype2), ((xname, xtype) as x), fxbody) as e ->
       (* fix (\f. \x. e2) ~> \x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
       let ftype = VTypeFun (ftype1, ftype2) in
@@ -229,6 +255,17 @@ and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
                      e ),
                  Var ((xtype, ()), xname) ) ))
   | Match _ -> failwith "TODO"
+(* | Match (_, e1, cs) ->
+    eval store e1 >>= fun v1 ->
+    let case_ev_opt : exec_res option =
+      Nonempty_list.fold ~init:None
+        ~f:(fun acc (p, c_e) ->
+          match acc with
+          | Some _ -> acc
+          | None -> failwith "TODO - try match pattern, if fail, return None")
+        cs
+    in
+    failwith "TODO" *)
 
 let execute (e : 'a Ast.typed_expr) =
   eval (VarnameMap.empty : store) (Ast.fmap ~f:(fun (t, _) -> (t, ())) e)
