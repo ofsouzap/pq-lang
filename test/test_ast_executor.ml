@@ -1,6 +1,8 @@
 open Core
 open OUnit2
 open Pq_lang
+open Utils
+open Pattern
 open Ast_executor
 open Testing_utils
 
@@ -13,7 +15,11 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
 let type_expr (e : Ast.plain_expr) =
   match Typing.type_expr e with
   | Ok x -> x
-  | Error _ -> failwith ("Typing error for: " ^ Ast.ast_to_source_code e)
+  | Error err ->
+      failwith
+        (sprintf "Typing error:\nExpression: %s\nError: %s"
+           (Ast.ast_to_source_code e)
+           (Typing.print_typing_error err))
 
 let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
@@ -272,7 +278,73 @@ let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 15) );
     ]
 
-(* TODO - test cases for pattern matching *)
+let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : plain_expr), (y : exec_res)) =
+    (ast_to_source_code x, type_expr x, y)
+  in
+  List.map ~f:mapf
+    [
+      ( Let
+          ( (),
+            "x",
+            IntLit ((), 3),
+            Match
+              ( (),
+                Var ((), "x"),
+                Nonempty_list.from_list_unsafe
+                  [
+                    ( PatName ("y", VTypeInt),
+                      Add ((), Var ((), "y"), IntLit ((), 1)) );
+                  ] ) ),
+        Ok (Int 4) );
+      ( Let
+          ( (),
+            "x",
+            BoolLit ((), false),
+            Match
+              ( (),
+                Var ((), "x"),
+                Nonempty_list.from_list_unsafe
+                  [
+                    ( PatName ("y", VTypeBool),
+                      If ((), Var ((), "y"), IntLit ((), 4), IntLit ((), 0)) );
+                    (PatName ("z", VTypeBool), IntLit ((), 9));
+                  ] ) ),
+        Ok (Int 0) );
+      ( Let
+          ( (),
+            "x",
+            Pair ((), BoolLit ((), true), IntLit ((), 1)),
+            Match
+              ( (),
+                Var ((), "x"),
+                Nonempty_list.from_list_unsafe
+                  [
+                    ( PatPair (PatName ("y", VTypeBool), PatName ("z", VTypeInt)),
+                      If ((), Var ((), "y"), Var ((), "z"), IntLit ((), 0)) );
+                  ] ) ),
+        Ok (Int 1) );
+      ( Let
+          ( (),
+            "x",
+            Pair
+              ( (),
+                Pair ((), BoolLit ((), true), BoolLit ((), true)),
+                IntLit ((), 1) ),
+            Match
+              ( (),
+                Var ((), "x"),
+                Nonempty_list.from_list_unsafe
+                  [
+                    ( PatPair
+                        ( PatName ("y", VTypePair (VTypeBool, VTypeBool)),
+                          PatName ("z", VTypeInt) ),
+                      Var ((), "y") );
+                  ] ) ),
+        Ok (Pair (Bool true, Bool true)) );
+    ]
+
 (* TODO - pattern maching tests where the case evaluation order makes a difference and is checked *)
 
 let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res))
@@ -294,4 +366,5 @@ let suite =
          "Variables" >::: List.map ~f:create_test test_cases_variables;
          "Functions" >::: List.map ~f:create_test test_cases_functions;
          "Recursion" >::: List.map ~f:create_test test_cases_recursion;
+         "Match" >::: List.map ~f:create_test test_cases_match;
        ]
