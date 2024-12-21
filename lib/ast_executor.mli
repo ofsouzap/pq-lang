@@ -64,6 +64,8 @@ type exec_err =
       (** Application of the Fix node was done on an invalid target *)
   | MaxRecursionDepthExceeded
       (** The maximum recursion depth of the execution has been exceeded so the program was terminated *)
+  | IncompleteMatchError
+      (** No cases could be found that match the provided value in a match statement *)
 
 (** The result of executing an AST *)
 type exec_res = (value, exec_err) Result.t

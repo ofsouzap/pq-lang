@@ -1,5 +1,7 @@
 open Core
+open Utils
 open Vtype
+open Pattern
 
 (* TODO - have backends as a module thing, so that they can more easily be swapped in *)
 
@@ -32,11 +34,11 @@ let store_set store ~key ~value = Map.set store ~key ~data:value
 let store_compare = equal_store
 let store_traverse = Map.to_alist ~key_order:`Increasing
 
-(* let rec value_type = function
-   | Int _ -> VTypeInt
-   | Bool _ -> VTypeBool
-   | Closure closure -> failwith "TODO"
-   | Pair (v1, v2) -> VTypePair (value_type v1, value_type v2) *)
+let rec value_type = function
+  | Int _ -> VTypeInt
+  | Bool _ -> VTypeBool
+  | Closure closure -> VTypeFun (snd closure.param, closure.out_type)
+  | Pair (v1, v2) -> VTypePair (value_type v1, value_type v2)
 
 type typing_error = {
   expected_type : string option;
@@ -81,6 +83,7 @@ type exec_err =
   | MisplacedFixError
   | FixApplicationError
   | MaxRecursionDepthExceeded
+  | IncompleteMatchError
 
 type exec_res = (value, exec_err) Result.t
 
@@ -98,7 +101,9 @@ let equal_exec_res a b =
       | FixApplicationError, FixApplicationError -> true
       | FixApplicationError, _ -> false
       | MaxRecursionDepthExceeded, MaxRecursionDepthExceeded -> true
-      | MaxRecursionDepthExceeded, _ -> false)
+      | MaxRecursionDepthExceeded, _ -> false
+      | IncompleteMatchError, IncompleteMatchError -> true
+      | IncompleteMatchError, _ -> false)
   | _ -> false
 
 let show_exec_res = function
@@ -109,12 +114,19 @@ let show_exec_res = function
       | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
       | MisplacedFixError -> "[MISPLACED FIX NODE]"
       | FixApplicationError -> "[Fix APPLICATION ERROR]"
-      | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]")
+      | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]"
+      | IncompleteMatchError -> "[INCOMPLETE MATCH]")
 
-(* let rec match_pattern (p : pattern) (v : value) :
-     ((varname * value) list, unit) Result.t =
-   let open Result in
-   failwith "TODO" *)
+let rec match_pattern (p : pattern) (v : value) : (varname * value) list option
+    =
+  let open Option in
+  match (p, v) with
+  | PatName (xname, xtype), v ->
+      if value_type v |> equal_vtype xtype then Some [ (xname, v) ] else None
+  | PatPair (p1, p2), Pair (v1, v2) ->
+      match_pattern p1 v1 >>= fun m1 ->
+      match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)
+  | PatPair _, _ -> None
 
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
@@ -254,18 +266,26 @@ and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
                          Fun ((ftype, ()), x, fxbody) ),
                      e ),
                  Var ((xtype, ()), xname) ) ))
-  | Match _ -> failwith "TODO"
-(* | Match (_, e1, cs) ->
-    eval store e1 >>= fun v1 ->
-    let case_ev_opt : exec_res option =
-      Nonempty_list.fold ~init:None
-        ~f:(fun acc (p, c_e) ->
-          match acc with
-          | Some _ -> acc
-          | None -> failwith "TODO - try match pattern, if fail, return None")
-        cs
-    in
-    failwith "TODO" *)
+  | Match (_, e1, cs) -> (
+      eval store e1 >>= fun v1 ->
+      let matched_c_e : ((varname * value) list * ast_tag Ast.typed_expr) option
+          =
+        Nonempty_list.fold ~init:None
+          ~f:(fun acc (p, c_e) ->
+            match acc with
+            | Some _ -> acc
+            | None -> match_pattern p v1 |> Option.map ~f:(fun m -> (m, c_e)))
+          cs
+      in
+      match matched_c_e with
+      | None -> Error IncompleteMatchError
+      | Some (m, c_e) ->
+          eval
+            (List.fold ~init:store
+               ~f:(fun acc (xname, xval) ->
+                 store_set acc ~key:xname ~value:xval)
+               m)
+            c_e)
 
 let execute (e : 'a Ast.typed_expr) =
   eval (VarnameMap.empty : store) (Ast.fmap ~f:(fun (t, _) -> (t, ())) e)
