@@ -97,8 +97,6 @@ match_cases:
   | cs = match_cases_no_leading_pipe { cs }
 ;
 
-(* TODO - make brackets optional in "fun (x : int) -> ..." if using a non-function type *)
-
 expr:
   | e = contained_expr { e }  (* ( e ) *)
   | e1 = expr PLUS e2 = expr { Add ((), e1, e2) }  (* e1 + e2 *)
