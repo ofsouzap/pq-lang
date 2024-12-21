@@ -184,6 +184,8 @@ let test_cases_expr_typing_full_check : test list =
    Do these as a module functor and then have a ground truth of an inefficient, but definitely-correct implementation
    (probably done with functions for context tracking) *)
 
+(* TODO - tests for expressions that should fail to type *)
+
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in
