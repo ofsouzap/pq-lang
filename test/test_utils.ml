@@ -1,53 +1,123 @@
 open Core
 open OUnit2
-open QCheck
 open Pq_lang
-open Vtype
-open Ast
 open Utils
+open Testing_utils
 
-let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
+let nonempty_list_test_head =
   let open QCheck in
   QCheck_runner.to_ounit2_test
-    (Test.make ~name ~count:1000
-       (let open QCheck.Gen in
-        let te_gen =
-          t_gen >>= fun t ->
-          QCheck.gen (ast_expr_arb ~t NoPrint Gen.unit) >|= fun e -> (t, e)
-        in
-        let te_arb =
-          make
-            ~print:(fun (t, e) ->
-              sprintf "[type: %s] %s" (vtype_to_source_code t)
-                (ast_to_source_code e))
-            te_gen
-        in
-        te_arb)
-       (fun (t, e) ->
-         let typed_result = Typing.type_expr e in
-         match typed_result with
-         | Ok typed_e ->
-             let et = Ast.expr_node_val typed_e |> fst in
-             equal_vtype t et
-         | Error _ -> false))
+    (Test.make ~name:"Head" ~count:1000
+       (pair int (list int))
+       (fun (h, ts) ->
+         let xs = Nonempty_list.make (h, ts) in
+         equal_int (Nonempty_list.head xs) h))
 
-let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
-  create_typed_expr_gen_test name (Gen.return t)
+let nonempty_list_test_tail =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name:"Tail" ~count:1000
+       (pair int (list int))
+       (fun (h, ts) ->
+         let xs = Nonempty_list.make (h, ts) in
+         (equal_list equal_int) (Nonempty_list.tail xs) ts))
 
-(* TODO - test that the TestingVarCtx module types things as the actual used one does *)
+let nonempty_list_test_singleton =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name:"Singleton" ~count:1000 int (fun h ->
+         let xs = Nonempty_list.singleton h in
+         (equal_list equal_int) (Nonempty_list.to_list xs) [ h ]))
 
-let suite =
-  "Utilities Tests"
-  >::: [
-         "Typed expression generator"
-         >::: [
-                create_typed_expr_gen_test_for_fixed_type "int" VTypeInt;
-                create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
-                create_typed_expr_gen_test "'a -> 'b"
-                  Gen.(
-                    pair
-                      (vtype_gen default_max_gen_rec_depth)
-                      (vtype_gen default_max_gen_rec_depth)
-                    >|= fun (t1, t2) -> VTypeFun (t1, t2));
-              ];
-       ]
+let nonempty_list_test_cons =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name:"Cons" ~count:1000
+       (pair int (nonempty_list_arb int))
+       (fun (h, ts) ->
+         let xs = Nonempty_list.cons h ts in
+         (equal_list equal_int) (Nonempty_list.to_list xs)
+           (h :: Nonempty_list.to_list ts)))
+
+let nonempty_list_test_map =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name:"Map" ~count:1000
+       (pair (fun1 QCheck.Observable.int int) (nonempty_list_arb int))
+       (fun (f_, xs) ->
+         let fn_then_list =
+           xs
+           |> Nonempty_list.map ~f:(QCheck.Fn.apply f_)
+           |> Nonempty_list.to_list
+         in
+         let list_then_fn =
+           xs |> Nonempty_list.to_list |> List.map ~f:(QCheck.Fn.apply f_)
+         in
+         (equal_list equal_int) fn_then_list list_then_fn))
+
+let nonempty_list_test_fold =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name:"Fold" ~count:1000
+       (triple int
+          (fun2 QCheck.Observable.int QCheck.Observable.int int)
+          (nonempty_list_arb int))
+       (fun (init, f_, xs) ->
+         let out = xs |> Nonempty_list.fold ~init ~f:(QCheck.Fn.apply f_) in
+         let exp =
+           xs |> Nonempty_list.to_list
+           |> List.fold ~init ~f:(QCheck.Fn.apply f_)
+         in
+         equal_int exp out))
+
+let nonempty_list_test_fold_result =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name:"Fold result" ~count:1000
+       (triple int
+          (fun2 QCheck.Observable.int QCheck.Observable.int
+             (result_arb QCheck.int QCheck.int))
+          (nonempty_list_arb int))
+       (fun (init, f_, xs) ->
+         let out =
+           xs |> Nonempty_list.fold_result ~init ~f:(QCheck.Fn.apply f_)
+         in
+         let exp =
+           xs |> Nonempty_list.to_list
+           |> List.fold_result ~init ~f:(QCheck.Fn.apply f_)
+         in
+         (equal_result equal_int equal_int) exp out))
+
+let nonempty_list_test_fold_result_consume_init =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name:"Fold result consume init" ~count:1000
+       (triple int
+          (fun2 QCheck.Observable.int QCheck.Observable.int
+             (result_arb QCheck.int QCheck.int))
+          (nonempty_list_arb int))
+       (fun (init, f_, xs) ->
+         let out =
+           xs
+           |> Nonempty_list.fold_result_consume_init ~init ~f:(fun x ->
+                  match x with First x | Second x -> (QCheck.Fn.apply f_) x)
+         in
+         let exp =
+           xs |> Nonempty_list.to_list
+           |> List.fold_result ~init ~f:(QCheck.Fn.apply f_)
+         in
+         (equal_result equal_int equal_int) exp out))
+
+let nonempty_list_tests =
+  [
+    nonempty_list_test_head;
+    nonempty_list_test_tail;
+    nonempty_list_test_singleton;
+    nonempty_list_test_cons;
+    nonempty_list_test_map;
+    nonempty_list_test_fold;
+    nonempty_list_test_fold_result;
+    nonempty_list_test_fold_result_consume_init;
+  ]
+
+let suite = "Utils" >::: [ "Non-Empty List" >::: nonempty_list_tests ]

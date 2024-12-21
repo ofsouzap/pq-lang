@@ -1,5 +1,7 @@
 %{
+open Utils
 open Vtype
+open Pattern
 open Ast
 open Parsing_errors
 
@@ -27,8 +29,8 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %}
 
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE FUN REC INT BOOL
-%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA
+%token END IF THEN ELSE LET IN TRUE FALSE FUN REC INT BOOL MATCH WITH
+%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA PIPE
 %token <int> INTLIT
 %token <string> NAME
 %token EOF
@@ -49,6 +51,10 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %type <vtype> vtype
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
+%type <pattern> pattern
+%type <pattern * plain_expr> match_case
+%type <(pattern * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
+%type <(pattern * plain_expr) Nonempty_list.t> match_cases
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
 %start <plain_expr> prog
@@ -69,6 +75,26 @@ typed_function_name:
 
 typed_name:
   | n = NAME COLON t = vtype { (n, t) }
+;
+
+pattern:
+  | LPAREN p = pattern RPAREN { p }
+  | LPAREN n = NAME COLON t = vtype RPAREN { PatName (n, t) }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
+;
+
+match_case:
+  | p = pattern ARROW e = expr { (p, e) }
+;
+
+match_cases_no_leading_pipe:
+  | c = match_case { (c, []) }
+  | c = match_case PIPE cs_tail = match_cases { Nonempty_list.cons c cs_tail }
+;
+
+match_cases:
+  | PIPE cs = match_cases_no_leading_pipe { cs }
+  | cs = match_cases_no_leading_pipe { cs }
 ;
 
 (* TODO - make brackets optional in "fun (x : int) -> ..." if using a non-function type *)
@@ -92,7 +118,7 @@ expr:
   | LET REC LPAREN l = typed_function_name RPAREN ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
-  | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
+  | MATCH e = expr WITH cs = match_cases END { Match ((), e, cs) }  (* match e with cs end *)
 ;
 
 contained_expr:
@@ -100,6 +126,7 @@ contained_expr:
   | i = INTLIT { IntLit ((), i) }
   | TRUE { BoolLit ((), true) }
   | FALSE { BoolLit ((), false) }
+  | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
   | n = NAME { Var ((), n) }
 ;
 

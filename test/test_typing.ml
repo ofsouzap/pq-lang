@@ -4,7 +4,7 @@ open Pq_lang
 open Vtype
 open Ast
 open Typing
-open Utils
+open Testing_utils
 
 let test_cases_expr_typing : test list =
   let open Either in
@@ -183,6 +183,8 @@ let test_cases_expr_typing_full_check : test list =
 (* TODO - tests for the variable context (e.g. that overwriting a variable's typing works).
    Do these as a module functor and then have a ground truth of an inefficient, but definitely-correct implementation
    (probably done with functions for context tracking) *)
+
+(* TODO - tests for expressions that should fail to type *)
 
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in

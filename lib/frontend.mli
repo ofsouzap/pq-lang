@@ -1,14 +1,12 @@
 open Core
 
-(** A result from trying to run the lexer and parser on an input *)
-type run_frontend_res =
-  | Res of Ast.plain_expr
-      (** A successful lex and parse, with the resulting AST *)
+type frontend_error =
   | LexingError of char
       (** A lexing error occured on the specified character *)
   | ParsingError  (** A parsing error occured on the token stream *)
 
-(* TODO - use the Result module here instead of run_frontend_res *)
+(** A result from trying to run the lexer and parser on an input *)
+type run_frontend_res = (Ast.plain_expr, frontend_error) Result.t
 
 (** Run the lexer and parser on an input channel *)
 val run_frontend_channel : In_channel.t -> run_frontend_res

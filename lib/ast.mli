@@ -2,7 +2,9 @@
   Abstract syntax tree for the language.
 *)
 
+open Utils
 open Vtype
+open Pattern
 
 (* TODO - have programs composed of optional custom type defintions then a concluding expression to evaluate, instead of just allowing a single main expression to evaluate.
    Defining functions can just be done with "let f = ... in" *)
@@ -40,12 +42,18 @@ type 'a expr =
   | App of 'a * 'a expr * 'a expr  (** Function application *)
   | Fix of 'a * (string * vtype * vtype) * (string * vtype) * 'a expr
       (** Application of fix operator: `((function_name_for_recursion, function_for_recursion_type1, function_for_recursion_type2), (param_name, param_type), expr)` *)
+  (* Pattern matching *)
+  | Match of 'a * 'a expr * (pattern * 'a expr) Nonempty_list.t
+      (** Match expression *)
 [@@deriving sexp, equal]
 
 (** Extract the value attached to a single node of a tagged AST expression *)
 val expr_node_val : 'a expr -> 'a
 
-(** Map a function onto values in an expression *)
+(** Map a function onto the value of a single node of a tagged AST expression *)
+val expr_node_map_val : f:('a -> 'a) -> 'a expr -> 'a expr
+
+(** Map a function onto all values in an entire tagged AST expression *)
 val fmap : f:('a -> 'b) -> 'a expr -> 'b expr
 
 (** Map a function onto values in an expression *)

@@ -1,5 +1,7 @@
 (** This module provides functionality for directly executing an AST of a program. *)
 
+open Vtype
+
 (** The data that the executor tags the interpreted AST with *)
 type ast_tag = unit [@@deriving sexp, equal]
 
@@ -7,7 +9,12 @@ type ast_tag = unit [@@deriving sexp, equal]
 type varname = string
 
 (** Properties of a closure *)
-type closure_props = varname * ast_tag Ast.typed_expr * store
+type closure_props = {
+  param : varname * vtype;  (** The function's parameter's name and type *)
+  out_type : vtype;  (** The output type of the function *)
+  body : ast_tag Ast.typed_expr;  (** The body of the function *)
+  store : store;  (** The store to use when executing the function *)
+}
 [@@deriving sexp, equal]
 
 (** A resulting value from executing an AST *)
@@ -50,23 +57,21 @@ val empty_typing_error : typing_error
 type exec_err =
   | TypingError of typing_error
       (** Execution was halted due to a typing error *)
-  | UndefinedVarError of string
+  | UndefinedVarError of varname
       (** Execution was halted due to usage of an undefined variable of the provided name *)
   | MisplacedFixError  (** Fix node was inappropriately used in the AST *)
   | FixApplicationError
       (** Application of the Fix node was done on an invalid target *)
   | MaxRecursionDepthExceeded
       (** The maximum recursion depth of the execution has been exceeded so the program was terminated *)
+  | IncompleteMatchError
+      (** No cases could be found that match the provided value in a match statement *)
 
 (** The result of executing an AST *)
-type exec_res =
-  | Res of value  (** The execution terminated with the provided value *)
-  | Err of exec_err  (** The execution terminated with an error *)
-
-(* TODO - use the Result module here instead of exec_res *)
+type exec_res = (value, exec_err) Result.t
 
 (** Check if two execution results are equal *)
-val exec_res_compare : exec_res -> exec_res -> bool
+val equal_exec_res : exec_res -> exec_res -> bool
 
 (** String representation of an execution result *)
 val show_exec_res : exec_res -> string
