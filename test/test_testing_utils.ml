@@ -49,5 +49,11 @@ let suite =
                       (vtype_gen default_max_gen_rec_depth)
                       (vtype_gen default_max_gen_rec_depth)
                     >|= fun (t1, t2) -> VTypeFun (t1, t2));
+                create_typed_expr_gen_test "'a * 'b"
+                  Gen.(
+                    pair
+                      (vtype_gen default_max_gen_rec_depth)
+                      (vtype_gen default_max_gen_rec_depth)
+                    >|= fun (t1, t2) -> VTypePair (t1, t2));
               ];
        ]
