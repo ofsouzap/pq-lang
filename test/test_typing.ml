@@ -330,6 +330,8 @@ module FunctionVariableContextTester =
 module ListVariableContextTester =
   MakeVariableContextTester (ListTypingVarContext)
 
+module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
+
 (* TODO - tester for testing utils test variable context implementation *)
 
 (* TODO - tests for expressions that should fail to type *)
@@ -471,5 +473,7 @@ let suite =
                 "Function context"
                 >::: FunctionVariableContextTester.all_test_cases;
                 "List context" >::: ListVariableContextTester.all_test_cases;
+                "Testing context"
+                >::: TestingVariableContextTester.all_test_cases;
               ];
        ]
