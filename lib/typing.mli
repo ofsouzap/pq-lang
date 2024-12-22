@@ -39,10 +39,10 @@ module type TypingVarContext = sig
   val empty : t
 
   (** Adds a new variable with its type to the context, overwriting any existing values *)
-  val add : t -> string -> Vtype.vtype -> t
+  val add : t -> string -> vtype -> t
 
   (** Looks up a variable's type in the context *)
-  val find : t -> string -> Vtype.vtype option
+  val find : t -> string -> vtype option
 
   (** Create a context with a single entry *)
   val singleton : string -> vtype -> t
@@ -66,9 +66,13 @@ module TypeChecker : functor (Ctx : TypingVarContext) -> sig
   (** Type checks an expression in the given context, returning either
       a typed expression or a typing error *)
   val type_expr :
-    Ctx.t -> 'a Ast.expr -> ((Vtype.vtype * 'a) Ast.expr, typing_error) result
+    Ctx.t -> 'a Ast.expr -> ((vtype * 'a) Ast.expr, typing_error) result
+end
+
+(** An implementation of a type checker using a list typing variable context *)
+module ListTypeChecker : sig
+  include module type of TypeChecker (ListTypingVarContext)
 end
 
 (** Type an AST expression using the default context implementation with an empty typing context *)
-val type_expr :
-  'a Ast.expr -> ((Vtype.vtype * 'a) Ast.expr, typing_error) result
+val type_expr : 'a Ast.expr -> ((vtype * 'a) Ast.expr, typing_error) result

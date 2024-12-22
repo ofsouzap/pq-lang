@@ -4,6 +4,7 @@ open QCheck
 open Pq_lang
 open Vtype
 open Ast
+open Typing
 open Testing_utils
 
 let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
@@ -34,7 +35,18 @@ let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
 let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
   create_typed_expr_gen_test name (Gen.return t)
 
-(* TODO - test that the TestingVarCtx module types things as the actual used one does *)
+let create_test_var_ctx (xs : (string * vtype) list) : TestingVarCtx.t =
+  List.fold xs ~init:TestingVarCtx.empty ~f:(fun ctx (x, t) ->
+      TestingVarCtx.add ctx x t)
+
+let create_list_impl_var_ctx (xs : (string * vtype) list) :
+    ListTypingVarContext.t =
+  List.fold xs ~init:ListTypingVarContext.empty ~f:(fun ctx (x, t) ->
+      ListTypingVarContext.add ctx x t)
+
+let var_ctx_list_arb =
+  let open QCheck in
+  list (pair string (vtype_arb default_max_gen_rec_depth))
 
 let suite =
   "Utilities Tests"

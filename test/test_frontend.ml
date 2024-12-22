@@ -244,6 +244,9 @@ let test_cases_variables : test_case list =
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ("x", [ NAME "x" ], Ok (Var ((), "x")));
+      ("_", [ NAME "_" ], Ok (Var ((), "_")));
+      ("one_thing", [ NAME "one_thing" ], Ok (Var ((), "one_thing")));
+      ("_something", [ NAME "_something" ], Ok (Var ((), "_something")));
       ( "let x = 1 in x end",
         [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
         Ok (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );

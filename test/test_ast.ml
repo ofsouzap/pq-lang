@@ -153,14 +153,16 @@ let create_test_cases_expr_node_map_val (t1_arb : 'a QCheck.arbitrary)
       t1_eq (expr_node_val e') (e |> expr_node_val |> f))
 
 let create_test_cases_expr_fmap_root (t1_arb : 'a QCheck.arbitrary)
-    (t1_sexp : 'a -> Sexp.t) (fn : 'a -> 'b) (t2_eq : 'b -> 'b -> bool) =
-  (* TODO - change this test to use QCheck.fun1 instead *)
+    (t1_obs : 'a QCheck.Observable.t) (t1_sexp : 'a -> Sexp.t)
+    (t2_arb : 'b QCheck.arbitrary) (t2_eq : 'b -> 'b -> bool) =
   let open QCheck in
   Test.make ~count:100
-    (pair t1_arb (ast_expr_arb_any (PrintSexp t1_sexp) (QCheck.gen t1_arb)))
-    (fun (x, e) ->
-      let e' = fmap ~f:(Core.Fn.compose fn (const x)) e in
-      t2_eq (expr_node_val e') (fn x))
+    (triple t1_arb (fun1 t1_obs t2_arb)
+       (ast_expr_arb_any (PrintSexp t1_sexp) (QCheck.gen t1_arb)))
+    (fun (x, f_, e) ->
+      let f = QCheck.Fn.apply f_ in
+      let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
+      t2_eq (expr_node_val e') (f x))
 
 let suite =
   "AST Tests"
@@ -210,17 +212,20 @@ let suite =
                   name >::: [ QCheck_runner.to_ounit2_test test ])
                 [
                   ( "unit -> int",
-                    create_test_cases_expr_fmap_root QCheck.unit sexp_of_unit
-                      (Fn.const 1) equal_int );
+                    create_test_cases_expr_fmap_root QCheck.unit
+                      QCheck.Observable.unit sexp_of_unit QCheck.int equal_int
+                  );
                   ( "int -> string",
-                    create_test_cases_expr_fmap_root QCheck.int sexp_of_int
-                      string_of_int equal_string );
+                    create_test_cases_expr_fmap_root QCheck.int
+                      QCheck.Observable.int sexp_of_int QCheck.string
+                      equal_string );
                   ( "bool -> int",
-                    create_test_cases_expr_fmap_root QCheck.bool sexp_of_bool
-                      (fun b -> if b then 1 else 0)
-                      equal_int );
+                    create_test_cases_expr_fmap_root QCheck.bool
+                      QCheck.Observable.bool sexp_of_bool QCheck.int equal_int
+                  );
                   ( "string -> int",
                     create_test_cases_expr_fmap_root QCheck.string
-                      sexp_of_string String.length equal_int );
+                      QCheck.Observable.string sexp_of_string QCheck.int
+                      equal_int );
                 ];
        ]

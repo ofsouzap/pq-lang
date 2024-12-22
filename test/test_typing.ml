@@ -1,106 +1,102 @@
 open OUnit2
 open Core
 open Pq_lang
+open Utils
 open Vtype
+open Pattern
 open Ast
 open Typing
 open Testing_utils
 
 let test_cases_expr_typing : test list =
-  let open Either in
-  let create_test
-      ((name : string), (e : plain_expr), (t : (vtype, typing_error) Either.t))
-      : test =
-    name >:: fun _ ->
-    let open Result in
+  let open Result in
+  let create_test ((e : plain_expr), (t : (vtype, typing_error) Result.t)) :
+      test =
+    ast_to_source_code e >:: fun _ ->
     let out = Typing.type_expr e in
     match (out, t) with
-    | Ok e', First exp_t ->
+    | Ok e', Ok exp_t ->
         let out_t = e' |> expr_node_val |> fst in
         assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
-    | Ok _, Second _ -> assert_failure "Expected typing error but got type"
-    | Error _, First _ -> assert_failure "Expected type but got typing error"
-    | Error t_err, Second exp_err ->
+    | Ok _, Error _ -> assert_failure "Expected typing error but got type"
+    | Error _, Ok _ -> assert_failure "Expected type but got typing error"
+    | Error t_err, Error exp_err ->
         assert_equal ~cmp:equal_typing_error ~printer:print_typing_error exp_err
           t_err
   in
-  List.map
-    ~f:Fn.(compose create_test (fun (e, t) -> (ast_to_source_code e, e, t)))
+  List.map ~f:create_test
     [
-      (IntLit ((), 1), First VTypeInt);
-      (Add ((), IntLit ((), 3), IntLit ((), 0)), First VTypeInt);
+      (IntLit ((), 1), Ok VTypeInt);
+      (Add ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
       ( Add ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Neg ((), IntLit ((), 3)), First VTypeInt);
-      ( Neg ((), BoolLit ((), false)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Subtr ((), IntLit ((), 3), IntLit ((), 0)), First VTypeInt);
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Neg ((), IntLit ((), 3)), Ok VTypeInt);
+      (Neg ((), BoolLit ((), false)), Error (TypeMismatch (VTypeInt, VTypeBool)));
+      (Subtr ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
       ( Subtr ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Mult ((), IntLit ((), 3), IntLit ((), 0)), First VTypeInt);
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Mult ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
       ( Mult ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      (BoolLit ((), true), First VTypeBool);
-      (BNot ((), BoolLit ((), false)), First VTypeBool);
-      (BNot ((), IntLit ((), 3)), Second (TypeMismatch (VTypeBool, VTypeInt)));
-      (BAnd ((), BoolLit ((), false), BoolLit ((), true)), First VTypeBool);
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (BoolLit ((), true), Ok VTypeBool);
+      (BNot ((), BoolLit ((), false)), Ok VTypeBool);
+      (BNot ((), IntLit ((), 3)), Error (TypeMismatch (VTypeBool, VTypeInt)));
+      (BAnd ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
       ( BAnd ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeBool, VTypeInt)) );
-      (BOr ((), BoolLit ((), false), BoolLit ((), true)), First VTypeBool);
+        Error (TypeMismatch (VTypeBool, VTypeInt)) );
+      (BOr ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
       ( BOr ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeBool, VTypeInt)) );
-      (Eq ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+        Error (TypeMismatch (VTypeBool, VTypeInt)) );
+      (Eq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( Eq ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (EqualOperatorTypeMistmatch (VTypeBool, VTypeInt)) );
+        Error (EqualOperatorTypeMistmatch (VTypeBool, VTypeInt)) );
       ( Eq ((), IntLit ((), 3), BoolLit ((), true)),
-        Second (EqualOperatorTypeMistmatch (VTypeInt, VTypeBool)) );
-      (Eq ((), BoolLit ((), true), BoolLit ((), true)), First VTypeBool);
-      (GtEq ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+        Error (EqualOperatorTypeMistmatch (VTypeInt, VTypeBool)) );
+      (Eq ((), BoolLit ((), true), BoolLit ((), true)), Ok VTypeBool);
+      (GtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( GtEq ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Gt ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Gt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( Gt ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      (LtEq ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (LtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( LtEq ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Lt ((), IntLit ((), 3), IntLit ((), 0)), First VTypeBool);
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (Lt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( Lt ((), BoolLit ((), true), IntLit ((), 2)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
-        First VTypeInt );
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
       ( If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
       ( If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
-        First VTypeInt );
-      (Var ((), "x"), Second (UndefinedVariable "x"));
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
+      (Var ((), "x"), Error (UndefinedVariable "x"));
       ( Fun ((), ("x", VTypeInt), Var ((), "x")),
-        First (VTypeFun (VTypeInt, VTypeInt)) );
-      (Let ((), "x", IntLit ((), 3), Var ((), "x")), First VTypeInt);
-      (Let ((), "x", BoolLit ((), true), Var ((), "x")), First VTypeBool);
-      (Let ((), "x", IntLit ((), 3), BoolLit ((), true)), First VTypeBool);
+        Ok (VTypeFun (VTypeInt, VTypeInt)) );
+      (Let ((), "x", IntLit ((), 3), Var ((), "x")), Ok VTypeInt);
+      (Let ((), "x", BoolLit ((), true), Var ((), "x")), Ok VTypeBool);
+      (Let ((), "x", IntLit ((), 3), BoolLit ((), true)), Ok VTypeBool);
       ( Let
           ( (),
             "f",
             Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        First VTypeInt );
+        Ok VTypeInt );
       ( Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
-        First (VTypeFun (VTypeInt, VTypeInt)) );
+        Ok (VTypeFun (VTypeInt, VTypeInt)) );
       ( Let
           ( (),
             "f",
             Fun ((), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        First VTypeInt );
+        Ok VTypeInt );
       ( Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        First VTypeInt );
+        Ok VTypeInt );
       ( Let
           ( (),
             "f",
@@ -110,19 +106,19 @@ let test_cases_expr_typing : test list =
                 ("x", VTypeInt),
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
       ( Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
       ( Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
             App ((), Var ((), "f"), BoolLit ((), false)) ),
-        Second (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
       ( Let
           ( (),
             "f",
@@ -132,7 +128,48 @@ let test_cases_expr_typing : test list =
                 ("x", VTypeInt),
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        First VTypeBool );
+        Ok VTypeBool );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [ (PatName ("x", VTypeInt), BoolLit ((), true)) ] ),
+        Ok VTypeBool );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [ (PatName ("x", VTypeInt), Var ((), "x")) ] ),
+        Ok VTypeInt );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [
+                (PatName ("x", VTypeInt), BoolLit ((), true));
+                (PatName ("y", VTypeInt), BoolLit ((), true));
+              ] ),
+        Ok VTypeBool );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [
+                (PatName ("x", VTypeInt), BoolLit ((), true));
+                (PatName ("y", VTypeBool), BoolLit ((), true));
+              ] ),
+        Error
+          (PatternTypeMismatch (PatName ("y", VTypeBool), VTypeInt, VTypeBool))
+      );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [
+                (PatName ("x", VTypeInt), BoolLit ((), true));
+                (PatName ("y", VTypeInt), IntLit ((), 5));
+              ] ),
+        Error (TypeMismatch (VTypeBool, VTypeInt)) );
     ]
 
 let test_cases_expr_typing_full_check : test list =
@@ -178,13 +215,122 @@ let test_cases_expr_typing_full_check : test list =
                 IntLit (VTypeInt, 0) ) ) );
     ]
 
-(* TODO - have tests that start with a variable context *)
+let test_cases_typing_with_var_ctx : test list =
+  let open Result in
+  let create_test
+      ( (ctx_list : (string * vtype) list),
+        (e : plain_expr),
+        (t : (vtype, typing_error) Result.t) ) : test =
+    let ctx =
+      List.fold ~init:ListTypingVarContext.empty
+        ~f:(fun acc (xname, xtype) -> ListTypingVarContext.add acc xname xtype)
+        ctx_list
+    in
+    let name = sprintf "[with context] %s" (e |> ast_to_source_code) in
+    name >:: fun _ ->
+    let out = ListTypeChecker.type_expr ctx e in
+    match (out, t) with
+    | Ok e', Ok exp_t ->
+        let out_t = e' |> expr_node_val |> fst in
+        assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
+    | Ok _, Error _ -> assert_failure "Expected typing error but got type"
+    | Error _, Ok _ -> assert_failure "Expected type but got typing error"
+    | Error t_err, Error exp_err ->
+        assert_equal ~cmp:equal_typing_error ~printer:print_typing_error exp_err
+          t_err
+  in
+  List.map ~f:create_test
+    [
+      ([], Var ((), "x"), Error (UndefinedVariable "x"));
+      ([ ("x", VTypeInt) ], Var ((), "x"), Ok VTypeInt);
+      ([ ("x", VTypeBool) ], Var ((), "x"), Ok VTypeBool);
+      ([ ("x", VTypeBool) ], Var ((), "y"), Error (UndefinedVariable "y"));
+      ( [ ("x", VTypeBool) ],
+        Fun ((), ("y", VTypeInt), IntLit ((), 2)),
+        Ok (VTypeFun (VTypeInt, VTypeInt)) );
+      ( [ ("x", VTypeBool) ],
+        Fun ((), ("x", VTypeInt), IntLit ((), 2)),
+        Ok (VTypeFun (VTypeInt, VTypeInt)) );
+    ]
 
-(* TODO - tests for the variable context (e.g. that overwriting a variable's typing works).
-   Do these as a module functor and then have a ground truth of an inefficient, but definitely-correct implementation
-   (probably done with functions for context tracking) *)
+module MakeVariableContextTester (Ctx : TypingVarContext) = struct
+  let create_test_add_then_get ((ctx : Ctx.t), (xname : string), (xtype : vtype))
+      : bool =
+    let ctx' = Ctx.add ctx xname xtype in
+    (equal_option equal_vtype) (Some xtype) (Ctx.find ctx' xname)
 
-(* TODO - tests for expressions that should fail to type *)
+  let create_test_overwrite
+      ((ctx : Ctx.t), (xname : string), (xtype1 : vtype), (xtype2 : vtype)) :
+      bool =
+    let ctx' = Ctx.add (Ctx.add ctx xname xtype1) xname xtype2 in
+    (equal_option equal_vtype) (Some xtype2) (Ctx.find ctx' xname)
+
+  let create_test_append_overwriting
+      ( ((ctx1_ : Ctx.t), (ctx2_ : Ctx.t)),
+        ((xname : string), (xtype1 : vtype), (xtype2 : vtype)) ) : bool =
+    let ctx1 = Ctx.add ctx1_ xname xtype1 in
+    let ctx2 = Ctx.add ctx2_ xname xtype2 in
+    let ctx' = Ctx.append ctx1 ctx2 in
+    (equal_option equal_vtype) (Ctx.find ctx2 xname) (Ctx.find ctx' xname)
+
+  let all_test_cases : test list =
+    let open QCheck in
+    let ctx_from_list : (string * vtype) list -> Ctx.t =
+      List.fold ~init:Ctx.empty ~f:(fun acc (xname, xtype) ->
+          Ctx.add acc xname xtype)
+    in
+    let ctx_arb : Ctx.t QCheck.arbitrary =
+      QCheck.make
+        QCheck.Gen.(
+          list (pair string (vtype_gen default_max_gen_rec_depth))
+          >|= ctx_from_list)
+    in
+    List.map ~f:QCheck_runner.to_ounit2_test
+      [
+        Test.make ~name:"Add then get" ~count:100
+          (triple ctx_arb string (vtype_arb default_max_gen_rec_depth))
+          create_test_add_then_get;
+        Test.make ~name:"Overwrite" ~count:100
+          (quad ctx_arb string
+             (vtype_arb default_max_gen_rec_depth)
+             (vtype_arb default_max_gen_rec_depth))
+          create_test_overwrite;
+        Test.make ~name:"Append overwriting" ~count:100
+          (pair (pair ctx_arb ctx_arb)
+             (triple string
+                (vtype_arb default_max_gen_rec_depth)
+                (vtype_arb default_max_gen_rec_depth)))
+          create_test_append_overwriting;
+      ]
+end
+
+(** An implementation of a variable context using functions.
+    It isn't efficient, but is just meant to be used
+    as a ground truth to test against the actually-implementations *)
+module FunctionTypingVarContext : TypingVarContext = struct
+  type t = string -> vtype option
+
+  let empty : t = Fn.const None
+
+  let add (f' : t) (xname : string) (xtype : vtype) : t =
+   fun x -> if equal_string xname x then Some xtype else f' x
+
+  let find = Fn.id
+  let singleton xname xtype = add empty xname xtype
+
+  let append (f1 : t) (f2 : t) x =
+    match f2 x with None -> f1 x | Some v -> Some v
+
+  let exists (f : t) xname = match f xname with None -> false | Some _ -> true
+end
+
+module FunctionVariableContextTester =
+  MakeVariableContextTester (FunctionTypingVarContext)
+
+module ListVariableContextTester =
+  MakeVariableContextTester (ListTypingVarContext)
+
+module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
 
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
@@ -314,7 +460,16 @@ let suite =
          "Expression typing" >::: test_cases_expr_typing;
          "Expression typing full hierarchy"
          >::: test_cases_expr_typing_full_check;
+         "Expression typing with context" >::: test_cases_typing_with_var_ctx;
          "Arbitrary expression typing" >::: test_cases_arb_compound_expr_typing;
          "Typing maintains structure"
          >::: [ test_cases_typing_maintains_structure ];
+         "Variable contexts"
+         >::: [
+                "Function context"
+                >::: FunctionVariableContextTester.all_test_cases;
+                "List context" >::: ListVariableContextTester.all_test_cases;
+                "Testing context"
+                >::: TestingVariableContextTester.all_test_cases;
+              ];
        ]

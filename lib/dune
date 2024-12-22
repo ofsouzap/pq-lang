@@ -16,8 +16,6 @@
  (preprocess
   (pps ppx_jane)))
 
-; TODO - consider not making lexer and parser public modules and instead having the frontend API just use frontend.ml[i]
-
 (ocamllex lexer)
 
 (menhir

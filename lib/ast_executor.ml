@@ -3,8 +3,6 @@ open Utils
 open Vtype
 open Pattern
 
-(* TODO - have backends as a module thing, so that they can more easily be swapped in *)
-
 type ast_tag = unit [@@deriving sexp, equal]
 type varname = string [@@deriving sexp, equal]
 
