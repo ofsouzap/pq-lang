@@ -69,6 +69,8 @@ val testing_var_ctx_arb : TestingVarCtx.t QCheck.arbitrary
 (** Arbitrary pattern generator that generates a pattern of the specified type as well as a list of the variables it defines *)
 val pattern_arb : t:vtype -> (pattern * (string * vtype) list) QCheck.arbitrary
 
+(* TODO - custom type definitions (arbitrary generator + integrate with ast arbitrary generator) *)
+
 (** Arbitrary generator for an AST expression, possibly of a specified type.
     Must be provided with a printing method for the AST and a generator for the tagging values.
     @param t (optional) The type that the generated output should type to *)

@@ -356,6 +356,8 @@ let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Pair (Bool true, Bool true)) );
     ]
 
+(* TODO - custom type definitions *)
+
 let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res))
     =
   name >:: fun _ ->

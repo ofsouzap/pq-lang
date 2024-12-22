@@ -75,3 +75,5 @@ let suite =
            ("Program Pred-or-Zero-a", program_pred_or_zero 0, Ok (Int 0));
            ("Program Pred-or-Zero-a", program_pred_or_zero 5, Ok (Int 4));
          ]
+
+(* TODO - custom type definitions *)

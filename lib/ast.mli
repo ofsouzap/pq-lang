@@ -49,6 +49,8 @@ type 'a expr =
       (** Match expression *)
 [@@deriving sexp, equal]
 
+(* TODO - custom type definitions *)
+
 (** Extract the value attached to a single node of a tagged AST expression *)
 val expr_node_val : 'a expr -> 'a
 

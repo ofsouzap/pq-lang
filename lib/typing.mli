@@ -59,6 +59,8 @@ module ListTypingVarContext : TypingVarContext
 
 (** Provides type-checking functionality *)
 module TypeChecker : functor (Ctx : TypingVarContext) -> sig
+  (* TODO - custom type definitions *)
+
   (** Type checks a pattern in the given context, returning either the pattern's type and declared variables, or a pattern typing error *)
   val type_pattern :
     Ctx.t -> pattern -> (vtype * Ctx.t, pattern_typing_error) Result.t

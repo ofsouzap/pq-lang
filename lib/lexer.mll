@@ -23,6 +23,7 @@ rule token = parse
   | "bool" { BOOL }
   | "match" { MATCH }
   | "with" { WITH }
+  (* TODO - custom type definitions *)
   (* Operators and symbols *)
   | '+' { PLUS }
   | '-' { MINUS }

@@ -780,6 +780,8 @@ let test_cases_precedence : test_case_precedence list =
         Add ((), App ((), Var ((), "f"), Var ((), "x")), Var ((), "y")) );
     ]
 
+(* TODO - custom type definitions *)
+
 let create_lexer_test ((name, inp, exp, _) : test_case) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in

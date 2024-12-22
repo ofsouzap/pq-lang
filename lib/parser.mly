@@ -49,6 +49,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 
 // Non-terminal typing
 %type <vtype> vtype
+(* TODO - custom type definitions *)
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
 %type <pattern> pattern
@@ -69,6 +70,8 @@ vtype:
   | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
   | t1 = vtype STAR t2 = vtype { VTypePair (t1, t2) }
 ;
+
+(* TODO - custom type definitions *)
 
 typed_function_name:
   | n = NAME COLON t1 = vtype ARROW t2 = vtype { (n, t1, t2) }
@@ -130,6 +133,7 @@ contained_expr:
   | n = NAME { Var ((), n) }
 ;
 
+(* TODO - custom type definitions *)
 prog:
   | e = expr EOF { e }
 ;

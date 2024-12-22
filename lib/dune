@@ -5,6 +5,7 @@
  (modules
   utils
   vtype
+  custom_types
   pattern
   ast
   typing

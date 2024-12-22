@@ -79,3 +79,5 @@ val show_exec_res : exec_res -> string
 
 (** Execute an AST representation of a program *)
 val execute : 'a Ast.typed_expr -> exec_res
+
+(* TODO - custom type definitions *)
