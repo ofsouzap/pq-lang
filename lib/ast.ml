@@ -4,6 +4,7 @@ open Vtype
 open Pattern
 
 type 'a expr =
+  | UnitLit of 'a
   | IntLit of 'a * int
   | Add of 'a * 'a expr * 'a expr
   | Neg of 'a * 'a expr
@@ -30,6 +31,7 @@ type 'a expr =
 
 let expr_node_map_val_with_result ~(f : 'a -> 'a) : 'a expr -> 'a * 'a expr =
   function
+  | UnitLit v -> (f v, UnitLit (f v))
   | IntLit (v, x) -> (f v, IntLit (f v, x))
   | Add (v, e1, e2) -> (f v, Add (f v, e1, e2))
   | Neg (v, e1) -> (f v, Neg (f v, e1))
@@ -61,6 +63,7 @@ let expr_node_map_val ~(f : 'a -> 'a) : 'a expr -> 'a expr =
 
 let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
   match e with
+  | UnitLit a -> UnitLit (f a)
   | IntLit (a, i) -> IntLit (f a, i)
   | Add (a, e1, e2) -> Add (f a, fmap ~f e1, fmap ~f e2)
   | Neg (a, e) -> Neg (f a, fmap ~f e)
@@ -96,6 +99,7 @@ type plain_typed_expr = unit typed_expr [@@deriving sexp, equal]
 
 let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
   match e with
+  | UnitLit _ -> UnitLit ()
   | IntLit (_, i) -> IntLit ((), i)
   | Add (_, e1, e2) -> Add ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
   | Neg (_, e) -> Neg ((), expr_to_plain_expr e)
@@ -130,6 +134,7 @@ let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
 exception AstConverionFixError
 
 let rec ast_to_source_code = function
+  | UnitLit _ -> "()"
   | IntLit (_, i) -> string_of_int i
   | Add (_, e1, e2) ->
       sprintf "(%s) + (%s)" (ast_to_source_code e1) (ast_to_source_code e2)

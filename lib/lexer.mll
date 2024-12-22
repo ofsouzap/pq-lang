@@ -18,6 +18,7 @@ rule token = parse
   | "true" { TRUE }
   | "false" { FALSE }
   | "fun" { FUN }
+  | "unit" { UNIT }
   | "int" { INT }
   | "bool" { BOOL }
   | "match" { MATCH }
@@ -41,6 +42,7 @@ rule token = parse
   | ":" { COLON }
   | "," { COMMA }
   | "|" { PIPE }
+  | "()" { UNIT_VAL }
   (* Literals and names *)
   | ['0'-'9']+ as n { INTLIT (int_of_string n) }
   | ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '0'-'9' '_']* as name { NAME name }

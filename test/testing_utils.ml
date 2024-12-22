@@ -36,6 +36,7 @@ let sexp_of_token = function
   | TRUE -> Sexp.Atom "TRUE"
   | FALSE -> Sexp.Atom "FALSE"
   | FUN -> Sexp.Atom "FUN"
+  | UNIT -> Sexp.Atom "UNIT"
   | INT -> Sexp.Atom "INT"
   | BOOL -> Sexp.Atom "BOOL"
   | MATCH -> Sexp.Atom "MATCH"
@@ -58,6 +59,7 @@ let sexp_of_token = function
   | COLON -> Sexp.Atom "COLON"
   | COMMA -> Sexp.Atom "COMMA"
   | PIPE -> Sexp.Atom "PIPE"
+  | UNIT_VAL -> Sexp.Atom "UNIT_VAL"
   | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
   | NAME n -> Sexp.List [ Sexp.Atom "NAME"; Sexp.Atom n ]
   | EOF -> Sexp.Atom "EOF"
@@ -86,6 +88,7 @@ let lexer_keywords : string list =
     "true";
     "false";
     "fun";
+    "unit";
     "int";
     "bool";
     "match";
@@ -105,6 +108,7 @@ let varname_gen : string QCheck.Gen.t =
 let vtype_gen (d : int) : vtype QCheck.Gen.t =
   let open QCheck.Gen in
   let gen =
+    (* TODO - unit type *)
     fix (fun self d ->
         let self' = self (d - 1) in
         let base_cases = [ return VTypeInt; return VTypeBool ] in
@@ -214,6 +218,7 @@ let pattern_arb ~(t : vtype) :
   and gen (t : vtype) : TestingVarCtx.t -> (pattern * TestingVarCtx.t) Gen.t =
     (* Generate a pattern of a specified type *)
     match t with
+    | VTypeUnit -> failwith "TODO"
     | VTypeInt -> gen_int
     | VTypeBool -> gen_bool
     | VTypeFun (t1, t2) -> gen_fun (t1, t2)
@@ -228,6 +233,7 @@ let pattern_arb ~(t : vtype) :
 
 let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
+  (* TODO - unit type case *)
   let open QCheck in
   let open QCheck.Gen in
   let rec gen_e_var_of_type
@@ -403,6 +409,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
       param
   and gen ((d : int), (ctx : TestingVarCtx.t)) (t : vtype) : 'a expr Gen.t =
     match t with
+    | VTypeUnit -> failwith "TODO"
     | VTypeInt -> gen_int (d, ctx)
     | VTypeBool -> gen_bool (d, ctx)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)

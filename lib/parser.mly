@@ -29,8 +29,8 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %}
 
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE FUN REC INT BOOL MATCH WITH
-%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA PIPE
+%token END IF THEN ELSE LET IN TRUE FALSE FUN REC UNIT INT BOOL MATCH WITH
+%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA PIPE UNIT_VAL
 %token <int> INTLIT
 %token <string> NAME
 %token EOF
@@ -44,7 +44,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %nonassoc GT GTEQ LT LTEQ // > >= < <=
 %left PLUS MINUS // + -
 %left STAR // *
-%nonassoc INTLIT NAME TRUE FALSE // literals
+%nonassoc UNIT_VAL INTLIT NAME TRUE FALSE // literals
 %nonassoc LPAREN // (
 
 // Non-terminal typing
@@ -63,6 +63,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 
 vtype:
   | LPAREN v = vtype RPAREN { v }
+  | UNIT { VTypeUnit }
   | INT { VTypeInt }
   | BOOL { VTypeBool }
   | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
@@ -121,6 +122,7 @@ expr:
 
 contained_expr:
   | LPAREN e = expr RPAREN { e }
+  | UNIT_VAL { UnitLit () }
   | i = INTLIT { IntLit ((), i) }
   | TRUE { BoolLit ((), true) }
   | FALSE { BoolLit ((), false) }
