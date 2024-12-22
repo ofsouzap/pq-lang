@@ -21,6 +21,17 @@ let type_expr (e : Ast.plain_expr) =
            (Ast.ast_to_source_code e)
            (Typing.print_typing_error err))
 
+let test_cases_unit_value : (string * Ast.plain_typed_expr * exec_res) list =
+  let open Ast in
+  let mapf ((x : plain_expr), (y : value)) =
+    (ast_to_source_code x, type_expr x, Ok y)
+  in
+  List.map ~f:mapf
+    [
+      (UnitLit (), Unit);
+      (If ((), BoolLit ((), true), UnitLit (), UnitLit ()), Unit);
+    ]
+
 let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
   let open Ast in
   let mapf ((x : plain_expr), (y : int)) =
@@ -355,6 +366,7 @@ let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res)
 let suite =
   "AST Executor"
   >::: [
+         "Unit Value" >::: List.map ~f:create_test test_cases_unit_value;
          "Arithmetic" >::: List.map ~f:create_test test_cases_arithmetic;
          "Booleans" >::: List.map ~f:create_test test_cases_booleans;
          "Pairs" >::: List.map ~f:create_test test_cases_pairs;
