@@ -5,8 +5,6 @@ open Vtype
 open Pattern
 open Ast
 
-(* TODO - doc comments *)
-
 (** The printing method for an AST representation of a program *)
 type 'a ast_print_method =
   | NoPrint  (** Don't print the AST *)
