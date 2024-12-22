@@ -7,8 +7,6 @@ type vtype =
   | VTypeFun of vtype * vtype
 [@@deriving sexp, equal]
 
-(* TODO - unit type *)
-
 (* TODO - custom type definitions *)
 
 (** Convert a vtype to a string representation compatible with the source code *)
