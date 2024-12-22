@@ -88,9 +88,10 @@ let lexer_keywords : string list =
     "fun";
     "int";
     "bool";
+    "match";
+    "with";
   ]
 
-(** Generator for a small-length, non-empty string of lowercase characters *)
 let varname_gen : string QCheck.Gen.t =
   let open QCheck.Gen in
   fix
