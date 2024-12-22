@@ -52,6 +52,9 @@ module type TypingVarContext = sig
 
   (** Check whether a variable exists in the context, by name *)
   val exists : t -> string -> bool
+
+  (** Get a list representation of the variable typing context *)
+  val to_list : t -> (string * vtype) list
 end
 
 (** Typing context of variables using a simple list-based approach *)
