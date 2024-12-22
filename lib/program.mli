@@ -7,3 +7,6 @@ type 'a program = { custom_types : custom_type list; e : 'a expr }
 
 (** A program with no tagging *)
 type plain_program = unit program [@@deriving sexp, equal]
+
+(** Convert a program into source code.  *)
+val program_to_source_code : 'a program -> string

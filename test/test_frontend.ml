@@ -4,6 +4,7 @@ open Pq_lang
 open Utils
 open Pattern
 open Ast
+open Program
 open Parser
 open Frontend
 open Testing_utils
@@ -11,7 +12,9 @@ open Testing_utils
 type test_case_no_custom_types =
   string * string * token list * (plain_expr, frontend_error) Result.t
 
-type test_case = string * string * token list * run_frontend_res
+type test_case_full_prog =
+  string * string * token list * (plain_program, frontend_error) Result.t
+
 type test_case_precedence = string * string * Ast.plain_expr
 
 let test_cases_unit_value : test_case_no_custom_types list =
@@ -792,7 +795,7 @@ let test_cases_precedence : test_case_precedence list =
 
 (* TODO - tests with custom type definitions *)
 
-let create_lexer_test ((name, inp, exp, _) : test_case_no_custom_types) =
+let create_lexer_test ((name, inp, exp, _) : test_case_full_prog) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
   let rec collect_tokens acc =
@@ -803,16 +806,15 @@ let create_lexer_test ((name, inp, exp, _) : test_case_no_custom_types) =
   let out = collect_tokens [] in
   assert_equal exp out ~printer:token_printer
 
-let create_frontend_test ((name, inp, _, exp) : test_case_no_custom_types) =
+let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
   assert_equal
-    ~cmp:(equal_result (equal_expr equal_unit) equal_frontend_error)
-    exp
-    (Result.map ~f:(fun prog -> prog.e) out)
+    ~cmp:(equal_result (equal_program equal_unit) equal_frontend_error)
+    exp out
     ~printer:(fun x ->
       match x with
-      | Ok e -> ast_to_source_code e
+      | Ok prog -> program_to_source_code prog
       | Error (LexingError c) -> sprintf "LexingError %c" c
       | Error ParsingError -> "ParsingError")
 
@@ -824,27 +826,31 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
   | Error ParsingError -> assert_failure "ParsingError"
 
-let test_suites test_create_func =
+let test_suites_no_custom_types (test_create_func : test_case_full_prog -> test)
+    =
+  let f =
+    Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
+        (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
+  in
   [
     "Unit Value" >::: List.map ~f:test_create_func test_cases_unit_value;
-    "Arithmetic" >::: List.map ~f:test_create_func test_cases_arithmetic;
-    "Booleans" >::: List.map ~f:test_create_func test_cases_booleans;
-    "Pairs" >::: List.map ~f:test_create_func test_cases_pairs;
-    "Integer Comparisons"
-    >::: List.map ~f:test_create_func test_cases_integer_comparisons;
-    "If-Then-Else" >::: List.map ~f:test_create_func test_cases_if_then_else;
-    "Variables" >::: List.map ~f:test_create_func test_cases_variables;
-    "Functions" >::: List.map ~f:test_create_func test_cases_functions;
-    "Recursion" >::: List.map ~f:test_create_func test_cases_recursion;
-    "Match" >::: List.map ~f:test_create_func test_cases_match;
+    "Arithmetic" >::: List.map ~f test_cases_arithmetic;
+    "Booleans" >::: List.map ~f test_cases_booleans;
+    "Pairs" >::: List.map ~f test_cases_pairs;
+    "Integer Comparisons" >::: List.map ~f test_cases_integer_comparisons;
+    "If-Then-Else" >::: List.map ~f test_cases_if_then_else;
+    "Variables" >::: List.map ~f test_cases_variables;
+    "Functions" >::: List.map ~f test_cases_functions;
+    "Recursion" >::: List.map ~f test_cases_recursion;
+    "Match" >::: List.map ~f test_cases_match;
   ]
 
 let suite =
   "Frontend Tests"
   >::: [
-         "Lexer" >::: test_suites create_lexer_test;
+         "Lexer" >::: test_suites_no_custom_types create_lexer_test;
          "Frontend"
-         >::: test_suites create_frontend_test
+         >::: test_suites_no_custom_types create_frontend_test
               @ [
                   "Precedence"
                   >::: List.map ~f:create_precedence_test test_cases_precedence;
