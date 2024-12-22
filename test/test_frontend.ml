@@ -793,8 +793,6 @@ let test_cases_precedence : test_case_precedence list =
         Add ((), App ((), Var ((), "f"), Var ((), "x")), Var ((), "y")) );
     ]
 
-(* TODO - tests with custom type definitions *)
-
 let create_lexer_test ((name, inp, exp, _) : test_case_full_prog) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
@@ -804,7 +802,7 @@ let create_lexer_test ((name, inp, exp, _) : test_case_full_prog) =
     | token -> collect_tokens (token :: acc)
   in
   let out = collect_tokens [] in
-  assert_equal exp out ~printer:token_printer
+  assert_equal ~cmp:(equal_list Stdlib.( = )) exp out ~printer:token_printer
 
 let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
   name >:: fun _ ->
@@ -826,8 +824,8 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
   | Error ParsingError -> assert_failure "ParsingError"
 
-let test_suites_no_custom_types (test_create_func : test_case_full_prog -> test)
-    =
+let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
+    test list =
   let f =
     Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
         (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
@@ -845,12 +843,61 @@ let test_suites_no_custom_types (test_create_func : test_case_full_prog -> test)
     "Match" >::: List.map ~f test_cases_match;
   ]
 
+let test_cases_custom_type_defn : test_case_full_prog list =
+  List.map
+    ~f:(fun (x, y, z) -> (x, x, y, z))
+    [
+      ( (* No type definition *)
+        {|
+1
+|},
+        [ INTLIT 1 ],
+        Ok { custom_types = []; e = IntLit ((), 1) } );
+      ( (* Simple type definition *)
+        {|
+        type int_or_bool = Int of int | Bool of bool
+
+        1
+        |},
+        [
+          TYPE;
+          LNAME "int_or_bool";
+          ASSIGN;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          UNAME "Bool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Ok
+          {
+            custom_types =
+              [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
+            e = IntLit ((), 1);
+          } );
+      (* TODO - test with and without leading pipe *)
+      (* TODO - test with incorrectly using UNAME for type name *)
+      (* TODO - test with incorrectly using LNAME for constructor name *)
+      (* TODO - recursive data type *)
+    ]
+
+let tests_full_prog (test_create_func : test_case_full_prog -> test) : test list
+    =
+  let f = test_create_func in
+  [ "Custom type definition" >::: List.map ~f test_cases_custom_type_defn ]
+
 let suite =
   "Frontend Tests"
   >::: [
-         "Lexer" >::: test_suites_no_custom_types create_lexer_test;
+         "Lexer"
+         >::: tests_no_custom_types create_lexer_test
+              @ tests_full_prog create_lexer_test;
          "Frontend"
-         >::: test_suites_no_custom_types create_frontend_test
+         >::: tests_no_custom_types create_frontend_test
+              @ tests_full_prog create_frontend_test
               @ [
                   "Precedence"
                   >::: List.map ~f:create_precedence_test test_cases_precedence;
