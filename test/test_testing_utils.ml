@@ -53,6 +53,7 @@ let suite =
   >::: [
          "Typed expression generator"
          >::: [
+                create_typed_expr_gen_test_for_fixed_type "unit" VTypeUnit;
                 create_typed_expr_gen_test_for_fixed_type "int" VTypeInt;
                 create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
                 create_typed_expr_gen_test "'a -> 'b"

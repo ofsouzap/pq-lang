@@ -36,6 +36,7 @@ let sexp_of_token = function
   | TRUE -> Sexp.Atom "TRUE"
   | FALSE -> Sexp.Atom "FALSE"
   | FUN -> Sexp.Atom "FUN"
+  | UNIT -> Sexp.Atom "UNIT"
   | INT -> Sexp.Atom "INT"
   | BOOL -> Sexp.Atom "BOOL"
   | MATCH -> Sexp.Atom "MATCH"
@@ -58,6 +59,7 @@ let sexp_of_token = function
   | COLON -> Sexp.Atom "COLON"
   | COMMA -> Sexp.Atom "COMMA"
   | PIPE -> Sexp.Atom "PIPE"
+  | UNIT_VAL -> Sexp.Atom "UNIT_VAL"
   | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
   | NAME n -> Sexp.List [ Sexp.Atom "NAME"; Sexp.Atom n ]
   | EOF -> Sexp.Atom "EOF"
@@ -86,6 +88,7 @@ let lexer_keywords : string list =
     "true";
     "false";
     "fun";
+    "unit";
     "int";
     "bool";
     "match";
@@ -107,7 +110,9 @@ let vtype_gen (d : int) : vtype QCheck.Gen.t =
   let gen =
     fix (fun self d ->
         let self' = self (d - 1) in
-        let base_cases = [ return VTypeInt; return VTypeBool ] in
+        let base_cases =
+          [ return VTypeUnit; return VTypeInt; return VTypeBool ]
+        in
         let rec_cases =
           [ (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2)) ]
         in
@@ -192,7 +197,10 @@ let pattern_arb ~(t : vtype) :
     gen_new_varname ctx >|= fun vname ->
     (PatName (vname, t), TestingVarCtx.singleton vname t)
   in
-  let rec gen_int (ctx : TestingVarCtx.t) : (pattern * TestingVarCtx.t) Gen.t =
+  let rec gen_unit (ctx : TestingVarCtx.t) : (pattern * TestingVarCtx.t) Gen.t =
+    (* Generate a pattern that types as unit *)
+    named_var ctx VTypeUnit
+  and gen_int (ctx : TestingVarCtx.t) : (pattern * TestingVarCtx.t) Gen.t =
     (* Generate a pattern that types as integer *)
     named_var ctx VTypeInt
   and gen_bool (ctx : TestingVarCtx.t) : (pattern * TestingVarCtx.t) Gen.t =
@@ -214,6 +222,7 @@ let pattern_arb ~(t : vtype) :
   and gen (t : vtype) : TestingVarCtx.t -> (pattern * TestingVarCtx.t) Gen.t =
     (* Generate a pattern of a specified type *)
     match t with
+    | VTypeUnit -> gen_unit
     | VTypeInt -> gen_int
     | VTypeBool -> gen_bool
     | VTypeFun (t1, t2) -> gen_fun (t1, t2)
@@ -308,6 +317,18 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
         gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
         gen_e_match (self, (d, ctx), v) (* Match *);
       ]
+  and gen_unit (param : int * TestingVarCtx.t) : 'a expr Gen.t =
+    (* Generate an expression that types as unit *)
+    fix
+      (fun self (d, ctx) ->
+        v_gen >>= fun v ->
+        let base_cases =
+          [ return (UnitLit v) ]
+          @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) VTypeUnit)
+        in
+        let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) VTypeUnit in
+        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
+      param
   and gen_int (param : int * TestingVarCtx.t) : 'a expr Gen.t =
     (* Generate an expression that types as integer *)
     fix
@@ -403,6 +424,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
       param
   and gen ((d : int), (ctx : TestingVarCtx.t)) (t : vtype) : 'a expr Gen.t =
     match t with
+    | VTypeUnit -> gen_unit (d, ctx)
     | VTypeInt -> gen_int (d, ctx)
     | VTypeBool -> gen_bool (d, ctx)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)

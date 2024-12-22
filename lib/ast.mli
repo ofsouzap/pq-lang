@@ -14,6 +14,8 @@ open Pattern
   Tagged with arbitrary values on each node.
 *)
 type 'a expr =
+  (* Unit type *)
+  | UnitLit of 'a  (** The literal of the unit type *)
   (* Integer arithmetic *)
   | IntLit of 'a * int  (** An integer literal *)
   | Add of 'a * 'a expr * 'a expr  (** Addition *)

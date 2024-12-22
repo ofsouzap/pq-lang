@@ -1,4 +1,5 @@
 type vtype =
+  | VTypeUnit
   | VTypeInt
   | VTypeBool
   | VTypePair of vtype * vtype
@@ -6,6 +7,7 @@ type vtype =
 [@@deriving sexp, equal]
 
 let rec vtype_to_source_code = function
+  | VTypeUnit -> "unit"
   | VTypeInt -> "int"
   | VTypeBool -> "bool"
   | VTypePair (t1, t2) ->

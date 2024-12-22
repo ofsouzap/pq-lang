@@ -11,6 +11,16 @@ open Testing_utils
 type test_case = string * string * token list * run_frontend_res
 type test_case_precedence = string * string * Ast.plain_expr
 
+let test_cases_unit_value : test_case list =
+  List.map
+    ~f:(fun (x, y, z) -> (x, x, y, z))
+    [
+      ("()", [ UNIT_VAL ], Ok (UnitLit ()));
+      ( "() + 5",
+        [ UNIT_VAL; PLUS; INTLIT 5 ],
+        Ok (Add ((), UnitLit (), IntLit ((), 5))) );
+    ]
+
 let test_cases_arithmetic : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
@@ -800,6 +810,7 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
 
 let test_suites test_create_func =
   [
+    "Unit Value" >::: List.map ~f:test_create_func test_cases_unit_value;
     "Arithmetic" >::: List.map ~f:test_create_func test_cases_arithmetic;
     "Booleans" >::: List.map ~f:test_create_func test_cases_booleans;
     "Pairs" >::: List.map ~f:test_create_func test_cases_pairs;

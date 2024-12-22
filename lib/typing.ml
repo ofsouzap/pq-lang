@@ -127,6 +127,7 @@ module TypeChecker (Ctx : TypingVarContext) = struct
       | _, _ -> Error (TypeMismatch (VTypeInt, t1))
     in
     match orig_e with
+    | UnitLit v -> Ok (UnitLit (VTypeUnit, v))
     | IntLit (v, x) -> Ok (IntLit ((VTypeInt, v), x))
     | Add (v, e1, e2) ->
         type_binop (fun e1' e2' t -> Add ((t, v), e1', e2')) e1 e2 VTypeInt

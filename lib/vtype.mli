@@ -1,5 +1,6 @@
 (** The type of a value or expression *)
 type vtype =
+  | VTypeUnit
   | VTypeInt
   | VTypeBool
   | VTypePair of vtype * vtype

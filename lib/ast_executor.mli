@@ -19,6 +19,7 @@ type closure_props = {
 
 (** A resulting value from executing an AST *)
 and value =
+  | Unit  (** The unit value *)
   | Int of int  (** An integer value *)
   | Bool of bool  (** A boolean value *)
   | Closure of closure_props  (** A function closure *)

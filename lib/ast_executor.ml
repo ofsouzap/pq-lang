@@ -18,6 +18,7 @@ type closure_props = {
 [@@deriving sexp, equal]
 
 and value =
+  | Unit
   | Int of int
   | Bool of bool
   | Closure of closure_props
@@ -33,6 +34,7 @@ let store_compare = equal_store
 let store_traverse = Map.to_alist ~key_order:`Increasing
 
 let rec value_type = function
+  | Unit -> VTypeUnit
   | Int _ -> VTypeInt
   | Bool _ -> VTypeBool
   | Closure closure -> VTypeFun (snd closure.param, closure.out_type)
@@ -171,6 +173,7 @@ and eval_apply_to_closure (store : store) (x : ast_tag Ast.typed_expr)
 and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
   let open Result in
   match e with
+  | UnitLit _ -> Ok Unit
   | IntLit (_, i) -> Ok (Int i)
   | Add (_, e1, e2) ->
       eval_apply_to_int store e1 (fun i1 ->

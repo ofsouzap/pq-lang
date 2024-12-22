@@ -26,6 +26,7 @@ let test_cases_expr_typing : test list =
   in
   List.map ~f:create_test
     [
+      (UnitLit (), Ok VTypeUnit);
       (IntLit ((), 1), Ok VTypeInt);
       (Add ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
       ( Add ((), BoolLit ((), true), IntLit ((), 2)),
