@@ -332,8 +332,6 @@ module ListVariableContextTester =
 
 module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
 
-(* TODO - tester for testing utils test variable context implementation *)
-
 (* TODO - tests for expressions that should fail to type *)
 
 let test_cases_arb_compound_expr_typing : test list =
