@@ -1,7 +1,9 @@
 open OUnit2
 open Core
 open Pq_lang
+open Utils
 open Vtype
+open Pattern
 open Ast
 open Typing
 open Testing_utils
@@ -133,6 +135,47 @@ let test_cases_expr_typing : test list =
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         First VTypeBool );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [ (PatName ("x", VTypeInt), BoolLit ((), true)) ] ),
+        First VTypeBool );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [ (PatName ("x", VTypeInt), Var ((), "x")) ] ),
+        First VTypeInt );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [
+                (PatName ("x", VTypeInt), BoolLit ((), true));
+                (PatName ("y", VTypeInt), BoolLit ((), true));
+              ] ),
+        First VTypeBool );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [
+                (PatName ("x", VTypeInt), BoolLit ((), true));
+                (PatName ("y", VTypeBool), BoolLit ((), true));
+              ] ),
+        Second
+          (PatternTypeMismatch (PatName ("y", VTypeBool), VTypeInt, VTypeBool))
+      );
+      ( Match
+          ( (),
+            IntLit ((), 3),
+            Nonempty_list.from_list_unsafe
+              [
+                (PatName ("x", VTypeInt), BoolLit ((), true));
+                (PatName ("y", VTypeInt), IntLit ((), 5));
+              ] ),
+        Second (TypeMismatch (VTypeBool, VTypeInt)) );
     ]
 
 let test_cases_expr_typing_full_check : test list =
