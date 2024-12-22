@@ -1,4 +1,5 @@
 open Core
+open Program
 
 type frontend_error =
   | LexingError of char
@@ -6,9 +7,7 @@ type frontend_error =
   | ParsingError  (** A parsing error occured on the token stream *)
 
 (** A result from trying to run the lexer and parser on an input *)
-type run_frontend_res = (Ast.plain_expr, frontend_error) Result.t
-
-(* TODO - custom type definitions *)
+type run_frontend_res = (plain_program, frontend_error) Result.t
 
 (** Run the lexer and parser on an input channel *)
 val run_frontend_channel : In_channel.t -> run_frontend_res

@@ -1,10 +1,11 @@
 open Core
+open Program
 
 type frontend_error = LexingError of char | ParsingError
-type run_frontend_res = (Ast.plain_expr, frontend_error) Result.t
+type run_frontend_res = (plain_program, frontend_error) Result.t
 
 let lex_parse_from_lexbuf (lexbuf : Lexing.lexbuf) : run_frontend_res =
-  try Ok (Parser.prog Lexer.token lexbuf |> snd) with
+  try Ok (Parser.prog Lexer.token lexbuf) with
   | Lexer.LexingError c -> Error (LexingError c)
   | Parser.Error | Parsing_errors.CustomError -> Error ParsingError
 
