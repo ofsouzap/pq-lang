@@ -72,6 +72,11 @@ module TypeChecker : functor (Ctx : TypingVarContext) -> sig
     Ctx.t -> 'a Ast.expr -> ((Vtype.vtype * 'a) Ast.expr, typing_error) result
 end
 
+(** An implementation of a type checker using a list typing variable context *)
+module ListTypeChecker : sig
+  include module type of TypeChecker (ListTypingVarContext)
+end
+
 (** Type an AST expression using the default context implementation with an empty typing context *)
 val type_expr :
   'a Ast.expr -> ((Vtype.vtype * 'a) Ast.expr, typing_error) result
