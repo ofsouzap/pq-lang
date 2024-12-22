@@ -27,6 +27,7 @@ type 'a expr =
   | App of 'a * 'a expr * 'a expr
   | Fix of 'a * (string * vtype * vtype) * (string * vtype) * 'a expr
   | Match of 'a * 'a expr * (pattern * 'a expr) Nonempty_list.t
+  | Constructor of 'a * string * 'a expr
 [@@deriving sexp, equal]
 
 let expr_node_map_val_with_result ~(f : 'a -> 'a) : 'a expr -> 'a * 'a expr =
@@ -54,6 +55,7 @@ let expr_node_map_val_with_result ~(f : 'a -> 'a) : 'a expr -> 'a * 'a expr =
   | App (v, e1, e2) -> (f v, App (f v, e1, e2))
   | Fix (v, fname, xname, e1) -> (f v, Fix (f v, fname, xname, e1))
   | Match (v, e1, cs) -> (f v, Match (f v, e1, cs))
+  | Constructor (v, cname, e1) -> (f v, Constructor (f v, cname, e1))
 
 let expr_node_val (e : 'a expr) : 'a =
   expr_node_map_val_with_result ~f:Fn.id e |> fst
@@ -90,6 +92,7 @@ let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
         ( f a,
           fmap ~f e,
           Nonempty_list.map ~f:(fun (p, c_e) -> (p, fmap ~f c_e)) cs )
+  | Constructor (a, cname, e) -> Constructor (f a, cname, fmap ~f e)
 
 let ( >|= ) (e : 'a expr) (f : 'a -> 'b) = fmap ~f e
 
@@ -130,6 +133,7 @@ let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
           expr_to_plain_expr e,
           Nonempty_list.map ~f:(fun (p, c_e) -> (p, expr_to_plain_expr c_e)) cs
         )
+  | Constructor (_, cname, e) -> Constructor ((), cname, expr_to_plain_expr e)
 
 exception AstConverionFixError
 
@@ -196,3 +200,4 @@ let rec ast_to_source_code = function
                sprintf "| (%s) -> (%s)" (pattern_to_source_code p)
                  (ast_to_source_code c_e))
         |> Nonempty_list.to_list |> String.concat ~sep:" ")
+  | Constructor (_, cname, e) -> sprintf "%s (%s)" cname (ast_to_source_code e)

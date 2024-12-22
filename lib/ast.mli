@@ -47,6 +47,9 @@ type 'a expr =
   (* Pattern matching *)
   | Match of 'a * 'a expr * (pattern * 'a expr) Nonempty_list.t
       (** Match expression *)
+  (* Custom data types *)
+  | Constructor of 'a * string * 'a expr
+      (** Constructor for a custom data type *)
 [@@deriving sexp, equal]
 
 (* TODO - custom type definitions *)

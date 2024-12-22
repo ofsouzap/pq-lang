@@ -55,6 +55,7 @@ let add_custom_type_definition_to_program (p : plain_program) (ct : custom_type)
 %left PLUS MINUS // + -
 %left STAR // *
 %nonassoc UNIT_VAL INTLIT LNAME TRUE FALSE // literals
+%nonassoc UNAME  // Constructor
 %nonassoc LPAREN // (
 
 // Non-terminal typing
@@ -82,6 +83,7 @@ vtype:
   | BOOL { VTypeBool }
   | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
   | t1 = vtype STAR t2 = vtype { VTypePair (t1, t2) }
+  | tname = LNAME { VTypeCustom tname }
 ;
 
 custom_type_constructor:
@@ -150,16 +152,17 @@ expr:
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
   | MATCH e = expr WITH cs = match_cases END { Match ((), e, cs) }  (* match e with cs end *)
+  | cname = UNAME e = expr { Constructor ((), cname, e) }  (* Cname e *)
 ;
 
 contained_expr:
-  | LPAREN e = expr RPAREN { e }
-  | UNIT_VAL { UnitLit () }
-  | i = INTLIT { IntLit ((), i) }
-  | TRUE { BoolLit ((), true) }
-  | FALSE { BoolLit ((), false) }
+  | LPAREN e = expr RPAREN { e }  (* ( e ) *)
+  | UNIT_VAL { UnitLit () }  (* () *)
+  | i = INTLIT { IntLit ((), i) }  (* n *)
+  | TRUE { BoolLit ((), true) }  (* true *)
+  | FALSE { BoolLit ((), false) }  (* false *)
   | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
-  | n = LNAME { Var ((), n) }
+  | n = LNAME { Var ((), n) }  (* var *)
 ;
 
 prog:

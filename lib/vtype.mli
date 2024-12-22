@@ -5,9 +5,8 @@ type vtype =
   | VTypeBool
   | VTypePair of vtype * vtype
   | VTypeFun of vtype * vtype
+  | VTypeCustom of string
 [@@deriving sexp, equal]
-
-(* TODO - custom type definitions *)
 
 (** Convert a vtype to a string representation compatible with the source code *)
 val vtype_to_source_code : vtype -> string

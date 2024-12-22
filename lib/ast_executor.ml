@@ -287,6 +287,7 @@ and eval (store : store) (e : ast_tag Ast.typed_expr) : exec_res =
                  store_set acc ~key:xname ~value:xval)
                m)
             c_e)
+  | Constructor _ -> failwith "TODO"
 
 let execute (e : 'a Ast.typed_expr) =
   eval (VarnameMap.empty : store) (Ast.fmap ~f:(fun (t, _) -> (t, ())) e)

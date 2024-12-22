@@ -241,6 +241,7 @@ module TypeChecker (Ctx : TypingVarContext) = struct
         >>| fun ( (t_out : vtype),
                   (cs_typed_rev : (pattern * (vtype * 'a) expr) Nonempty_list.t)
                 ) -> Match ((t_out, v), e', Nonempty_list.rev cs_typed_rev)
+    | Constructor _ -> failwith "TODO"
 end
 
 module ListTypeChecker = TypeChecker (ListTypingVarContext)

@@ -111,6 +111,7 @@ let varname_gen : string QCheck.Gen.t =
     ()
 
 let vtype_gen (d : int) : vtype QCheck.Gen.t =
+  (* TODO - allow custom type. However, requires type context *)
   let open QCheck.Gen in
   let gen =
     fix (fun self d ->
@@ -232,6 +233,7 @@ let pattern_arb ~(t : vtype) :
     | VTypeBool -> gen_bool
     | VTypeFun (t1, t2) -> gen_fun (t1, t2)
     | VTypePair (t1, t2) -> gen_pair (t1, t2)
+    | VTypeCustom _ -> failwith "TODO"
   in
   QCheck.make
     ~print:
@@ -434,6 +436,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     | VTypeBool -> gen_bool (d, ctx)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
     | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
+    | VTypeCustom _ -> failwith "TODO"
   and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
       (vtype * 'a expr) Gen.t =
     vtype_gen d >>= fun t ->
