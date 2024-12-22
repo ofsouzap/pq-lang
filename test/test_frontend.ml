@@ -831,7 +831,7 @@ let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
         (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
   in
   [
-    "Unit Value" >::: List.map ~f:test_create_func test_cases_unit_value;
+    "Unit Value" >::: List.map ~f test_cases_unit_value;
     "Arithmetic" >::: List.map ~f test_cases_arithmetic;
     "Booleans" >::: List.map ~f test_cases_booleans;
     "Pairs" >::: List.map ~f test_cases_pairs;
