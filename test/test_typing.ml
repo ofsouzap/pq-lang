@@ -10,10 +10,9 @@ open Testing_utils
 
 let test_cases_expr_typing : test list =
   let open Either in
-  let create_test
-      ((name : string), (e : plain_expr), (t : (vtype, typing_error) Either.t))
-      : test =
-    name >:: fun _ ->
+  let create_test ((e : plain_expr), (t : (vtype, typing_error) Either.t)) :
+      test =
+    ast_to_source_code e >:: fun _ ->
     let open Result in
     let out = Typing.type_expr e in
     match (out, t) with
@@ -26,8 +25,7 @@ let test_cases_expr_typing : test list =
         assert_equal ~cmp:equal_typing_error ~printer:print_typing_error exp_err
           t_err
   in
-  List.map
-    ~f:Fn.(compose create_test (fun (e, t) -> (ast_to_source_code e, e, t)))
+  List.map ~f:create_test
     [
       (IntLit ((), 1), First VTypeInt);
       (Add ((), IntLit ((), 3), IntLit ((), 0)), First VTypeInt);
