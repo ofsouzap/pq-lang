@@ -33,6 +33,9 @@ module TestingVarCtx : sig
   (** Get a list of all the variables who have the given type *)
   val varnames_of_type : vtype -> t -> string list
 
+  (** Get the variable context as a list *)
+  val to_list : t -> (string * vtype) list
+
   (** Creates a context from a list *)
   val from_list : (string * vtype) list -> t
 end

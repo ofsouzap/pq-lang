@@ -226,13 +226,7 @@ let test_cases_typing_with_var_ctx : test list =
         ~f:(fun acc (xname, xtype) -> ListTypingVarContext.add acc xname xtype)
         ctx_list
     in
-    let name =
-      sprintf "[%s] %s"
-        (ctx |> ListTypingVarContext.to_list
-        |> sexp_of_list (sexp_of_pair sexp_of_string sexp_of_vtype)
-        |> Sexp.to_string)
-        (e |> ast_to_source_code)
-    in
+    let name = sprintf "[with context] %s" (e |> ast_to_source_code) in
     name >:: fun _ ->
     let out = ListTypeChecker.type_expr ctx e in
     match (out, t) with
@@ -259,9 +253,84 @@ let test_cases_typing_with_var_ctx : test list =
         Ok (VTypeFun (VTypeInt, VTypeInt)) );
     ]
 
-(* TODO - tests for the variable context (e.g. that overwriting a variable's typing works).
-   Do these as a module functor and then have a ground truth of an inefficient, but definitely-correct implementation
-   (probably done with functions for context tracking) *)
+module MakeVariableContextTester (Ctx : TypingVarContext) = struct
+  let create_test_add_then_get ((ctx : Ctx.t), (xname : string), (xtype : vtype))
+      : bool =
+    let ctx' = Ctx.add ctx xname xtype in
+    (equal_option equal_vtype) (Some xtype) (Ctx.find ctx' xname)
+
+  let create_test_overwrite
+      ((ctx : Ctx.t), (xname : string), (xtype1 : vtype), (xtype2 : vtype)) :
+      bool =
+    let ctx' = Ctx.add (Ctx.add ctx xname xtype1) xname xtype2 in
+    (equal_option equal_vtype) (Some xtype2) (Ctx.find ctx' xname)
+
+  let create_test_append_overwriting
+      ( ((ctx1_ : Ctx.t), (ctx2_ : Ctx.t)),
+        ((xname : string), (xtype1 : vtype), (xtype2 : vtype)) ) : bool =
+    let ctx1 = Ctx.add ctx1_ xname xtype1 in
+    let ctx2 = Ctx.add ctx2_ xname xtype2 in
+    let ctx' = Ctx.append ctx1 ctx2 in
+    (equal_option equal_vtype) (Ctx.find ctx2 xname) (Ctx.find ctx' xname)
+
+  let all_test_cases : test list =
+    let open QCheck in
+    let ctx_from_list : (string * vtype) list -> Ctx.t =
+      List.fold ~init:Ctx.empty ~f:(fun acc (xname, xtype) ->
+          Ctx.add acc xname xtype)
+    in
+    let ctx_arb : Ctx.t QCheck.arbitrary =
+      QCheck.make
+        QCheck.Gen.(
+          list (pair string (vtype_gen default_max_gen_rec_depth))
+          >|= ctx_from_list)
+    in
+    List.map ~f:QCheck_runner.to_ounit2_test
+      [
+        Test.make ~name:"Add then get" ~count:100
+          (triple ctx_arb string (vtype_arb default_max_gen_rec_depth))
+          create_test_add_then_get;
+        Test.make ~name:"Overwrite" ~count:100
+          (quad ctx_arb string
+             (vtype_arb default_max_gen_rec_depth)
+             (vtype_arb default_max_gen_rec_depth))
+          create_test_overwrite;
+        Test.make ~name:"Append overwriting" ~count:100
+          (pair (pair ctx_arb ctx_arb)
+             (triple string
+                (vtype_arb default_max_gen_rec_depth)
+                (vtype_arb default_max_gen_rec_depth)))
+          create_test_append_overwriting;
+      ]
+end
+
+(** An implementation of a variable context using functions.
+    It isn't efficient, but is just meant to be used
+    as a ground truth to test against the actually-implementations *)
+module FunctionTypingVarContext : TypingVarContext = struct
+  type t = string -> vtype option
+
+  let empty : t = Fn.const None
+
+  let add (f' : t) (xname : string) (xtype : vtype) : t =
+   fun x -> if equal_string xname x then Some xtype else f' x
+
+  let find = Fn.id
+  let singleton xname xtype = add empty xname xtype
+
+  let append (f1 : t) (f2 : t) x =
+    match f2 x with None -> f1 x | Some v -> Some v
+
+  let exists (f : t) xname = match f xname with None -> false | Some _ -> true
+end
+
+module FunctionVariableContextTester =
+  MakeVariableContextTester (FunctionTypingVarContext)
+
+module ListVariableContextTester =
+  MakeVariableContextTester (ListTypingVarContext)
+
+(* TODO - tester for testing utils test variable context implementation *)
 
 (* TODO - tests for expressions that should fail to type *)
 
@@ -397,4 +466,10 @@ let suite =
          "Arbitrary expression typing" >::: test_cases_arb_compound_expr_typing;
          "Typing maintains structure"
          >::: [ test_cases_typing_maintains_structure ];
+         "Variable contexts"
+         >::: [
+                "Function context"
+                >::: FunctionVariableContextTester.all_test_cases;
+                "List context" >::: ListVariableContextTester.all_test_cases;
+              ];
        ]

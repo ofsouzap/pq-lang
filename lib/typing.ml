@@ -60,7 +60,6 @@ module type TypingVarContext = sig
   val singleton : string -> vtype -> t
   val append : t -> t -> t
   val exists : t -> string -> bool
-  val to_list : t -> (string * vtype) list
 end
 
 module ListTypingVarContext : TypingVarContext = struct
@@ -75,7 +74,6 @@ module ListTypingVarContext : TypingVarContext = struct
     List.fold ~init:ctx1 ~f:(fun ctx_acc (x, t) -> add ctx_acc x t)
 
   let exists ctx x = match find ctx x with None -> false | Some _ -> true
-  let to_list = Fn.id
 end
 
 module TypeChecker (Ctx : TypingVarContext) = struct
