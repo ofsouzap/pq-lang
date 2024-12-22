@@ -878,9 +878,72 @@ let test_cases_custom_type_defn : test_case_full_prog list =
               [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
             e = IntLit ((), 1);
           } );
-      (* TODO - test with and without leading pipe *)
-      (* TODO - test with incorrectly using UNAME for type name *)
-      (* TODO - test with incorrectly using LNAME for constructor name *)
+      ( (* Simple type definition (with leading pipe) *)
+        {|
+        type int_or_bool = | Int of int | Bool of bool
+
+        1
+        |},
+        [
+          TYPE;
+          LNAME "int_or_bool";
+          ASSIGN;
+          PIPE;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          UNAME "Bool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Ok
+          {
+            custom_types =
+              [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
+            e = IntLit ((), 1);
+          } );
+      ( (* Incorrectly using upper-name for type name *)
+        {|
+        type Int_or_bool = Int of int | Bool of bool
+
+        1
+        |},
+        [
+          TYPE;
+          UNAME "Int_or_bool";
+          ASSIGN;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          UNAME "Bool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Error ParsingError );
+      ( (* Incorrectly using lower-name for constructor name *)
+        {|
+        type int_or_bool = Int of int | thisisabool of bool
+
+        1
+        |},
+        [
+          TYPE;
+          LNAME "int_or_bool";
+          ASSIGN;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          LNAME "thisisabool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Error ParsingError );
       (* TODO - recursive data type *)
     ]
 
