@@ -35,7 +35,7 @@ end
 let create_test ((name : string), (inp : string), (exp : exec_res)) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
-  let ast = Parser.prog Lexer.token lexbuf |> snd in
+  let ast = (Parser.prog Lexer.token lexbuf).e in
   let typed_e =
     match Typing.type_expr ast with
     | Ok x -> x

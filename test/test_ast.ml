@@ -130,7 +130,7 @@ let test_cases_to_source_code_inv =
   Test.make ~count:100 ~name:"AST to source code" plain_ast_expr_arb_any
     (fun e ->
       match run_frontend_string (ast_to_source_code e) with
-      | Ok e' -> equal_plain_expr e e'
+      | Ok prog -> equal_plain_expr e prog.e
       | _ -> false)
 
 let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)

@@ -8,10 +8,13 @@ open Parser
 open Frontend
 open Testing_utils
 
+type test_case_no_custom_types =
+  string * string * token list * (plain_expr, frontend_error) Result.t
+
 type test_case = string * string * token list * run_frontend_res
 type test_case_precedence = string * string * Ast.plain_expr
 
-let test_cases_unit_value : test_case list =
+let test_cases_unit_value : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -21,7 +24,7 @@ let test_cases_unit_value : test_case list =
         Ok (Add ((), UnitLit (), IntLit ((), 5))) );
     ]
 
-let test_cases_arithmetic : test_case list =
+let test_cases_arithmetic : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -94,7 +97,7 @@ let test_cases_arithmetic : test_case list =
       ("+**+", [ PLUS; STAR; STAR; PLUS ], Error ParsingError);
     ]
 
-let test_cases_booleans : test_case list =
+let test_cases_booleans : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -119,7 +122,7 @@ let test_cases_booleans : test_case list =
                BoolLit ((), true) )) );
     ]
 
-let test_cases_pairs : test_case list =
+let test_cases_pairs : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -149,7 +152,7 @@ let test_cases_pairs : test_case list =
       );
     ]
 
-let test_cases_integer_comparisons : test_case list =
+let test_cases_integer_comparisons : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -171,7 +174,7 @@ let test_cases_integer_comparisons : test_case list =
       ("== <=", [ EQ; LTEQ ], Error ParsingError);
     ]
 
-let test_cases_if_then_else : test_case list =
+let test_cases_if_then_else : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -249,7 +252,7 @@ let test_cases_if_then_else : test_case list =
                IntLit ((), 3) )) );
     ]
 
-let test_cases_variables : test_case list =
+let test_cases_variables : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -302,7 +305,7 @@ let test_cases_variables : test_case list =
                App ((), Var ((), "f"), IntLit ((), 1)) )) );
     ]
 
-let test_cases_functions : test_case list =
+let test_cases_functions : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -451,7 +454,7 @@ let test_cases_functions : test_case list =
       );
     ]
 
-let test_cases_recursion : test_case list =
+let test_cases_recursion : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -571,7 +574,7 @@ let test_cases_recursion : test_case list =
                App ((), Var ((), "f"), IntLit ((), 5)) )) );
     ]
 
-let test_cases_match : test_case list =
+let test_cases_match : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -787,9 +790,9 @@ let test_cases_precedence : test_case_precedence list =
         Add ((), App ((), Var ((), "f"), Var ((), "x")), Var ((), "y")) );
     ]
 
-(* TODO - custom type definitions *)
+(* TODO - tests with custom type definitions *)
 
-let create_lexer_test ((name, inp, exp, _) : test_case) =
+let create_lexer_test ((name, inp, exp, _) : test_case_no_custom_types) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
   let rec collect_tokens acc =
@@ -800,10 +803,14 @@ let create_lexer_test ((name, inp, exp, _) : test_case) =
   let out = collect_tokens [] in
   assert_equal exp out ~printer:token_printer
 
-let create_frontend_test ((name, inp, _, exp) : test_case) =
+let create_frontend_test ((name, inp, _, exp) : test_case_no_custom_types) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
-  assert_equal exp out ~printer:(fun x ->
+  assert_equal
+    ~cmp:(equal_result (equal_expr equal_unit) equal_frontend_error)
+    exp
+    (Result.map ~f:(fun prog -> prog.e) out)
+    ~printer:(fun x ->
       match x with
       | Ok e -> ast_to_source_code e
       | Error (LexingError c) -> sprintf "LexingError %c" c
@@ -813,7 +820,7 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
   match out with
-  | Ok e -> assert_equal exp e ~printer:ast_to_source_code
+  | Ok prog -> assert_equal exp prog.e ~printer:ast_to_source_code
   | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
   | Error ParsingError -> assert_failure "ParsingError"
 

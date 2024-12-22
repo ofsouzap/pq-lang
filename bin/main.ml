@@ -8,7 +8,11 @@ let () =
       match err with
       | LexingError c -> eprintf "Lexing error: %c\n" c
       | ParsingError -> eprintf "Parsing error\n")
-  | Ok ast -> (
+  | Ok _ -> (
+      let ast =
+        failwith "TODO"
+        (* TODO - this will need to be changed once typing uses the custom types and execution too *)
+      in
       match Typing.type_expr ast with
       | Ok typed_e ->
           let result = Ast_executor.execute typed_e in

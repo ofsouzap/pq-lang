@@ -1,8 +1,10 @@
 %{
 open Utils
 open Vtype
+open Custom_types
 open Pattern
 open Ast
+open Program
 open Parsing_errors
 
 (*
@@ -26,6 +28,12 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
   match fbody with
   | Fun (_, x, fbody') -> Let ((), fname, Fix ((), f, x, fbody'), subexpr)
   | _ -> raise CustomError
+
+let add_custom_type_definition_to_program (p : plain_program) (ct : custom_type) : plain_program =
+  {
+    custom_types = ct :: p.custom_types;
+    e = p.e
+  }
 %}
 
 (* TODO - rename EQ token to EQUATE to be more-clearly distinguished from ASSIGN *)
@@ -51,10 +59,10 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 
 // Non-terminal typing
 %type <vtype> vtype
-%type <Custom_types.custom_type_constructor> custom_type_constructor
-%type <Custom_types.custom_type_constructor list> custom_type_definition_constructors_no_leading_pipe
-%type <Custom_types.custom_type_constructor list> custom_type_definition_constructors
-%type <Custom_types.custom_type> custom_type_definition
+%type <custom_type_constructor> custom_type_constructor
+%type <custom_type_constructor list> custom_type_definition_constructors_no_leading_pipe
+%type <custom_type_constructor list> custom_type_definition_constructors
+%type <custom_type> custom_type_definition
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
 %type <pattern> pattern
@@ -63,7 +71,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %type <(pattern * plain_expr) Nonempty_list.t> match_cases
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
-%start <Program.plain_program> prog
+%start <plain_program> prog
 
 %%
 
@@ -155,6 +163,6 @@ contained_expr:
 ;
 
 prog:
-  | e = expr EOF { ([], e) }
-  | ct = custom_type_definition p = prog { let (p_cts, e) = p in (ct :: p_cts, e) }
+  | e = expr EOF { { custom_types = []; e = e } }
+  | ct = custom_type_definition p = prog { add_custom_type_definition_to_program p ct }
 ;
