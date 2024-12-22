@@ -332,8 +332,6 @@ module ListVariableContextTester =
 
 module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
 
-(* TODO - tests for expressions that should fail to type *)
-
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in
