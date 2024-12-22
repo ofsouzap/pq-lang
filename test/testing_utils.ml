@@ -114,6 +114,9 @@ let vtype_gen (d : int) : vtype QCheck.Gen.t =
   in
   gen d
 
+let vtype_arb (d : int) : vtype QCheck.arbitrary =
+  QCheck.make ~print:vtype_to_source_code (vtype_gen d)
+
 let typed_var_gen (d : int) : (string * vtype) QCheck.Gen.t =
   let open QCheck.Gen in
   pair varname_gen (vtype_gen d)
@@ -158,8 +161,21 @@ end = struct
       ctx
 
   let to_list = Fn.id
-  let from_list = Fn.id
+  let from_list = List.fold ~init:empty ~f:(fun acc (x, t) -> add acc x t)
 end
+
+let testing_var_ctx_arb : TestingVarCtx.t QCheck.arbitrary =
+  let gen =
+    let open QCheck.Gen in
+    list (pair varname_gen (vtype_gen default_max_gen_rec_depth))
+    >|= TestingVarCtx.from_list
+  in
+  QCheck.make
+    ~print:
+      (Core.Fn.compose
+         QCheck.Print.(list (pair string vtype_to_source_code))
+         TestingVarCtx.to_list)
+    gen
 
 let pattern_arb ~(t : vtype) :
     (pattern * (string * vtype) list) QCheck.arbitrary =
