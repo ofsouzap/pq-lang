@@ -218,9 +218,14 @@ let test_cases_expr_typing_full_check : test list =
 let test_cases_typing_with_var_ctx : test list =
   let open Result in
   let create_test
-      ( (ctx : ListTypingVarContext.t),
+      ( (ctx_list : (string * vtype) list),
         (e : plain_expr),
         (t : (vtype, typing_error) Result.t) ) : test =
+    let ctx =
+      List.fold ~init:ListTypingVarContext.empty
+        ~f:(fun acc (xname, xtype) -> ListTypingVarContext.add acc xname xtype)
+        ctx_list
+    in
     let name =
       sprintf "[%s] %s"
         (ctx |> ListTypingVarContext.to_list
@@ -228,11 +233,31 @@ let test_cases_typing_with_var_ctx : test list =
         |> Sexp.to_string)
         (e |> ast_to_source_code)
     in
-    name >:: fun _ -> failwith "TODO"
+    name >:: fun _ ->
+    let out = ListTypeChecker.type_expr ctx e in
+    match (out, t) with
+    | Ok e', Ok exp_t ->
+        let out_t = e' |> expr_node_val |> fst in
+        assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
+    | Ok _, Error _ -> assert_failure "Expected typing error but got type"
+    | Error _, Ok _ -> assert_failure "Expected type but got typing error"
+    | Error t_err, Error exp_err ->
+        assert_equal ~cmp:equal_typing_error ~printer:print_typing_error exp_err
+          t_err
   in
-  failwith "TODO"
-
-(* TODO - have tests that start with a variable context *)
+  List.map ~f:create_test
+    [
+      ([], Var ((), "x"), Error (UndefinedVariable "x"));
+      ([ ("x", VTypeInt) ], Var ((), "x"), Ok VTypeInt);
+      ([ ("x", VTypeBool) ], Var ((), "x"), Ok VTypeBool);
+      ([ ("x", VTypeBool) ], Var ((), "y"), Error (UndefinedVariable "y"));
+      ( [ ("x", VTypeBool) ],
+        Fun ((), ("y", VTypeInt), IntLit ((), 2)),
+        Ok (VTypeFun (VTypeInt, VTypeInt)) );
+      ( [ ("x", VTypeBool) ],
+        Fun ((), ("x", VTypeInt), IntLit ((), 2)),
+        Ok (VTypeFun (VTypeInt, VTypeInt)) );
+    ]
 
 (* TODO - tests for the variable context (e.g. that overwriting a variable's typing works).
    Do these as a module functor and then have a ground truth of an inefficient, but definitely-correct implementation
@@ -368,6 +393,7 @@ let suite =
          "Expression typing" >::: test_cases_expr_typing;
          "Expression typing full hierarchy"
          >::: test_cases_expr_typing_full_check;
+         "Expression typing with context" >::: test_cases_typing_with_var_ctx;
          "Arbitrary expression typing" >::: test_cases_arb_compound_expr_typing;
          "Typing maintains structure"
          >::: [ test_cases_typing_maintains_structure ];
