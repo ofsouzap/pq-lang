@@ -28,11 +28,13 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
   | _ -> raise CustomError
 %}
 
+(* TODO - rename EQ token to EQUATE to be more-clearly distinguished from ASSIGN *)
+
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE FUN REC UNIT INT BOOL MATCH WITH
+%token END IF THEN ELSE LET IN TRUE FALSE FUN REC UNIT INT BOOL MATCH WITH TYPE OF
 %token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA PIPE UNIT_VAL
 %token <int> INTLIT
-%token <string> NAME
+%token <string> LNAME UNAME
 %token EOF
 
 // Precedence and associativity rules
@@ -44,12 +46,15 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %nonassoc GT GTEQ LT LTEQ // > >= < <=
 %left PLUS MINUS // + -
 %left STAR // *
-%nonassoc UNIT_VAL INTLIT NAME TRUE FALSE // literals
+%nonassoc UNIT_VAL INTLIT LNAME TRUE FALSE // literals
 %nonassoc LPAREN // (
 
 // Non-terminal typing
 %type <vtype> vtype
-(* TODO - custom type definitions *)
+%type <Custom_types.custom_type_constructor> custom_type_constructor
+%type <Custom_types.custom_type_constructor list> custom_type_definition_constructors_no_leading_pipe
+%type <Custom_types.custom_type_constructor list> custom_type_definition_constructors
+%type <Custom_types.custom_type> custom_type_definition
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
 %type <pattern> pattern
@@ -58,7 +63,7 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 %type <(pattern * plain_expr) Nonempty_list.t> match_cases
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
-%start <plain_expr> prog
+%start <Program.plain_program> prog
 
 %%
 
@@ -71,19 +76,35 @@ vtype:
   | t1 = vtype STAR t2 = vtype { VTypePair (t1, t2) }
 ;
 
-(* TODO - custom type definitions *)
+custom_type_constructor:
+  | name = UNAME OF t = vtype { (name, t) }
+;
+
+custom_type_definition_constructors_no_leading_pipe:
+  | c = custom_type_constructor { [c] }
+  | c = custom_type_constructor PIPE cs_tail = custom_type_definition_constructors { c :: cs_tail }
+;
+
+custom_type_definition_constructors:
+  | PIPE cs = custom_type_definition_constructors_no_leading_pipe { cs }
+  | cs = custom_type_definition_constructors_no_leading_pipe { cs }
+;
+
+custom_type_definition:
+  | TYPE name = LNAME ASSIGN cs = custom_type_definition_constructors { (name, cs) }
+;
 
 typed_function_name:
-  | n = NAME COLON t1 = vtype ARROW t2 = vtype { (n, t1, t2) }
+  | n = LNAME COLON t1 = vtype ARROW t2 = vtype { (n, t1, t2) }
 ;
 
 typed_name:
-  | n = NAME COLON t = vtype { (n, t) }
+  | n = LNAME COLON t = vtype { (n, t) }
 ;
 
 pattern:
   | LPAREN p = pattern RPAREN { p }
-  | LPAREN n = NAME COLON t = vtype RPAREN { PatName (n, t) }
+  | LPAREN n = LNAME COLON t = vtype RPAREN { PatName (n, t) }
   | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
 ;
 
@@ -116,7 +137,7 @@ expr:
   | e1 = expr LT e2 = expr { Lt ((), e1, e2) }  (* e1 < e2 *)
   | e1 = expr LTEQ e2 = expr { LtEq ((), e1, e2) }  (* e1 <= e2 *)
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }  (* if e1 then e2 else e3 *)
-  | LET l = NAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
+  | LET l = LNAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
   | LET REC LPAREN l = typed_function_name RPAREN ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
@@ -130,10 +151,10 @@ contained_expr:
   | TRUE { BoolLit ((), true) }
   | FALSE { BoolLit ((), false) }
   | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
-  | n = NAME { Var ((), n) }
+  | n = LNAME { Var ((), n) }
 ;
 
-(* TODO - custom type definitions *)
 prog:
-  | e = expr EOF { e }
+  | e = expr EOF { ([], e) }
+  | ct = custom_type_definition p = prog { let (p_cts, e) = p in (ct :: p_cts, e) }
 ;

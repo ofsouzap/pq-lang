@@ -23,7 +23,8 @@ rule token = parse
   | "bool" { BOOL }
   | "match" { MATCH }
   | "with" { WITH }
-  (* TODO - custom type definitions *)
+  | "type" { TYPE }
+  | "of" { OF }
   (* Operators and symbols *)
   | '+' { PLUS }
   | '-' { MINUS }
@@ -46,7 +47,8 @@ rule token = parse
   | "()" { UNIT_VAL }
   (* Literals and names *)
   | ['0'-'9']+ as n { INTLIT (int_of_string n) }
-  | ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '0'-'9' '_']* as name { NAME name }
+  | ['a'-'z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as name { LNAME name }
+  | ['A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as name { UNAME name }
   (* Misc *)
   | eof { EOF }
   | whitespace { token lexbuf }

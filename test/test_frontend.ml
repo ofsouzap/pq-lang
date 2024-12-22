@@ -253,29 +253,36 @@ let test_cases_variables : test_case list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("x", [ NAME "x" ], Ok (Var ((), "x")));
-      ("_", [ NAME "_" ], Ok (Var ((), "_")));
-      ("one_thing", [ NAME "one_thing" ], Ok (Var ((), "one_thing")));
-      ("_something", [ NAME "_something" ], Ok (Var ((), "_something")));
+      ("x", [ LNAME "x" ], Ok (Var ((), "x")));
+      ("one_thing", [ LNAME "one_thing" ], Ok (Var ((), "one_thing")));
       ( "let x = 1 in x end",
-        [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
+        [ LET; LNAME "x"; ASSIGN; INTLIT 1; IN; LNAME "x"; END ],
         Ok (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
       ( "let x = 1 in x end",
-        [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
+        [ LET; LNAME "x"; ASSIGN; INTLIT 1; IN; LNAME "x"; END ],
         Ok (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
       ( "let x = 1 in let y in x end",
         [
-          LET; NAME "x"; ASSIGN; INTLIT 1; IN; LET; NAME "y"; IN; NAME "x"; END;
+          LET;
+          LNAME "x";
+          ASSIGN;
+          INTLIT 1;
+          IN;
+          LET;
+          LNAME "y";
+          IN;
+          LNAME "x";
+          END;
         ],
         Error ParsingError );
       ( "let f = fun (x : int) -> true end in f 1 end",
         [
           LET;
-          NAME "f";
+          LNAME "f";
           ASSIGN;
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
@@ -283,7 +290,7 @@ let test_cases_variables : test_case list =
           TRUE;
           END;
           IN;
-          NAME "f";
+          LNAME "f";
           INTLIT 1;
           END;
         ],
@@ -300,18 +307,18 @@ let test_cases_functions : test_case list =
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( "fun (x : int) -> x end",
-        [ FUN; LPAREN; NAME "x"; COLON; INT; RPAREN; ARROW; NAME "x"; END ],
+        [ FUN; LPAREN; LNAME "x"; COLON; INT; RPAREN; ARROW; LNAME "x"; END ],
         Ok (Fun ((), ("x", VTypeInt), Var ((), "x"))) );
       ( "fun (x : int) -> x + 1 end",
         [
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "x";
+          LNAME "x";
           PLUS;
           INTLIT 1;
           END;
@@ -322,21 +329,21 @@ let test_cases_functions : test_case list =
         [
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
           FUN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "x";
+          LNAME "x";
           PLUS;
-          NAME "y";
+          LNAME "y";
           END;
           END;
         ],
@@ -351,12 +358,12 @@ let test_cases_functions : test_case list =
           LPAREN;
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "x";
+          LNAME "x";
           PLUS;
           INTLIT 1;
           END;
@@ -369,10 +376,10 @@ let test_cases_functions : test_case list =
                Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
                IntLit ((), 4) )) );
       ( "x 5",
-        [ NAME "x"; INTLIT 5 ],
+        [ LNAME "x"; INTLIT 5 ],
         Ok (App ((), Var ((), "x"), IntLit ((), 5))) );
       ( "x y",
-        [ NAME "x"; NAME "y" ],
+        [ LNAME "x"; LNAME "y" ],
         Ok (App ((), Var ((), "x"), Var ((), "y"))) );
       ( "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x else \
          y end end end end ) true 1 2",
@@ -380,31 +387,31 @@ let test_cases_functions : test_case list =
           LPAREN;
           FUN;
           LPAREN;
-          NAME "b";
+          LNAME "b";
           COLON;
           BOOL;
           RPAREN;
           ARROW;
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
           FUN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
           IF;
-          NAME "b";
+          LNAME "b";
           THEN;
-          NAME "x";
+          LNAME "x";
           ELSE;
-          NAME "y";
+          LNAME "y";
           END;
           END;
           END;
@@ -439,7 +446,7 @@ let test_cases_functions : test_case list =
                    IntLit ((), 1) ),
                IntLit ((), 2) )) );
       ( "f1 f2 f3",
-        [ NAME "f1"; NAME "f2"; NAME "f3" ],
+        [ LNAME "f1"; LNAME "f2"; LNAME "f3" ],
         Ok (App ((), App ((), Var ((), "f1"), Var ((), "f2")), Var ((), "f3")))
       );
     ]
@@ -454,7 +461,7 @@ let test_cases_recursion : test_case list =
           LET;
           REC;
           LPAREN;
-          NAME "f";
+          LNAME "f";
           COLON;
           INT;
           ARROW;
@@ -463,30 +470,30 @@ let test_cases_recursion : test_case list =
           ASSIGN;
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
           IF;
-          NAME "x";
+          LNAME "x";
           EQ;
           INTLIT 0;
           THEN;
           INTLIT 0;
           ELSE;
-          NAME "x";
+          LNAME "x";
           PLUS;
-          NAME "f";
+          LNAME "f";
           LPAREN;
-          NAME "x";
+          LNAME "x";
           MINUS;
           INTLIT 1;
           RPAREN;
           END;
           END;
           IN;
-          NAME "f";
+          LNAME "f";
           INTLIT 5;
           END;
         ],
@@ -516,7 +523,7 @@ let test_cases_recursion : test_case list =
           LET;
           REC;
           LPAREN;
-          NAME "f";
+          LNAME "f";
           COLON;
           INT;
           ARROW;
@@ -525,7 +532,7 @@ let test_cases_recursion : test_case list =
           ASSIGN;
           INTLIT 2;
           IN;
-          NAME "f";
+          LNAME "f";
           END;
         ],
         Error ParsingError );
@@ -534,7 +541,7 @@ let test_cases_recursion : test_case list =
           LET;
           REC;
           LPAREN;
-          NAME "f";
+          LNAME "f";
           COLON;
           INT;
           ARROW;
@@ -543,15 +550,15 @@ let test_cases_recursion : test_case list =
           ASSIGN;
           FUN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
           IN;
-          NAME "f";
+          LNAME "f";
           INTLIT 5;
           END;
         ],
@@ -572,15 +579,15 @@ let test_cases_match : test_case list =
         "match x with (y : int) -> y end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
         ],
         Ok
@@ -593,16 +600,16 @@ let test_cases_match : test_case list =
         "match x with | (y : int) -> y end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           PIPE;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
         ],
         Ok
@@ -622,7 +629,7 @@ let test_cases_match : test_case list =
           IF;
           TRUE;
           THEN;
-          NAME "x";
+          LNAME "x";
           ELSE;
           INTLIT 4;
           END;
@@ -630,12 +637,12 @@ let test_cases_match : test_case list =
           RPAREN;
           WITH;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
         ],
         Ok
@@ -651,23 +658,23 @@ let test_cases_match : test_case list =
         "match x with (y : int) -> y | (z : int) -> z end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           PIPE;
           LPAREN;
-          NAME "z";
+          LNAME "z";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "z";
+          LNAME "z";
           END;
         ],
         Ok
@@ -683,23 +690,23 @@ let test_cases_match : test_case list =
         "match x with ((y : int), (z : bool)) -> y end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           LPAREN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           COMMA;
           LPAREN;
-          NAME "z";
+          LNAME "z";
           COLON;
           BOOL;
           RPAREN;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
         ],
         Ok
@@ -716,24 +723,24 @@ let test_cases_match : test_case list =
          else z2 end end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           LPAREN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           BOOL;
           RPAREN;
           COMMA;
           LPAREN;
           LPAREN;
-          NAME "z1";
+          LNAME "z1";
           COLON;
           BOOL;
           RPAREN;
           COMMA;
           LPAREN;
-          NAME "z2";
+          LNAME "z2";
           COLON;
           BOOL;
           RPAREN;
@@ -741,11 +748,11 @@ let test_cases_match : test_case list =
           RPAREN;
           ARROW;
           IF;
-          NAME "y";
+          LNAME "y";
           THEN;
-          NAME "z1";
+          LNAME "z1";
           ELSE;
-          NAME "z2";
+          LNAME "z2";
           END;
           END;
         ],

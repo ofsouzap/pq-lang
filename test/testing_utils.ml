@@ -41,6 +41,8 @@ let sexp_of_token = function
   | BOOL -> Sexp.Atom "BOOL"
   | MATCH -> Sexp.Atom "MATCH"
   | WITH -> Sexp.Atom "WITH"
+  | TYPE -> Sexp.Atom "TYPE"
+  | OF -> Sexp.Atom "OF"
   | PLUS -> Sexp.Atom "PLUS"
   | MINUS -> Sexp.Atom "MINUS"
   | STAR -> Sexp.Atom "STAR"
@@ -61,7 +63,8 @@ let sexp_of_token = function
   | PIPE -> Sexp.Atom "PIPE"
   | UNIT_VAL -> Sexp.Atom "UNIT_VAL"
   | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
-  | NAME n -> Sexp.List [ Sexp.Atom "NAME"; Sexp.Atom n ]
+  | LNAME n -> Sexp.List [ Sexp.Atom "LNAME"; Sexp.Atom n ]
+  | UNAME n -> Sexp.List [ Sexp.Atom "UNAME"; Sexp.Atom n ]
   | EOF -> Sexp.Atom "EOF"
 
 let token_printer tokens =
@@ -93,6 +96,8 @@ let lexer_keywords : string list =
     "bool";
     "match";
     "with";
+    "type";
+    "of";
   ]
 
 let varname_gen : string QCheck.Gen.t =
