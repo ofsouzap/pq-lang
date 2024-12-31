@@ -1,5 +1,6 @@
 open Core
 open Utils
+open Custom_types
 open Vtype
 open Pattern
 open Ast
@@ -51,6 +52,50 @@ let print_typing_error = function
   | PatternTypingError err ->
       sprintf "Error typing pattern: %s" (print_pattern_typing_error err)
 
+module type TypingTypeContext = sig
+  type t
+
+  val empty : t
+  val add_custom : t -> custom_type -> t
+  val find_custom : t -> string -> custom_type option
+  val singleton_custom : custom_type -> t
+  val append : t -> t -> t
+  val custom_exists : t -> string -> bool
+end
+
+module CustomTypeComparatorByName = struct
+  type t = custom_type
+
+  let compare ((ct1_name, _) : custom_type) ((ct2_name, _) : custom_type) =
+    String.compare ct1_name ct2_name
+
+  let sexp_of_t = sexp_of_custom_type
+  let t_of_sexp = custom_type_of_sexp
+end
+
+module CustomTypeSetByName = Set.Make (CustomTypeComparatorByName)
+
+module SetTypingTypeContext : TypingTypeContext = struct
+  type t = { custom_types : CustomTypeSetByName.t }
+
+  let empty : t = { custom_types = CustomTypeSetByName.empty }
+
+  let add_custom (ctx : t) (ct : custom_type) : t =
+    { custom_types = Set.add ctx.custom_types ct }
+
+  let find_custom (ctx : t) (ct_name : string) : custom_type option =
+    Set.find ctx.custom_types ~f:(fun ((name, _) : custom_type) ->
+        equal_string name ct_name)
+
+  let singleton_custom (ct : custom_type) : t = add_custom empty ct
+
+  let append (ctx1 : t) (ctx2 : t) : t =
+    { custom_types = Set.union ctx1.custom_types ctx2.custom_types }
+
+  let custom_exists (ctx : t) (ct_name : string) : bool =
+    Set.mem ctx.custom_types (ct_name, [])
+end
+
 module type TypingVarContext = sig
   type t
 
@@ -76,21 +121,24 @@ module ListTypingVarContext : TypingVarContext = struct
   let exists ctx x = match find ctx x with None -> false | Some _ -> true
 end
 
-module TypeChecker (Ctx : TypingVarContext) = struct
-  let rec type_pattern (ctx : Ctx.t) (orig_p : pattern) :
-      (vtype * Ctx.t, pattern_typing_error) Result.t =
+module TypeChecker (TypeCtx : TypingTypeContext) (VarCtx : TypingVarContext) =
+struct
+  let rec type_pattern (((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) as ctx)
+      (orig_p : pattern) : (vtype * VarCtx.t, pattern_typing_error) Result.t =
     let open Result in
     match orig_p with
     | PatName (x_name, x_t) ->
-        if Ctx.exists ctx x_name then Error (MultipleVariableDefinitions x_name)
-        else Ok (x_t, Ctx.add ctx x_name x_t)
+        if VarCtx.exists var_ctx x_name then
+          Error (MultipleVariableDefinitions x_name)
+        else Ok (x_t, VarCtx.add var_ctx x_name x_t)
     | PatPair (p1, p2) ->
-        type_pattern ctx p1 >>= fun (p1_t, ctx_from_p1) ->
-        type_pattern ctx_from_p1 p2 >>= fun (p2_t, ctx_final) ->
-        Ok (VTypePair (p1_t, p2_t), ctx_final)
+        type_pattern ctx p1 >>= fun (p1_t, var_ctx_from_p1) ->
+        type_pattern (type_ctx, var_ctx_from_p1) p2
+        >>= fun (p2_t, var_ctx_final) ->
+        Ok (VTypePair (p1_t, p2_t), var_ctx_final)
 
-  let rec type_expr (ctx : Ctx.t) (orig_e : 'a expr) :
-      ((vtype * 'a) expr, typing_error) Result.t =
+  let rec type_expr (((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) as ctx)
+      (orig_e : 'a expr) : ((vtype * 'a) expr, typing_error) Result.t =
     let open Result in
     let e_type (e : (vtype * 'a) expr) : vtype = e |> expr_node_val |> fst in
     let be_of_type (exp : vtype) (e : (vtype * 'a) expr) :
@@ -173,17 +221,17 @@ module TypeChecker (Ctx : TypingVarContext) = struct
         let t2 = e_type e2' in
         be_of_type t2 e3' >>= fun _ -> Ok (If ((t2, v), e1', e2', e3'))
     | Var (v, xname) -> (
-        match Ctx.find ctx xname with
+        match VarCtx.find var_ctx xname with
         | Some t -> Ok (Var ((t, v), xname))
         | None -> Error (UndefinedVariable xname))
     | Let (v, xname, e1, e2) ->
         type_expr ctx e1 >>= fun e1' ->
         let t1 = e_type e1' in
-        type_expr (Ctx.add ctx xname t1) e2 >>= fun e2' ->
+        type_expr (type_ctx, VarCtx.add var_ctx xname t1) e2 >>= fun e2' ->
         let t2 = e_type e2' in
         Ok (Let ((t2, v), xname, e1', e2'))
     | Fun (v, (xname, xtype), e') ->
-        type_expr (Ctx.add ctx xname xtype) e' >>= fun e' ->
+        type_expr (type_ctx, VarCtx.add var_ctx xname xtype) e' >>= fun e' ->
         let t = e_type e' in
         Ok (Fun ((VTypeFun (xtype, t), v), (xname, xtype), e'))
     | App (v, e1, e2) -> (
@@ -200,7 +248,9 @@ module TypeChecker (Ctx : TypingVarContext) = struct
       ->
         let ftype = VTypeFun (ftype1, ftype2) in
         if equal_vtype ftype1 xtype then
-          type_expr (Ctx.add (Ctx.add ctx fname ftype) xname xtype) e
+          type_expr
+            (type_ctx, VarCtx.add (VarCtx.add var_ctx fname ftype) xname xtype)
+            e
           >>= fun e' ->
           be_of_type ftype2 e' >>= fun _ ->
           Ok (Fix ((ftype, v), fvals, xvals, e'))
@@ -218,13 +268,13 @@ module TypeChecker (Ctx : TypingVarContext) = struct
               ((p : pattern), (c_e : 'a expr))
             ->
             (* First, try type the pattern *)
-            match type_pattern Ctx.empty p with
+            match type_pattern (type_ctx, VarCtx.empty) p with
             | Ok (p_t, p_ctx) ->
                 (* Check the pattern's type *)
                 if equal_vtype t_in p_t then
-                  let case_ctx = Ctx.append ctx p_ctx in
+                  let case_ctx = VarCtx.append var_ctx p_ctx in
                   (* Then, type the case's expression using the extended context *)
-                  type_expr case_ctx c_e >>= fun c_e' ->
+                  type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
                   let t_c_e = e_type c_e' in
                   match acc with
                   | First _ ->
@@ -244,8 +294,11 @@ module TypeChecker (Ctx : TypingVarContext) = struct
     | Constructor _ -> failwith "TODO"
 end
 
-module ListTypeChecker = TypeChecker (ListTypingVarContext)
+module SimpleTypeChecker =
+  TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 
 let type_expr (e : 'a Ast.expr) :
     ((Vtype.vtype * 'a) Ast.expr, typing_error) result =
-  ListTypeChecker.type_expr ListTypingVarContext.empty e
+  SimpleTypeChecker.type_expr
+    (SetTypingTypeContext.empty, ListTypingVarContext.empty)
+    e

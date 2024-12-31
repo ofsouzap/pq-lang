@@ -229,7 +229,7 @@ let test_cases_typing_with_var_ctx : test list =
     in
     let name = sprintf "[with context] %s" (e |> ast_to_source_code) in
     name >:: fun _ ->
-    let out = ListTypeChecker.type_expr ctx e in
+    let out = SimpleTypeChecker.type_expr (SetTypingTypeContext.empty, ctx) e in
     match (out, t) with
     | Ok e', Ok exp_t ->
         let out_t = e' |> expr_node_val |> fst in

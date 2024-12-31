@@ -1,3 +1,4 @@
+open Custom_types
 open Vtype
 open Pattern
 
@@ -31,6 +32,32 @@ type typing_error =
 val equal_typing_error_variant : typing_error -> typing_error -> bool
 val print_typing_error : typing_error -> string
 
+(** Typing context for types (e.g. if a type of a certain name exists) *)
+module type TypingTypeContext = sig
+  type t
+
+  (** Creates an empty typing context *)
+  val empty : t
+
+  (** Adds a new custom type with its type to the context, overwriting any existing values *)
+  val add_custom : t -> custom_type -> t
+
+  (** Looks up a custom type, by name, in the context *)
+  val find_custom : t -> string -> custom_type option
+
+  (** Create a context with a single custom type *)
+  val singleton_custom : custom_type -> t
+
+  (** Appends two type contexts. When overwriting is necessary, the second argument overwrites the first *)
+  val append : t -> t -> t
+
+  (** Check whether a custom type exists in the context, by name *)
+  val custom_exists : t -> string -> bool
+end
+
+(** Typing context of types using a simple set-based approach *)
+module SetTypingTypeContext : TypingTypeContext
+
 (** Typing contexts of variables *)
 module type TypingVarContext = sig
   type t
@@ -58,22 +85,28 @@ end
 module ListTypingVarContext : TypingVarContext
 
 (** Provides type-checking functionality *)
-module TypeChecker : functor (Ctx : TypingVarContext) -> sig
-  (* TODO - custom type definitions *)
-
+module TypeChecker : functor
+  (TypeCtx : TypingTypeContext)
+  (VarCtx : TypingVarContext)
+  -> sig
   (** Type checks a pattern in the given context, returning either the pattern's type and declared variables, or a pattern typing error *)
   val type_pattern :
-    Ctx.t -> pattern -> (vtype * Ctx.t, pattern_typing_error) Result.t
+    TypeCtx.t * VarCtx.t ->
+    pattern ->
+    (vtype * VarCtx.t, pattern_typing_error) Result.t
 
   (** Type checks an expression in the given context, returning either
       a typed expression or a typing error *)
   val type_expr :
-    Ctx.t -> 'a Ast.expr -> ((vtype * 'a) Ast.expr, typing_error) result
+    TypeCtx.t * VarCtx.t ->
+    'a Ast.expr ->
+    ((vtype * 'a) Ast.expr, typing_error) result
 end
 
 (** An implementation of a type checker using a list typing variable context *)
-module ListTypeChecker : sig
-  include module type of TypeChecker (ListTypingVarContext)
+module SimpleTypeChecker : sig
+  include module type of
+      TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 end
 
 (** Type an AST expression using the default context implementation with an empty typing context *)
