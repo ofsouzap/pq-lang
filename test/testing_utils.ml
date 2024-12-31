@@ -52,7 +52,7 @@ let sexp_of_token = function
   | BOR -> Sexp.Atom "BOR"
   | BAND -> Sexp.Atom "BAND"
   | ASSIGN -> Sexp.Atom "ASSIGN"
-  | EQ -> Sexp.Atom "EQ"
+  | EQUATE -> Sexp.Atom "EQUATE"
   | GT -> Sexp.Atom "GT"
   | GTEQ -> Sexp.Atom "GTEQ"
   | LT -> Sexp.Atom "LT"

@@ -114,10 +114,10 @@ let test_cases_booleans : test_case_no_custom_types list =
         [ TRUE; BOR; FALSE ],
         Ok (BOr ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true == false",
-        [ TRUE; EQ; FALSE ],
+        [ TRUE; EQUATE; FALSE ],
         Ok (Eq ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true == false || true",
-        [ TRUE; EQ; FALSE; BOR; TRUE ],
+        [ TRUE; EQUATE; FALSE; BOR; TRUE ],
         Ok
           (BOr
              ( (),
@@ -160,7 +160,7 @@ let test_cases_integer_comparisons : test_case_no_custom_types list =
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( "0 == 0",
-        [ INTLIT 0; EQ; INTLIT 0 ],
+        [ INTLIT 0; EQUATE; INTLIT 0 ],
         Ok (Eq ((), IntLit ((), 0), IntLit ((), 0))) );
       ( "1 > 0",
         [ INTLIT 1; GT; INTLIT 0 ],
@@ -174,7 +174,7 @@ let test_cases_integer_comparisons : test_case_no_custom_types list =
       ( "0 <= 1",
         [ INTLIT 0; LTEQ; INTLIT 1 ],
         Ok (LtEq ((), IntLit ((), 0), IntLit ((), 1))) );
-      ("== <=", [ EQ; LTEQ ], Error ParsingError);
+      ("== <=", [ EQUATE; LTEQ ], Error ParsingError);
     ]
 
 let test_cases_if_then_else : test_case_no_custom_types list =
@@ -483,7 +483,7 @@ let test_cases_recursion : test_case_no_custom_types list =
           ARROW;
           IF;
           LNAME "x";
-          EQ;
+          EQUATE;
           INTLIT 0;
           THEN;
           INTLIT 0;

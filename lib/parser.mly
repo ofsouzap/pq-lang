@@ -36,11 +36,9 @@ let add_custom_type_definition_to_program (p : plain_program) (ct : custom_type)
   }
 %}
 
-(* TODO - rename EQ token to EQUATE to be more-clearly distinguished from ASSIGN *)
-
 // Tokens
 %token END IF THEN ELSE LET IN TRUE FALSE FUN REC UNIT INT BOOL MATCH WITH TYPE OF
-%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQ GT GTEQ LT LTEQ ARROW COLON COMMA PIPE UNIT_VAL
+%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQUATE GT GTEQ LT LTEQ ARROW COLON COMMA PIPE UNIT_VAL
 %token <int> INTLIT
 %token <string> LNAME UNAME
 %token EOF
@@ -50,7 +48,7 @@ let add_custom_type_definition_to_program (p : plain_program) (ct : custom_type)
 %left BNOT // ~
 %left BOR // ||
 %left BAND // &&
-%nonassoc EQ // =
+%nonassoc EQUATE // ==
 %nonassoc GT GTEQ LT LTEQ // > >= < <=
 %left PLUS MINUS // + -
 %left STAR // *
@@ -141,7 +139,7 @@ expr:
   | BNOT e = expr { BNot ((), e) }  (* ~ e *)
   | e1 = expr BOR e2 = expr { BOr ((), e1, e2) }  (* e1 || e2 *)
   | e1 = expr BAND e2 = expr { BAnd ((), e1, e2) }  (* e1 && e2 *)
-  | e1 = expr EQ e2 = expr { Eq ((), e1, e2) }  (* e1 == e2 *)
+  | e1 = expr EQUATE e2 = expr { Eq ((), e1, e2) }  (* e1 == e2 *)
   | e1 = expr GT e2 = expr { Gt ((), e1, e2) }  (* e1 > e2 *)
   | e1 = expr GTEQ e2 = expr { GtEq ((), e1, e2) }  (* e1 >= e2 *)
   | e1 = expr LT e2 = expr { Lt ((), e1, e2) }  (* e1 < e2 *)

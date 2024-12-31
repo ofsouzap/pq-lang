@@ -35,7 +35,7 @@ rule token = parse
   | "||" { BOR }
   | "&&" { BAND }
   | '=' { ASSIGN }
-  | "==" { EQ }
+  | "==" { EQUATE }
   | ">" { GT }
   | ">=" { GTEQ }
   | "<" { LT }
