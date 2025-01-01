@@ -212,6 +212,7 @@ let test_cases_expr_typing : test list =
                 (PatName ("y", VTypeInt), IntLit ((), 5));
               ] ),
         Error (TypeMismatch (VTypeBool, VTypeInt)) );
+      (* TODO - test cases for custom type constructors *)
     ]
 
 let test_cases_expr_typing_full_check : test list =
@@ -277,7 +278,7 @@ let test_cases_typing_with_var_ctx : test list =
         ~f:(fun acc (xname, xtype) -> ListTypingVarContext.add acc xname xtype)
         ctx_list
     in
-    let name = sprintf "[with context] %s" (e |> ast_to_source_code) in
+    let name = sprintf "[with var context] %s" (e |> ast_to_source_code) in
     name >:: fun _ ->
     let out = SimpleTypeChecker.type_expr (SetTypingTypeContext.empty, ctx) e in
     match (out, t) with
@@ -303,6 +304,8 @@ let test_cases_typing_with_var_ctx : test list =
         Fun ((), ("x", VTypeInt), IntLit ((), 2)),
         Ok (VTypeFun (VTypeInt, VTypeInt)) );
     ]
+
+(* TODO - type context tester module and implementations *)
 
 module MakeVariableContextTester (Ctx : TypingVarContext) = struct
   let create_test_add_then_get ((ctx : Ctx.t), (xname : string), (xtype : vtype))
@@ -357,7 +360,7 @@ end
 
 (** An implementation of a variable context using functions.
     It isn't efficient, but is just meant to be used
-    as a ground truth to test against the actually-implementations *)
+    as a ground truth to test against the actually-used implementations *)
 module FunctionTypingVarContext : TypingVarContext = struct
   type t = string -> vtype option
 
@@ -514,6 +517,7 @@ let test_cases_arb_compound_expr_typing : test list =
         >>= fun (xname, t2) ->
         expr_gen t2 >|= fun e ->
         (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );
+      (* TODO - test cases for custom type constructors *)
     ]
 
 let test_cases_typing_maintains_structure : test =
