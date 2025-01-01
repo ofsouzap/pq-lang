@@ -878,7 +878,39 @@ let test_cases_custom_type_defn : test_case_full_prog list =
           INTLIT 1;
         ],
         Error ParsingError );
-      (* TODO - recursive data type *)
+      ( (* Recursive type definition *)
+        {|
+        type int_list = Nil of unit | Cons of int * int_list
+
+        1
+        |},
+        [
+          TYPE;
+          LNAME "int_list";
+          ASSIGN;
+          UNAME "Nil";
+          OF;
+          UNIT;
+          PIPE;
+          UNAME "Cons";
+          OF;
+          INT;
+          STAR;
+          LNAME "int_list";
+          INTLIT 1;
+        ],
+        Ok
+          {
+            custom_types =
+              [
+                ( "int_list",
+                  [
+                    ("Nil", VTypeUnit);
+                    ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                  ] );
+              ];
+            e = IntLit ((), 1);
+          } );
     ]
 
 let test_cases_custom_type_referencing : test_case_no_custom_types list =
