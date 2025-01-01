@@ -6,9 +6,6 @@ open Utils
 open Vtype
 open Pattern
 
-(* TODO - have programs composed of optional custom type defintions then a concluding expression to evaluate, instead of just allowing a single main expression to evaluate.
-   Defining functions can just be done with "let f = ... in" *)
-
 (**
   Expressions in the language.
   Tagged with arbitrary values on each node.
@@ -51,8 +48,6 @@ type 'a expr =
   | Constructor of 'a * string * 'a expr
       (** Constructor for a custom data type *)
 [@@deriving sexp, equal]
-
-(* TODO - custom type definitions *)
 
 (** Extract the value attached to a single node of a tagged AST expression *)
 val expr_node_val : 'a expr -> 'a

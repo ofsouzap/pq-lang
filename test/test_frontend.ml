@@ -1038,10 +1038,7 @@ let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
 let tests_full_prog (test_create_func : test_case_full_prog -> test) : test list
     =
   let f = test_create_func in
-  [
-    "Custom type definition" >::: List.map ~f test_cases_custom_type_defn;
-    (* TODO - tests for construction of custom data type values *)
-  ]
+  [ "Custom type definition" >::: List.map ~f test_cases_custom_type_defn ]
 
 let suite =
   "Frontend Tests"
