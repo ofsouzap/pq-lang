@@ -36,11 +36,12 @@ end
 let create_test ((name : string), (inp : string), (exp : exec_res)) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
-  let ast = (Parser.prog Lexer.token lexbuf).e in
+  let prog = Parser.prog Lexer.token lexbuf in
   let typed_e =
     match
-      Typing.type_expr ~type_ctx:SetTypingTypeContext.empty ast
-      (* TODO - implement with custom type definitions to make a type context *)
+      Typing.type_expr
+        ~type_ctx:(SetTypingTypeContext.create ~custom_types:prog.custom_types)
+        prog.e
     with
     | Ok x -> x
     | Error _ -> failwith "Failed to type expression"
