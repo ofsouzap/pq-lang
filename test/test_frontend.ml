@@ -775,6 +775,59 @@ let test_cases_match : test_case_no_custom_types list =
                        ),
                      If ((), Var ((), "y"), Var ((), "z1"), Var ((), "z2")) );
                  ] )) );
+      ( (* Matching custom data type constructor *)
+        "match x with (Nil (z : int)) -> 0 | (Cons ((h : int), (ts : \
+         int_list))) -> 1 end",
+        [
+          MATCH;
+          LNAME "x";
+          WITH;
+          LPAREN;
+          UNAME "Nil";
+          LPAREN;
+          LNAME "z";
+          COLON;
+          INT;
+          RPAREN;
+          RPAREN;
+          ARROW;
+          INTLIT 0;
+          PIPE;
+          LPAREN;
+          UNAME "Cons";
+          LPAREN;
+          LPAREN;
+          LNAME "h";
+          COLON;
+          INT;
+          RPAREN;
+          COMMA;
+          LPAREN;
+          LNAME "ts";
+          COLON;
+          LNAME "int_list";
+          RPAREN;
+          RPAREN;
+          RPAREN;
+          ARROW;
+          INTLIT 1;
+          END;
+        ],
+        Ok
+          (Match
+             ( (),
+               Var ((), "x"),
+               Nonempty_list.from_list_unsafe
+                 [
+                   ( PatConstructor ("Nil", PatName ("z", VTypeInt)),
+                     IntLit ((), 0) );
+                   ( PatConstructor
+                       ( "Cons",
+                         PatPair
+                           ( PatName ("h", VTypeInt),
+                             PatName ("ts", VTypeCustom "int_list") ) ),
+                     IntLit ((), 1) );
+                 ] )) );
     ]
 
 let test_cases_custom_type_defn : test_case_full_prog list =

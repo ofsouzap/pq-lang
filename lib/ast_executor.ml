@@ -136,6 +136,9 @@ let rec match_pattern (p : pattern) (v : value) : (varname * value) list option
       match_pattern p1 v1 >>= fun m1 ->
       match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)
   | PatPair _, _ -> None
+  | PatConstructor (p_c_name, p1), CustomTypeValue (_, v_c_name, v') ->
+      if equal_string p_c_name v_c_name then match_pattern p1 v' else None
+  | PatConstructor _, _ -> None
 
 (** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =

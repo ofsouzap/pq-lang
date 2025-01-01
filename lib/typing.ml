@@ -5,17 +5,30 @@ open Vtype
 open Pattern
 open Ast
 
-type pattern_typing_error = MultipleVariableDefinitions of string
+type pattern_typing_error =
+  | MultipleVariableDefinitions of string
+  | UndefinedCustomTypeConstructor of string
+  | PatternTypeMismatch of vtype * vtype
 [@@deriving sexp, equal]
 
 let equal_pattern_typing_error_variant x y =
   match (x, y) with
   | MultipleVariableDefinitions _, MultipleVariableDefinitions _ -> true
+  | MultipleVariableDefinitions _, _ -> false
+  | UndefinedCustomTypeConstructor _, UndefinedCustomTypeConstructor _ -> true
+  | UndefinedCustomTypeConstructor _, _ -> false
+  | PatternTypeMismatch _, PatternTypeMismatch _ -> true
+  | PatternTypeMismatch _, _ -> false
 
 let print_pattern_typing_error = function
   | MultipleVariableDefinitions xname ->
       sprintf "Variable named \"%s\" has been defined twice in the pattern"
         xname
+  | UndefinedCustomTypeConstructor c_name ->
+      sprintf "Undefined custom type constructor: %s" c_name
+  | PatternTypeMismatch (t1, t2) ->
+      sprintf "Type mismatch in pattern: expected %s but got %s"
+        (vtype_to_source_code t1) (vtype_to_source_code t2)
 
 type typing_error =
   | UndefinedVariable of string
@@ -170,6 +183,13 @@ struct
         type_pattern (type_ctx, var_ctx_from_p1) p2
         >>= fun (p2_t, var_ctx_final) ->
         Ok (VTypePair (p1_t, p2_t), var_ctx_final)
+    | PatConstructor (c_name, p) -> (
+        match TypeCtx.find_custom_with_constructor type_ctx c_name with
+        | None -> Error (UndefinedCustomTypeConstructor c_name)
+        | Some ((ct_name, _), (_, c_t)) ->
+            type_pattern ctx p >>= fun (p_t, var_ctx_from_p) ->
+            if equal_vtype c_t p_t then Ok (VTypeCustom ct_name, var_ctx_from_p)
+            else Error (PatternTypeMismatch (c_t, p_t)))
 
   let type_expr :
       TypeCtx.t * VarCtx.t ->

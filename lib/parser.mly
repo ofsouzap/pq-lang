@@ -114,6 +114,7 @@ pattern:
   | LPAREN p = pattern RPAREN { p }
   | LPAREN n = LNAME COLON t = vtype RPAREN { PatName (n, t) }
   | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
+  | LPAREN cname = UNAME p = pattern RPAREN { PatConstructor (cname, p) }
 ;
 
 match_case:

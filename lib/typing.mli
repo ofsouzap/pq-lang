@@ -6,6 +6,10 @@ open Pattern
 type pattern_typing_error =
   | MultipleVariableDefinitions of string
       (** Multiple definitions of some variable name in the pattern have been found *)
+  | UndefinedCustomTypeConstructor of string
+      (** The specified type constructor was used but hasn't been defined *)
+  | PatternTypeMismatch of vtype * vtype
+      (** A pattern was expected to have the first type but had the second *)
 [@@deriving sexp, equal]
 
 val equal_pattern_typing_error_variant :

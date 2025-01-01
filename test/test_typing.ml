@@ -215,6 +215,7 @@ let test_cases_expr_typing : test list =
                 (PatName ("y", VTypeInt), IntLit ((), 5));
               ] ),
         Error (TypeMismatch (VTypeBool, VTypeInt)) );
+      (* TODO - matching with PatConstructor *)
       ( None,
         Constructor ((), "Nil", UnitLit ()),
         Error (UndefinedCustomTypeConstructor "Nil") );

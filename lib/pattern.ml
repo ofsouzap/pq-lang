@@ -1,7 +1,10 @@
 open Core
 open Vtype
 
-type pattern = PatName of string * vtype | PatPair of pattern * pattern
+type pattern =
+  | PatName of string * vtype
+  | PatPair of pattern * pattern
+  | PatConstructor of string * pattern
 [@@deriving sexp, equal]
 
 let rec pattern_to_source_code = function
@@ -10,3 +13,5 @@ let rec pattern_to_source_code = function
       sprintf "(%s), (%s)"
         (pattern_to_source_code p1)
         (pattern_to_source_code p2)
+  | PatConstructor (cname, p) ->
+      sprintf "%s (%s)" cname (pattern_to_source_code p)

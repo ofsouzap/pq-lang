@@ -362,6 +362,7 @@ let test_cases_match : basic_test_case list =
                       Var ((), "y") );
                   ] ) ),
         Ok (Pair (Bool true, Bool true)) );
+      (* TODO - matching with PatConstructor *)
     ]
 
 let test_cases_constructor : basic_test_case list =
