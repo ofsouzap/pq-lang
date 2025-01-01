@@ -41,17 +41,11 @@ module type TypingTypeContext = sig
   (** Creates an empty typing context *)
   val empty : t
 
-  (** Adds a new custom type with its type to the context, overwriting any existing values *)
-  val add_custom : t -> custom_type -> t
+  (** Creates a typing context using the provided values *)
+  val create : custom_types:custom_type list -> t
 
   (** Looks up a custom type, by name, in the context *)
   val find_custom : t -> string -> custom_type option
-
-  (** Create a context with a single custom type *)
-  val singleton_custom : custom_type -> t
-
-  (** Appends two type contexts. When overwriting is necessary, the second argument overwrites the first *)
-  val append : t -> t -> t
 
   (** Check whether a custom type exists in the context, by name *)
   val custom_exists : t -> string -> bool

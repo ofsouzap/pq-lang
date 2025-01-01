@@ -59,10 +59,8 @@ module type TypingTypeContext = sig
   type t
 
   val empty : t
-  val add_custom : t -> custom_type -> t
+  val create : custom_types:custom_type list -> t
   val find_custom : t -> string -> custom_type option
-  val singleton_custom : custom_type -> t
-  val append : t -> t -> t
   val custom_exists : t -> string -> bool
 
   val find_custom_with_constructor :
@@ -86,17 +84,12 @@ module SetTypingTypeContext : TypingTypeContext = struct
 
   let empty : t = { custom_types = CustomTypeSetByName.empty }
 
-  let add_custom (ctx : t) (ct : custom_type) : t =
-    { custom_types = Set.add ctx.custom_types ct }
+  let create ~(custom_types : custom_type list) : t =
+    { custom_types = CustomTypeSetByName.of_list custom_types }
 
   let find_custom (ctx : t) (ct_name : string) : custom_type option =
     Set.find ctx.custom_types ~f:(fun ((name, _) : custom_type) ->
         equal_string name ct_name)
-
-  let singleton_custom (ct : custom_type) : t = add_custom empty ct
-
-  let append (ctx1 : t) (ctx2 : t) : t =
-    { custom_types = Set.union ctx1.custom_types ctx2.custom_types }
 
   let custom_exists (ctx : t) (ct_name : string) : bool =
     Set.mem ctx.custom_types (ct_name, [])
