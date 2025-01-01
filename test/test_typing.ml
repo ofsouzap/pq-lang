@@ -212,7 +212,30 @@ let test_cases_expr_typing : test list =
                 (PatName ("y", VTypeInt), IntLit ((), 5));
               ] ),
         Error (TypeMismatch (VTypeBool, VTypeInt)) );
-      (* TODO - test cases for custom type constructors *)
+      ( None,
+        Constructor ((), "Nil", UnitLit ()),
+        Error (UndefinedCustomTypeConstructor "Nil") );
+      ( Some (SetTypingTypeContext.singleton_custom ("Empty", [])),
+        Constructor ((), "Nil", UnitLit ()),
+        Error (UndefinedCustomTypeConstructor "Nil") );
+      ( Some
+          (SetTypingTypeContext.singleton_custom
+             ( "List",
+               [
+                 ("Leaf", VTypeInt);
+                 ("Cons", VTypePair (VTypeInt, VTypeCustom "List"));
+               ] )),
+        Constructor ((), "Leaf", UnitLit ()),
+        Error (TypeMismatch (VTypeInt, VTypeUnit)) );
+      ( Some
+          (SetTypingTypeContext.singleton_custom
+             ( "List",
+               [
+                 ("Nil", VTypeUnit);
+                 ("Cons", VTypePair (VTypeInt, VTypeCustom "List"));
+               ] )),
+        Constructor ((), "Nil", UnitLit ()),
+        Ok (VTypeCustom "List") );
     ]
 
 let test_cases_expr_typing_full_check : test list =
