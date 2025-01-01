@@ -30,8 +30,11 @@ let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
            (* TODO - use arbitrary type context once this added to typed expression generation *)
          in
          match typed_result with
-         | Ok typed_e ->
-             let et = Ast.expr_node_val typed_e |> fst in
+         | Ok tpe ->
+             let et =
+               tpe |> SimpleTypeChecker.typed_program_expression_get_expression
+               |> Ast.expr_node_val |> fst
+             in
              equal_vtype t et
          | Error _ -> false))
 

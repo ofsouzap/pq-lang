@@ -84,11 +84,22 @@ end
 (** Typing context of variables using a simple list-based approach *)
 module ListTypingVarContext : TypingVarContext
 
-(** Provides type-checking functionality *)
-module TypeChecker : functor
+(** Signature for module that provides type-checking functionality *)
+module type TypeCheckerSig = functor
   (TypeCtx : TypingTypeContext)
   (VarCtx : TypingVarContext)
   -> sig
+  (** The type of a program's expression that has passed type checking *)
+  type 'a typed_program_expression
+
+  (** Get the type context from a typed program expression *)
+  val typed_program_expression_get_type_ctx :
+    'a typed_program_expression -> TypeCtx.t
+
+  (** Get the expression from a typed program expression *)
+  val typed_program_expression_get_expression :
+    'a typed_program_expression -> (vtype * 'a) Ast.expr
+
   (** Type checks a pattern in the given context, returning either the pattern's type and declared variables, or a pattern typing error *)
   val type_pattern :
     TypeCtx.t * VarCtx.t ->
@@ -100,8 +111,11 @@ module TypeChecker : functor
   val type_expr :
     TypeCtx.t * VarCtx.t ->
     'a Ast.expr ->
-    ((vtype * 'a) Ast.expr, typing_error) result
+    ('a typed_program_expression, typing_error) result
 end
+
+(** Functor for creating modules providing type-checking functionality *)
+module TypeChecker : TypeCheckerSig
 
 (** An implementation of a type checker using a list typing variable context *)
 module SimpleTypeChecker : sig
@@ -109,8 +123,8 @@ module SimpleTypeChecker : sig
       TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 end
 
-(** Type an AST expression using the default context implementation with the provided typing context *)
+(** Type an AST expression using the default context implementations with the provided typing context *)
 val type_expr :
   type_ctx:SetTypingTypeContext.t ->
   'a Ast.expr ->
-  ((vtype * 'a) Ast.expr, typing_error) result
+  ('a SimpleTypeChecker.typed_program_expression, typing_error) result

@@ -3,8 +3,12 @@ open OUnit2
 open Pq_lang
 open Utils
 open Pattern
+open Typing
 open Ast_executor
 open Testing_utils
+
+type basic_test_case =
+  string * unit SimpleTypeChecker.typed_program_expression * exec_res
 
 let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     =
@@ -12,22 +16,19 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
     ~init:Ast_executor.empty_store
 
-let type_expr ?(type_ctx : Typing.SetTypingTypeContext.t option)
-    (e : Ast.plain_expr) =
+let type_expr ?(type_ctx : SetTypingTypeContext.t option) (e : Ast.plain_expr) =
   match
-    Typing.type_expr
-      ~type_ctx:
-        (Option.value ~default:Typing.SetTypingTypeContext.empty type_ctx)
+    type_expr
+      ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
       e
   with
   | Ok x -> x
   | Error err ->
       failwith
         (sprintf "Typing error:\nExpression: %s\nError: %s"
-           (Ast.ast_to_source_code e)
-           (Typing.print_typing_error err))
+           (Ast.ast_to_source_code e) (print_typing_error err))
 
-let test_cases_unit_value : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_unit_value : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : value)) =
     (ast_to_source_code x, type_expr x, Ok y)
@@ -38,7 +39,7 @@ let test_cases_unit_value : (string * Ast.plain_typed_expr * exec_res) list =
       (If ((), BoolLit ((), true), UnitLit (), UnitLit ()), Unit);
     ]
 
-let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_arithmetic : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : int)) =
     (ast_to_source_code x, type_expr x, Ok (Int y))
@@ -71,7 +72,7 @@ let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
         0 );
     ]
 
-let test_cases_booleans : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_booleans : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : bool)) =
     (ast_to_source_code x, type_expr x, Ok (Bool y))
@@ -96,7 +97,7 @@ let test_cases_booleans : (string * Ast.plain_typed_expr * exec_res) list =
       (Eq ((), BoolLit ((), false), BoolLit ((), false)), true);
     ]
 
-let test_cases_pairs : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_pairs : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : value)) =
     (ast_to_source_code x, type_expr x, Ok y)
@@ -112,8 +113,7 @@ let test_cases_pairs : (string * Ast.plain_typed_expr * exec_res) list =
         Ast_executor.Pair (Int 6, Bool true) );
     ]
 
-let test_cases_integer_comparisons :
-    (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_integer_comparisons : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : bool)) =
     (ast_to_source_code x, type_expr x, Ok (Bool y))
@@ -142,7 +142,7 @@ let test_cases_integer_comparisons :
       (LtEq ((), IntLit ((), 1), IntLit ((), 1)), true);
     ]
 
-let test_cases_control_flow : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_control_flow : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -165,7 +165,7 @@ let test_cases_control_flow : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 3) );
     ]
 
-let test_cases_variables : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_variables : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -197,7 +197,7 @@ let test_cases_variables : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 8) );
     ]
 
-let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_functions : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -266,7 +266,7 @@ let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 1) );
     ]
 
-let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_recursion : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -295,7 +295,7 @@ let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 15) );
     ]
 
-let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_match : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -364,10 +364,12 @@ let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
 
 (* TODO - custom type definitions *)
 
-let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res))
-    =
+let create_test
+    ( (name : string),
+      (inp : unit SimpleTypeChecker.typed_program_expression),
+      (exp : exec_res) ) =
   name >:: fun _ ->
-  let out = Ast_executor.execute inp in
+  let out = Ast_executor.SimpleExecutor.execute_program inp in
   assert_equal exp out ~cmp:override_equal_exec_res
     ~printer:Ast_executor.show_exec_res
 

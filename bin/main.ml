@@ -14,7 +14,7 @@ let () =
         SetTypingTypeContext.create ~custom_types:prog.custom_types
       in
       match type_expr ~type_ctx prog.e with
-      | Ok typed_e ->
-          let result = Ast_executor.execute typed_e in
+      | Ok tpe ->
+          let result = Ast_executor.SimpleExecutor.execute_program tpe in
           printf "%s\n" (Ast_executor.show_exec_res result)
       | Error _ -> eprintf "Typing error\n")

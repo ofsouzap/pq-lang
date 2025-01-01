@@ -37,7 +37,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
   let prog = Parser.prog Lexer.token lexbuf in
-  let typed_e =
+  let tpe =
     match
       Typing.type_expr
         ~type_ctx:(SetTypingTypeContext.create ~custom_types:prog.custom_types)
@@ -46,7 +46,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) =
     | Ok x -> x
     | Error _ -> failwith "Failed to type expression"
   in
-  let result = Ast_executor.execute typed_e in
+  let result = Ast_executor.SimpleExecutor.execute_program tpe in
   assert_equal exp result ~cmp:override_equal_exec_res
     ~printer:Ast_executor.show_exec_res
 

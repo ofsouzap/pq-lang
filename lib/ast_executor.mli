@@ -77,7 +77,18 @@ val equal_exec_res : exec_res -> exec_res -> bool
 (** String representation of an execution result *)
 val show_exec_res : exec_res -> string
 
-(** Execute an AST representation of a program *)
-val execute : 'a Ast.typed_expr -> exec_res
+(** Provides AST execution functionality, given a typing context and variable context used for a type checker implementation *)
+module Executor : functor
+  (TypeCtx : Typing.TypingTypeContext)
+  (VarCtx : Typing.TypingVarContext)
+  -> sig
+  (** Execute a typed program using the type checker constructed from TypeCtx and VarCtx *)
+  val execute_program :
+    'a Typing.TypeChecker(TypeCtx)(VarCtx).typed_program_expression -> exec_res
+end
 
-(* TODO - custom type definitions *)
+(** An implementation of the AST executor using the simple type checker implementation *)
+module SimpleExecutor : sig
+  include module type of
+      Executor (Typing.SetTypingTypeContext) (Typing.ListTypingVarContext)
+end

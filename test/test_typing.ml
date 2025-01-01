@@ -21,8 +21,11 @@ let test_cases_expr_typing : test list =
         e
     in
     match (out, t) with
-    | Ok e', Ok exp_t ->
-        let out_t = e' |> expr_node_val |> fst in
+    | Ok tpe, Ok exp_t ->
+        let out_t =
+          tpe |> SimpleTypeChecker.typed_program_expression_get_expression
+          |> expr_node_val |> fst
+        in
         assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
@@ -258,8 +261,11 @@ let test_cases_expr_typing_full_check : test list =
         e
     in
     match out with
-    | Ok e' ->
-        let typed_out = e' >|= fst in
+    | Ok tpe ->
+        let typed_out =
+          tpe |> SimpleTypeChecker.typed_program_expression_get_expression
+          >|= fst
+        in
         assert_equal ~cmp:(equal_expr equal_vtype)
           ~printer:(get_asp_printer (PrintSexp sexp_of_vtype))
           exp typed_out
@@ -311,8 +317,11 @@ let test_cases_typing_with_var_ctx : test list =
     name >:: fun _ ->
     let out = SimpleTypeChecker.type_expr (SetTypingTypeContext.empty, ctx) e in
     match (out, t) with
-    | Ok e', Ok exp_t ->
-        let out_t = e' |> expr_node_val |> fst in
+    | Ok tpe, Ok exp_t ->
+        let out_t =
+          tpe |> SimpleTypeChecker.typed_program_expression_get_expression
+          |> expr_node_val |> fst
+        in
         assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
@@ -440,8 +449,12 @@ let test_cases_arb_compound_expr_typing : test list =
                e
            in
            match out with
-           | Ok typed_e ->
-               let t = typed_e |> expr_node_val |> fst in
+           | Ok tpe ->
+               let t =
+                 tpe
+                 |> SimpleTypeChecker.typed_program_expression_get_expression
+                 |> expr_node_val |> fst
+               in
                equal_vtype exp_t t
            | Error _ -> false))
   in
@@ -558,9 +571,12 @@ let test_cases_typing_maintains_structure : test =
          let out = Typing.type_expr ~type_ctx:SetTypingTypeContext.empty e in
          (* TODO - have an arbitrary type context and use this in test *)
          match out with
-         | Ok typed_e ->
+         | Ok tpe ->
              let plain_e = expr_to_plain_expr e in
-             let plain_typed_e = expr_to_plain_expr typed_e in
+             let plain_typed_e =
+               tpe |> SimpleTypeChecker.typed_program_expression_get_expression
+               |> expr_to_plain_expr
+             in
              equal_plain_expr plain_e plain_typed_e
          | Error _ -> false))
 
