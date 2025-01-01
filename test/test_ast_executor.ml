@@ -2,6 +2,8 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
+open Vtype
+open Custom_types
 open Pattern
 open Typing
 open Ast_executor
@@ -362,7 +364,46 @@ let test_cases_match : basic_test_case list =
         Ok (Pair (Bool true, Bool true)) );
     ]
 
-(* TODO - custom type definitions *)
+let test_cases_constructor : basic_test_case list =
+  let open Ast in
+  let mapf ((x : custom_type list), (y : plain_expr), (z : exec_res)) =
+    ( ast_to_source_code y,
+      type_expr ~type_ctx:(SetTypingTypeContext.create ~custom_types:x) y,
+      z )
+  in
+  let ct_list : custom_type =
+    ( "list",
+      [ ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeCustom "list")) ]
+    )
+  in
+  let ct_int_box : custom_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
+  List.map ~f:mapf
+    [
+      ( [ ct_list ],
+        Constructor ((), "Nil", UnitLit ()),
+        Ok (CustomTypeValue (ct_list, "Nil", Unit)) );
+      ( [ ct_list ],
+        Constructor
+          ( (),
+            "Cons",
+            Pair ((), IntLit ((), 1), Constructor ((), "Nil", UnitLit ())) ),
+        Ok
+          (CustomTypeValue
+             ( ct_list,
+               "Cons",
+               Pair (Int 1, CustomTypeValue (ct_list, "Nil", Unit)) )) );
+      ( [ ct_int_box ],
+        Constructor ((), "IntBox", Add ((), IntLit ((), 2), IntLit ((), 5))),
+        Ok (CustomTypeValue (ct_int_box, "IntBox", Int 7)) );
+      ( [ ct_int_box ],
+        Let
+          ( (),
+            "x",
+            IntLit ((), 2),
+            Constructor ((), "IntBox", Add ((), Var ((), "x"), IntLit ((), 5)))
+          ),
+        Ok (CustomTypeValue (ct_int_box, "IntBox", Int 7)) );
+    ]
 
 let create_test
     ( (name : string),
@@ -387,4 +428,5 @@ let suite =
          "Functions" >::: List.map ~f:create_test test_cases_functions;
          "Recursion" >::: List.map ~f:create_test test_cases_recursion;
          "Match" >::: List.map ~f:create_test test_cases_match;
+         "Constructor" >::: List.map ~f:create_test test_cases_constructor;
        ]
