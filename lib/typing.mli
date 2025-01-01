@@ -27,6 +27,8 @@ type typing_error =
       (** A value is used as a function but isn't a function. The expected input type of the function is the value *)
   | PatternTypingError of pattern_typing_error
       (** There was an error when typing a pattern *)
+  | UndefinedCustomTypeConstructor of string
+      (** The specified type constructor was used but hasn't been defined *)
 [@@deriving sexp, equal]
 
 val equal_typing_error_variant : typing_error -> typing_error -> bool
@@ -53,6 +55,10 @@ module type TypingTypeContext = sig
 
   (** Check whether a custom type exists in the context, by name *)
   val custom_exists : t -> string -> bool
+
+  (** Find a custom type in the type context with a custom of the specified name. If multiple exist, only one is returned *)
+  val find_custom_with_constructor :
+    t -> string -> (custom_type * custom_type_constructor) option
 end
 
 (** Typing context of types using a simple set-based approach *)
@@ -109,5 +115,8 @@ module SimpleTypeChecker : sig
       TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 end
 
-(** Type an AST expression using the default context implementation with an empty typing context *)
-val type_expr : 'a Ast.expr -> ((vtype * 'a) Ast.expr, typing_error) result
+(** Type an AST expression using the default context implementation with the provided typing context *)
+val type_expr :
+  type_ctx:SetTypingTypeContext.t ->
+  'a Ast.expr ->
+  ((vtype * 'a) Ast.expr, typing_error) result

@@ -25,7 +25,10 @@ let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
         in
         te_arb)
        (fun (t, e) ->
-         let typed_result = Typing.type_expr e in
+         let typed_result =
+           Typing.type_expr ~type_ctx:SetTypingTypeContext.empty e
+           (* TODO - use arbitrary type context once this added to typed expression generation *)
+         in
          match typed_result with
          | Ok typed_e ->
              let et = Ast.expr_node_val typed_e |> fst in

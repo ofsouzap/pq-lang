@@ -1,6 +1,7 @@
 open Core
 open OUnit2
 open Pq_lang
+open Typing
 open Ast_executor
 open Testing_utils
 
@@ -37,7 +38,10 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) =
   let lexbuf = Lexing.from_string inp in
   let ast = (Parser.prog Lexer.token lexbuf).e in
   let typed_e =
-    match Typing.type_expr ast with
+    match
+      Typing.type_expr ~type_ctx:SetTypingTypeContext.empty ast
+      (* TODO - implement with custom type definitions to make a type context *)
+    with
     | Ok x -> x
     | Error _ -> failwith "Failed to type expression"
   in

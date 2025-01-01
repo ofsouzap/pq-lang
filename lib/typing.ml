@@ -24,6 +24,7 @@ type typing_error =
   | EqualOperatorTypeMistmatch of vtype * vtype
   | ExpectedFunctionOf of vtype
   | PatternTypingError of pattern_typing_error
+  | UndefinedCustomTypeConstructor of string
 [@@deriving sexp, equal]
 
 let equal_typing_error_variant x y =
@@ -51,6 +52,8 @@ let print_typing_error = function
       "Expected a function taking input of " ^ vtype_to_source_code t
   | PatternTypingError err ->
       sprintf "Error typing pattern: %s" (print_pattern_typing_error err)
+  | UndefinedCustomTypeConstructor c_name ->
+      sprintf "Undefined custom type constructor: %s" c_name
 
 module type TypingTypeContext = sig
   type t
@@ -61,6 +64,9 @@ module type TypingTypeContext = sig
   val singleton_custom : custom_type -> t
   val append : t -> t -> t
   val custom_exists : t -> string -> bool
+
+  val find_custom_with_constructor :
+    t -> string -> (custom_type * custom_type_constructor) option
 end
 
 module CustomTypeComparatorByName = struct
@@ -94,6 +100,13 @@ module SetTypingTypeContext : TypingTypeContext = struct
 
   let custom_exists (ctx : t) (ct_name : string) : bool =
     Set.mem ctx.custom_types (ct_name, [])
+
+  let find_custom_with_constructor (ctx : t) (c_name : string) :
+      (custom_type * custom_type_constructor) option =
+    Set.find_map ctx.custom_types ~f:(fun (((_, cs) : custom_type) as ct) ->
+        let open Option in
+        List.find cs ~f:(fun (c_name', _) -> equal_string c_name c_name')
+        >>| fun c -> (ct, c))
 end
 
 module type TypingVarContext = sig
@@ -291,14 +304,20 @@ struct
         >>| fun ( (t_out : vtype),
                   (cs_typed_rev : (pattern * (vtype * 'a) expr) Nonempty_list.t)
                 ) -> Match ((t_out, v), e', Nonempty_list.rev cs_typed_rev)
-    | Constructor _ -> failwith "TODO"
+    | Constructor (v, c_name, e1) -> (
+        type_expr ctx e1 >>= fun e1' ->
+        let t1 = e_type e1' in
+        match TypeCtx.find_custom_with_constructor type_ctx c_name with
+        | None -> Error (UndefinedCustomTypeConstructor c_name)
+        | Some ((ct_name, _), (_, c_t)) ->
+            if equal_vtype c_t t1 then
+              Ok (Constructor ((VTypeCustom ct_name, v), c_name, e1'))
+            else Error (TypeMismatch (c_t, t1)))
 end
 
 module SimpleTypeChecker =
   TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 
-let type_expr (e : 'a Ast.expr) :
+let type_expr ~(type_ctx : SetTypingTypeContext.t) (e : 'a Ast.expr) :
     ((Vtype.vtype * 'a) Ast.expr, typing_error) result =
-  SimpleTypeChecker.type_expr
-    (SetTypingTypeContext.empty, ListTypingVarContext.empty)
-    e
+  SimpleTypeChecker.type_expr (type_ctx, ListTypingVarContext.empty) e

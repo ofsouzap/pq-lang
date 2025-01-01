@@ -12,8 +12,14 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
     ~init:Ast_executor.empty_store
 
-let type_expr (e : Ast.plain_expr) =
-  match Typing.type_expr e with
+let type_expr ?(type_ctx : Typing.SetTypingTypeContext.t option)
+    (e : Ast.plain_expr) =
+  match
+    Typing.type_expr
+      ~type_ctx:
+        (Option.value ~default:Typing.SetTypingTypeContext.empty type_ctx)
+      e
+  with
   | Ok x -> x
   | Error err ->
       failwith

@@ -10,10 +10,16 @@ open Testing_utils
 
 let test_cases_expr_typing : test list =
   let open Result in
-  let create_test ((e : plain_expr), (t : (vtype, typing_error) Result.t)) :
-      test =
+  let create_test
+      ( (type_ctx : SetTypingTypeContext.t option),
+        (e : plain_expr),
+        (t : (vtype, typing_error) Result.t) ) : test =
     ast_to_source_code e >:: fun _ ->
-    let out = Typing.type_expr e in
+    let out =
+      Typing.type_expr
+        ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
+        e
+    in
     match (out, t) with
     | Ok e', Ok exp_t ->
         let out_t = e' |> expr_node_val |> fst in
@@ -26,79 +32,106 @@ let test_cases_expr_typing : test list =
   in
   List.map ~f:create_test
     [
-      (UnitLit (), Ok VTypeUnit);
-      (IntLit ((), 1), Ok VTypeInt);
-      (Add ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
-      ( Add ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, UnitLit (), Ok VTypeUnit);
+      (None, IntLit ((), 1), Ok VTypeInt);
+      (None, Add ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
+      ( None,
+        Add ((), BoolLit ((), true), IntLit ((), 2)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Neg ((), IntLit ((), 3)), Ok VTypeInt);
-      (Neg ((), BoolLit ((), false)), Error (TypeMismatch (VTypeInt, VTypeBool)));
-      (Subtr ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
-      ( Subtr ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, Neg ((), IntLit ((), 3)), Ok VTypeInt);
+      ( None,
+        Neg ((), BoolLit ((), false)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Mult ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
-      ( Mult ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, Subtr ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
+      ( None,
+        Subtr ((), BoolLit ((), true), IntLit ((), 2)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      (BoolLit ((), true), Ok VTypeBool);
-      (BNot ((), BoolLit ((), false)), Ok VTypeBool);
-      (BNot ((), IntLit ((), 3)), Error (TypeMismatch (VTypeBool, VTypeInt)));
-      (BAnd ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
-      ( BAnd ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, Mult ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
+      ( None,
+        Mult ((), BoolLit ((), true), IntLit ((), 2)),
+        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+      (None, BoolLit ((), true), Ok VTypeBool);
+      (None, BNot ((), BoolLit ((), false)), Ok VTypeBool);
+      ( None,
+        BNot ((), IntLit ((), 3)),
         Error (TypeMismatch (VTypeBool, VTypeInt)) );
-      (BOr ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
-      ( BOr ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, BAnd ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
+      ( None,
+        BAnd ((), BoolLit ((), true), IntLit ((), 2)),
         Error (TypeMismatch (VTypeBool, VTypeInt)) );
-      (Eq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
-      ( Eq ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, BOr ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
+      ( None,
+        BOr ((), BoolLit ((), true), IntLit ((), 2)),
+        Error (TypeMismatch (VTypeBool, VTypeInt)) );
+      (None, Eq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+      ( None,
+        Eq ((), BoolLit ((), true), IntLit ((), 2)),
         Error (EqualOperatorTypeMistmatch (VTypeBool, VTypeInt)) );
-      ( Eq ((), IntLit ((), 3), BoolLit ((), true)),
+      ( None,
+        Eq ((), IntLit ((), 3), BoolLit ((), true)),
         Error (EqualOperatorTypeMistmatch (VTypeInt, VTypeBool)) );
-      (Eq ((), BoolLit ((), true), BoolLit ((), true)), Ok VTypeBool);
-      (GtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
-      ( GtEq ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, Eq ((), BoolLit ((), true), BoolLit ((), true)), Ok VTypeBool);
+      (None, GtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+      ( None,
+        GtEq ((), BoolLit ((), true), IntLit ((), 2)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Gt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
-      ( Gt ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, Gt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+      ( None,
+        Gt ((), BoolLit ((), true), IntLit ((), 2)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      (LtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
-      ( LtEq ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, LtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+      ( None,
+        LtEq ((), BoolLit ((), true), IntLit ((), 2)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      (Lt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
-      ( Lt ((), BoolLit ((), true), IntLit ((), 2)),
+      (None, Lt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+      ( None,
+        Lt ((), BoolLit ((), true), IntLit ((), 2)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      (If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
-      ( If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
+      ( None,
+        If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
+        Ok VTypeInt );
+      ( None,
+        If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
+      ( None,
+        If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      (If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
-      (Var ((), "x"), Error (UndefinedVariable "x"));
-      ( Fun ((), ("x", VTypeInt), Var ((), "x")),
+      ( None,
+        If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
+        Ok VTypeInt );
+      (None, Var ((), "x"), Error (UndefinedVariable "x"));
+      ( None,
+        Fun ((), ("x", VTypeInt), Var ((), "x")),
         Ok (VTypeFun (VTypeInt, VTypeInt)) );
-      (Let ((), "x", IntLit ((), 3), Var ((), "x")), Ok VTypeInt);
-      (Let ((), "x", BoolLit ((), true), Var ((), "x")), Ok VTypeBool);
-      (Let ((), "x", IntLit ((), 3), BoolLit ((), true)), Ok VTypeBool);
-      ( Let
+      (None, Let ((), "x", IntLit ((), 3), Var ((), "x")), Ok VTypeInt);
+      (None, Let ((), "x", BoolLit ((), true), Var ((), "x")), Ok VTypeBool);
+      (None, Let ((), "x", IntLit ((), 3), BoolLit ((), true)), Ok VTypeBool);
+      ( None,
+        Let
           ( (),
             "f",
             Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Ok VTypeInt );
-      ( Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
+      ( None,
+        Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
         Ok (VTypeFun (VTypeInt, VTypeInt)) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "f",
             Fun ((), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Ok VTypeInt );
-      ( Let
+      ( None,
+        Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeInt), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Ok VTypeInt );
-      ( Let
+      ( None,
+        Let
           ( (),
             "f",
             Fix
@@ -108,19 +141,22 @@ let test_cases_expr_typing : test list =
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "f",
             Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
             App ((), Var ((), "f"), BoolLit ((), false)) ),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "f",
             Fix
@@ -130,19 +166,22 @@ let test_cases_expr_typing : test list =
                 BoolLit ((), false) ),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Ok VTypeBool );
-      ( Match
+      ( None,
+        Match
           ( (),
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
               [ (PatName ("x", VTypeInt), BoolLit ((), true)) ] ),
         Ok VTypeBool );
-      ( Match
+      ( None,
+        Match
           ( (),
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
               [ (PatName ("x", VTypeInt), Var ((), "x")) ] ),
         Ok VTypeInt );
-      ( Match
+      ( None,
+        Match
           ( (),
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
@@ -151,7 +190,8 @@ let test_cases_expr_typing : test list =
                 (PatName ("y", VTypeInt), BoolLit ((), true));
               ] ),
         Ok VTypeBool );
-      ( Match
+      ( None,
+        Match
           ( (),
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
@@ -162,7 +202,8 @@ let test_cases_expr_typing : test list =
         Error
           (PatternTypeMismatch (PatName ("y", VTypeBool), VTypeInt, VTypeBool))
       );
-      ( Match
+      ( None,
+        Match
           ( (),
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
@@ -174,11 +215,18 @@ let test_cases_expr_typing : test list =
     ]
 
 let test_cases_expr_typing_full_check : test list =
-  let create_test ((name : string), (e : plain_expr), (exp : vtype expr)) : test
-      =
+  let create_test
+      ( (name : string),
+        (type_ctx : SetTypingTypeContext.t option),
+        (e : plain_expr),
+        (exp : vtype expr) ) : test =
     name >:: fun _ ->
     let open Result in
-    let out = Typing.type_expr e in
+    let out =
+      Typing.type_expr
+        ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
+        e
+    in
     match out with
     | Ok e' ->
         let typed_out = e' >|= fst in
@@ -190,6 +238,7 @@ let test_cases_expr_typing_full_check : test list =
   List.map ~f:create_test
     [
       ( "Plain Arithmetic 1",
+        None,
         Add
           ( (),
             Subtr ((), IntLit ((), 3), IntLit ((), 2)),
@@ -202,6 +251,7 @@ let test_cases_expr_typing_full_check : test list =
                 IntLit (VTypeInt, 2),
                 Neg (VTypeInt, IntLit (VTypeInt, 7)) ) ) );
       ( "Mixed Typing 1",
+        None,
         Add
           ( (),
             IntLit ((), 2),
@@ -339,8 +389,10 @@ let test_cases_arb_compound_expr_typing : test list =
   let expr_gen (t : vtype) : unit expr Gen.t =
     ast_expr_arb ~t NoPrint Gen.unit |> QCheck.gen
   in
-  let create_test ((name : string), (e_gen : (vtype * plain_expr) Gen.t)) : test
-      =
+  let create_test
+      ( (name : string),
+        (type_ctx : SetTypingTypeContext.t option),
+        (e_gen : (vtype * plain_expr) Gen.t) ) : test =
     let e_arb =
       QCheck.make
         ~print:QCheck.Print.(pair vtype_to_source_code ast_to_source_code)
@@ -349,7 +401,12 @@ let test_cases_arb_compound_expr_typing : test list =
     QCheck_ounit.to_ounit2_test
       (Test.make ~name ~count:100 e_arb (fun (exp_t, e) ->
            let open Result in
-           let out = Typing.type_expr e in
+           let out =
+             Typing.type_expr
+               ~type_ctx:
+                 (Option.value ~default:SetTypingTypeContext.empty type_ctx)
+               e
+           in
            match out with
            | Ok typed_e ->
                let t = typed_e |> expr_node_val |> fst in
@@ -359,59 +416,74 @@ let test_cases_arb_compound_expr_typing : test list =
   List.map ~f:create_test
     [
       ( "Add",
+        None,
         pair (return VTypeInt)
           ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
             Add ((), e1, e2) ) );
       ( "Neg",
+        None,
         pair (return VTypeInt) (expr_gen VTypeInt >|= fun e -> Neg ((), e)) );
       ( "Subtr",
+        None,
         pair (return VTypeInt)
           ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
             Subtr ((), e1, e2) ) );
       ( "Mult",
+        None,
         pair (return VTypeInt)
           ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
             Mult ((), e1, e2) ) );
       ( "BNot",
+        None,
         pair (return VTypeBool) (expr_gen VTypeBool >|= fun e -> BNot ((), e))
       );
       ( "BOr",
+        None,
         pair (return VTypeBool)
           ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
             BOr ((), e1, e2) ) );
       ( "BAnd",
+        None,
         pair (return VTypeBool)
           ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
             BAnd ((), e1, e2) ) );
       ( "Eq - int",
+        None,
         pair (return VTypeBool)
           ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
             Eq ((), e1, e2) ) );
       ( "Eq - bool",
+        None,
         pair (return VTypeBool)
           ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
             Eq ((), e1, e2) ) );
       ( "Gt",
+        None,
         pair (return VTypeBool)
           ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
             Gt ((), e1, e2) ) );
       ( "GtEq",
+        None,
         pair (return VTypeBool)
           ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
             GtEq ((), e1, e2) ) );
       ( "Lt",
+        None,
         pair (return VTypeBool)
           ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
             Lt ((), e1, e2) ) );
       ( "LtEq",
+        None,
         pair (return VTypeBool)
           ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
             LtEq ((), e1, e2) ) );
       ( "If",
+        None,
         vtype_gen default_max_gen_rec_depth >>= fun t ->
         triple (expr_gen VTypeBool) (expr_gen t) (expr_gen t)
         >|= fun (e1, e2, e3) -> (t, If ((), e1, e2, e3)) );
       ( "Let",
+        None,
         vtype_gen default_max_gen_rec_depth >>= fun t ->
         pair varname_gen (vtype_gen default_max_gen_rec_depth)
         >>= fun (xname, xtype) ->
@@ -420,12 +492,14 @@ let test_cases_arb_compound_expr_typing : test list =
         (* Note, the tests here (and for the Fun and Fix cases) don't work with changing variable contexts. But this should be fine *)
       );
       ( "Fun",
+        None,
         vtype_gen default_max_gen_rec_depth >>= fun t2 ->
         pair varname_gen (vtype_gen default_max_gen_rec_depth)
         >>= fun (xname, t1) ->
         expr_gen t2 >|= fun e ->
         (VTypeFun (t1, t2), Ast.Fun ((), (xname, t1), e)) );
       ( "App",
+        None,
         pair
           (vtype_gen default_max_gen_rec_depth)
           (vtype_gen default_max_gen_rec_depth)
@@ -433,6 +507,7 @@ let test_cases_arb_compound_expr_typing : test list =
         pair (expr_gen (VTypeFun (t1, t2))) (expr_gen t1) >|= fun (e1, e2) ->
         (t2, App ((), e1, e2)) );
       ( "Fix",
+        None,
         pair varname_gen (vtype_gen default_max_gen_rec_depth)
         >>= fun (fname, t1) ->
         pair varname_gen (vtype_gen default_max_gen_rec_depth)
@@ -447,7 +522,8 @@ let test_cases_typing_maintains_structure : test =
     (Test.make ~name:"Typing maintains structure" ~count:100
        (ast_expr_arb PrintExprSource Gen.unit) (fun e ->
          let open Result in
-         let out = Typing.type_expr e in
+         let out = Typing.type_expr ~type_ctx:SetTypingTypeContext.empty e in
+         (* TODO - have an arbitrary type context and use this in test *)
          match out with
          | Ok typed_e ->
              let plain_e = expr_to_plain_expr e in
