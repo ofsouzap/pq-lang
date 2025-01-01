@@ -225,10 +225,10 @@ let test_cases_expr_typing : test list =
           (SetTypingTypeContext.create
              ~custom_types:
                [
-                 ( "List",
+                 ( "list",
                    [
                      ("Leaf", VTypeInt);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "List"));
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
                    ] );
                ]),
         Constructor ((), "Leaf", UnitLit ()),
@@ -237,14 +237,14 @@ let test_cases_expr_typing : test list =
           (SetTypingTypeContext.create
              ~custom_types:
                [
-                 ( "List",
+                 ( "list",
                    [
                      ("Nil", VTypeUnit);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "List"));
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
                    ] );
                ]),
         Constructor ((), "Nil", UnitLit ()),
-        Ok (VTypeCustom "List") );
+        Ok (VTypeCustom "list") );
     ]
 
 let test_cases_expr_typing_full_check : test list =
