@@ -5,6 +5,8 @@ open Vtype
 open Pattern
 open Ast
 
+(* TODO - move the generators and arbitrary instances for different things into the main lib/ things, and have them as submodules with a consistent name relating to QCheck *)
+
 (** The printing method for an AST representation of a program *)
 type 'a ast_print_method =
   | NoPrint  (** Don't print the AST *)
