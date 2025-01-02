@@ -21,7 +21,7 @@ let create_typed_expr_gen_test (name : string)
         in
         QCheck.make
           ~print:(fun (type_ctx, (t, e)) ->
-            sprintf "[type ctx: %s] [type: %s] %s"
+            sprintf "[type ctx: %s]\n[type: %s]\n%s"
               (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
               (vtype_to_source_code t) (ast_to_source_code e))
           gen)
