@@ -36,11 +36,11 @@ type 'a ast_print_method =
 
 (** Take an AST printing method and return a function that implements the printing method.
     Returns None if no printing is specified. *)
-val get_asp_printer_opt : 'a ast_print_method -> ('a expr -> string) option
+val get_ast_printer_opt : 'a ast_print_method -> ('a expr -> string) option
 
 (** Take an AST printing method and return a function that implements the printing method.
     Returns a function always returning the empty string if no printing is specified. *)
-val get_asp_printer : 'a ast_print_method -> 'a expr -> string
+val get_ast_printer : 'a ast_print_method -> 'a expr -> string
 
 (** A default AST printing method *)
 val default_ast_print_method : 'a ast_print_method

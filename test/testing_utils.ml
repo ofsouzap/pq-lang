@@ -42,14 +42,14 @@ type 'a ast_print_method =
   | PrintSexp of ('a -> Sexp.t)
   | PrintExprSource
 
-let get_asp_printer_opt : 'a ast_print_method -> ('a expr -> string) option =
+let get_ast_printer_opt : 'a ast_print_method -> ('a expr -> string) option =
   function
   | NoPrint -> None
   | PrintSexp f -> Some (fun e -> Ast.sexp_of_expr f e |> Sexp.to_string)
   | PrintExprSource -> Some ast_to_source_code
 
-let get_asp_printer (p : 'a ast_print_method) (e : 'a expr) : string =
-  match get_asp_printer_opt p with None -> "" | Some f -> f e
+let get_ast_printer (p : 'a ast_print_method) (e : 'a expr) : string =
+  match get_ast_printer_opt p with None -> "" | Some f -> f e
 
 (* TODO - change these values back to larger ones *)
 let default_ast_print_method : 'a ast_print_method = PrintExprSource
@@ -645,7 +645,7 @@ let ast_expr_arb ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
     (print : 'a ast_print_method) (v_gen : 'a QCheck.Gen.t) :
     'a expr QCheck.arbitrary =
   QCheck.make
-    ?print:(get_asp_printer_opt print)
+    ?print:(get_ast_printer_opt print)
     (ast_expr_gen ?t ~type_ctx v_gen)
 
 let ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) print v_gen =
@@ -660,7 +660,7 @@ let ast_expr_arb_default_type_ctx_params ?(t : vtype option)
     pair (return type_ctx) (ast_expr_gen ?t ~type_ctx v_gen)
   in
   QCheck.make
-    ?print:Option.(get_asp_printer_opt print >>| fun p (_, e) -> p e)
+    ?print:Option.(get_ast_printer_opt print >>| fun p (_, e) -> p e)
     gen
 
 let plain_ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) :

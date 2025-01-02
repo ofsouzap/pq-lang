@@ -9,16 +9,16 @@ let test_cases_equality : test list =
   let create_positive_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (get_asp_printer (PrintSexp sexp_of_unit) x)
-        (get_asp_printer (PrintSexp sexp_of_unit) y)
+        (get_ast_printer (PrintSexp sexp_of_unit) x)
+        (get_ast_printer (PrintSexp sexp_of_unit) y)
     in
     name >:: fun _ -> assert_bool "not equal" (equal_plain_expr x y)
   in
   let create_negative_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (get_asp_printer (PrintSexp sexp_of_unit) x)
-        (get_asp_printer (PrintSexp sexp_of_unit) y)
+        (get_ast_printer (PrintSexp sexp_of_unit) x)
+        (get_ast_printer (PrintSexp sexp_of_unit) y)
     in
     name >:: fun _ -> assert_bool "equal" (not (equal_plain_expr x y))
   in

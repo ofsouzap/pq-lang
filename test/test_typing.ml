@@ -317,7 +317,7 @@ let test_cases_expr_typing_full_check : test list =
           >|= fst
         in
         assert_equal ~cmp:(equal_expr equal_vtype)
-          ~printer:(get_asp_printer (PrintSexp sexp_of_vtype))
+          ~printer:(get_ast_printer (PrintSexp sexp_of_vtype))
           exp typed_out
     | Error _ -> assert_failure "Failed to type"
   in
