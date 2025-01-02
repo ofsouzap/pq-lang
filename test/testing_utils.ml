@@ -137,6 +137,7 @@ let gen_unique_pair ~(equal : 'a -> 'a -> bool) (g : 'a QCheck.Gen.t) :
 module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
+  val add_custom : t -> custom_type -> t
   val to_list : t -> custom_type list
   val from_list : custom_type list -> t
   val custom_gen : t -> custom_type QCheck.Gen.t
@@ -159,6 +160,7 @@ end = struct
             if equal_string c_name x_c_name then Some c else None)
         >>| fun c -> (ct, c))
 
+  let add_custom (ctx : t) (ct : custom_type) : t = ct :: ctx
   let to_list = Fn.id
   let from_list cts = cts
 
@@ -200,8 +202,8 @@ let typed_var_gen ~(type_ctx : TestingTypeCtx.t) (d : int) :
   let open QCheck.Gen in
   pair varname_gen (vtype_gen ~type_ctx d)
 
-let custom_type_arb ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
-    ~(mrd : int) : custom_type QCheck.arbitrary =
+let custom_type_gen ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
+    ~(mrd : int) : custom_type QCheck.Gen.t =
   let open QCheck.Gen in
   let gen_constructor =
     pair custom_type_constructor_name_gen (vtype_gen ~type_ctx mrd)
@@ -209,18 +211,25 @@ let custom_type_arb ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
   let gen_constructors =
     list_size (int_range 1 max_constructors) gen_constructor
   in
-  let gen = pair custom_type_name_gen gen_constructors in
-  QCheck.make ~print:custom_type_to_source_code gen
+  pair custom_type_name_gen gen_constructors
 
-let testing_type_ctx_arb ~(type_ctx : TestingTypeCtx.t)
-    ~(max_custom_types : int) ~(max_constructors : int) ~(mrd : int) :
-    TestingTypeCtx.t QCheck.arbitrary =
+let custom_type_arb ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
+    ~(mrd : int) : custom_type QCheck.arbitrary =
+  QCheck.make ~print:custom_type_to_source_code
+    (custom_type_gen ~type_ctx ~max_constructors ~mrd)
+
+let testing_type_ctx_arb ~(max_custom_types : int) ~(max_constructors : int)
+    ~(mrd : int) : TestingTypeCtx.t QCheck.arbitrary =
   let gen : TestingTypeCtx.t QCheck.Gen.t =
     let open QCheck.Gen in
-    list_size
-      (int_range 0 max_custom_types)
-      (QCheck.get_gen (custom_type_arb ~type_ctx ~max_constructors ~mrd))
-    >|= TestingTypeCtx.from_list
+    int_range 0 max_custom_types >>= fun custom_type_count ->
+    fix
+      (fun self (n, type_ctx) ->
+        if n <= 0 then return type_ctx
+        else
+          custom_type_gen ~type_ctx ~max_constructors ~mrd >>= fun new_ct ->
+          self (n - 1, TestingTypeCtx.add_custom type_ctx new_ct))
+      (custom_type_count, TestingTypeCtx.empty)
   in
   let print_custom_type_constructor : custom_type_constructor QCheck.Print.t =
     QCheck.Print.(pair string vtype_to_source_code)

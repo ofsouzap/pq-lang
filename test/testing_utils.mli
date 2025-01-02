@@ -72,6 +72,13 @@ val vtype_arb : type_ctx:TestingTypeCtx.t -> int -> vtype QCheck.arbitrary
 val typed_var_gen :
   type_ctx:TestingTypeCtx.t -> int -> (string * vtype) QCheck.Gen.t
 
+(** Generator for a custom data type, taking a maximum number of constructors and a maximum recursion depth *)
+val custom_type_gen :
+  type_ctx:TestingTypeCtx.t ->
+  max_constructors:int ->
+  mrd:int ->
+  custom_type QCheck.Gen.t
+
 (** Arbitrary generator for a custom data type, taking a maximum number of constructors and a maximum recursion depth *)
 val custom_type_arb :
   type_ctx:TestingTypeCtx.t ->
@@ -81,7 +88,6 @@ val custom_type_arb :
 
 (** Arbitrary generator for testing type context module context instances *)
 val testing_type_ctx_arb :
-  type_ctx:TestingTypeCtx.t ->
   max_custom_types:int ->
   max_constructors:int ->
   mrd:int ->
