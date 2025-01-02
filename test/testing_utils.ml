@@ -477,15 +477,13 @@ let ast_expr_gen ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
         ((d : int), (ctx : TestingVarCtx.t)),
         (v : 'a) ) (t : vtype) : 'a expr Gen.t list =
     (* The standard recursive generator cases for some provided type *)
-    const
-      [ gen_e_match (self, (d, ctx), v) (* Match *) ]
-      [
-        gen_e_if (self, (d, ctx), v) (* If-then-else *);
-        gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-        gen_e_app (self, (d, ctx), v) t (* Function application *);
-        gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
-        gen_e_match (self, (d, ctx), v) (* Match *);
-      ]
+    [
+      gen_e_if (self, (d, ctx), v) (* If-then-else *);
+      gen_e_let_in (self, (d, ctx), v) (* Let-in *);
+      gen_e_app (self, (d, ctx), v) t (* Function application *);
+      gen_e_let_rec (self, (d, ctx), v) (* Let-rec *);
+      gen_e_match (self, (d, ctx), v) (* Match *);
+    ]
   and gen_unit (param : int * TestingVarCtx.t) : 'a expr Gen.t =
     (* Generate an expression that types as unit *)
     fix
