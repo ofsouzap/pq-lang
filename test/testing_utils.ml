@@ -104,6 +104,77 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string sexp_of_token) tokens)
 
+let rec expr_shrink : 'a expr QCheck.Shrink.t =
+  let open QCheck.Iter in
+  let unop_shrink (v, e1) (recomb : 'a * 'a expr -> 'a expr) :
+      'a expr QCheck.Iter.t =
+    expr_shrink e1 >|= fun e1' -> recomb (v, e1')
+  in
+  let binop_shrink (v, e1, e2) (recomb : 'a * 'a expr * 'a expr -> 'a expr) :
+      'a expr QCheck.Iter.t =
+    return e1 <+> return e2
+    <+> (expr_shrink e1 >|= fun e1' -> recomb (v, e1', e2))
+    <+> (expr_shrink e2 >|= fun e2' -> recomb (v, e1, e2'))
+  in
+  let triop_shrink (v, e1, e2, e3)
+      (recomb : 'a * 'a expr * 'a expr * 'a expr -> 'a expr) :
+      'a expr QCheck.Iter.t =
+    return e1 <+> return e2 <+> return e3
+    <+> (expr_shrink e1 >|= fun e1' -> recomb (v, e1', e2, e3))
+    <+> (expr_shrink e2 >|= fun e2' -> recomb (v, e1, e2', e3))
+    <+> (expr_shrink e3 >|= fun e3' -> recomb (v, e1, e2, e3'))
+  in
+  function
+  | UnitLit _ -> empty
+  | IntLit _ -> empty
+  | Add (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Add (v', e1', e2'))
+  | Neg (v, e1) -> unop_shrink (v, e1) (fun (v', e1') -> Neg (v', e1'))
+  | Subtr (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Subtr (v', e1', e2'))
+  | Mult (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Mult (v', e1', e2'))
+  | BoolLit _ -> empty
+  | BNot (v, e1) -> unop_shrink (v, e1) (fun (v', e1') -> BNot (v', e1'))
+  | BOr (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> BOr (v', e1', e2'))
+  | BAnd (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> BAnd (v', e1', e2'))
+  | Pair (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Pair (v', e1', e2'))
+  | Eq (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Eq (v', e1', e2'))
+  | Gt (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Gt (v', e1', e2'))
+  | GtEq (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> GtEq (v', e1', e2'))
+  | Lt (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Lt (v', e1', e2'))
+  | LtEq (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> LtEq (v', e1', e2'))
+  | If (v, e1, e2, e3) ->
+      triop_shrink (v, e1, e2, e3) (fun (v', e1', e2', e3') ->
+          If (v', e1', e2', e3'))
+  | Var _ -> empty
+  | Let (v, x, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Let (v', x, e1', e2'))
+  | Fun (v, (x, t), e1) ->
+      return e1 <+> expr_shrink e1 >|= fun e1' -> Fun (v, (x, t), e1')
+  | App (v, e1, e2) ->
+      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> App (v', e1', e2'))
+  | Fix (v, (f, t1, t2), (x, t), e1) ->
+      return e1 <+> expr_shrink e1 >|= fun e1' ->
+      Fix (v, (f, t1, t2), (x, t), e1')
+  | Match (v, e1, ps) ->
+      return e1
+      <+> ( (* Try shrinking each case expression *)
+            QCheck.Shrink.list_elems
+              (fun (c_p, c_e) -> expr_shrink c_e >|= fun c_e' -> (c_p, c_e'))
+              (Nonempty_list.to_list ps)
+          >|= fun ps' -> Match (v, e1, Nonempty_list.from_list_unsafe ps') )
+  | Constructor (v, c, e1) ->
+      unop_shrink (v, e1) (fun (v', e1') -> Constructor (v', c, e1'))
+
 let override_equal_exec_res (a : exec_res) (b : exec_res) : bool =
   match (a, b) with
   | Error e1, Error e2 -> (
@@ -646,6 +717,7 @@ let ast_expr_arb ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
     'a expr QCheck.arbitrary =
   QCheck.make
     ?print:(get_ast_printer_opt print)
+    ~shrink:expr_shrink
     (ast_expr_gen ?t ~type_ctx v_gen)
 
 let ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) print v_gen =
@@ -661,6 +733,7 @@ let ast_expr_arb_default_type_ctx_params ?(t : vtype option)
   in
   QCheck.make
     ?print:Option.(get_ast_printer_opt print >>| fun p (_, e) -> p e)
+    ~shrink:QCheck.Shrink.(pair nil expr_shrink)
     gen
 
 let plain_ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) :
@@ -681,4 +754,5 @@ let plain_ast_expr_arb_any_default_type_ctx_params :
       sprintf "[type ctx: %s]\n%s"
         (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
         (ast_to_source_code ~use_newlines:true e))
+    ~shrink:QCheck.Shrink.(pair nil expr_shrink)
     gen
