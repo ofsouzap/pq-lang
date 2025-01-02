@@ -195,6 +195,7 @@ struct
       TypeCtx.t * VarCtx.t ->
       'a expr ->
       ('a typed_program_expression, typing_error) Result.t =
+    (* TODO - check that no custom type constructors have overloaded names *)
     let open Result in
     let rec type_expr (((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) as ctx)
         (orig_e : 'a expr) =

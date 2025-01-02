@@ -3,6 +3,7 @@ open OUnit2
 open QCheck
 open Pq_lang
 open Vtype
+open Custom_types
 open Ast
 open Typing
 open Testing_utils
@@ -23,9 +24,10 @@ let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
           (type_ctx, (t, e))
         in
         QCheck.make
-          ~print:(fun (_, (t, e)) ->
-            sprintf "[with type ctx] [type: %s] %s" (vtype_to_source_code t)
-              (ast_to_source_code e))
+          ~print:(fun (type_ctx, (t, e)) ->
+            sprintf "[type ctx: %s] [type: %s] %s"
+              (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
+              (vtype_to_source_code t) (ast_to_source_code e))
           gen)
        (fun (type_ctx, (t, e)) ->
          let typed_result =
@@ -42,6 +44,29 @@ let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
 
 let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
   create_typed_expr_gen_test name (Gen.return t)
+
+let create_test_vtype_gen_constructors_exist (name : string) : test =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name ~count:1000
+       (QCheck.make
+          ~print:
+            (Core.Fn.compose Sexp.to_string
+               (let sexp_of_type_ctx (type_ctx : TestingTypeCtx.t) : Sexp.t =
+                  TestingTypeCtx.to_list type_ctx
+                  |> sexp_of_list sexp_of_custom_type
+                in
+                sexp_of_pair sexp_of_type_ctx sexp_of_vtype))
+          QCheck.Gen.(
+            default_testing_type_ctx_gen >>= fun type_ctx ->
+            vtype_gen ~type_ctx default_max_gen_rec_depth >|= fun t ->
+            (type_ctx, t)))
+       (fun (type_ctx, t) ->
+         match t with
+         | VTypeCustom ct_name -> TestingTypeCtx.custom_exists type_ctx ct_name
+         | _ -> true))
+
+(* TODO - test that the type contexts generated don't contain duplicated constructor names or type names *)
 
 let create_test_var_ctx (xs : (string * vtype) list) : TestingVarCtx.t =
   List.fold xs ~init:TestingVarCtx.empty ~f:(fun ctx (x, t) ->
@@ -61,6 +86,8 @@ let var_ctx_list_arb ~(type_ctx : TestingTypeCtx.t) =
 let suite =
   "Utilities Tests"
   >::: [
+         "Value type generator"
+         >::: [ create_test_vtype_gen_constructors_exist "Custom types exist" ];
          "Typed expression generator"
          >::: [
                 create_typed_expr_gen_test_for_fixed_type "unit" VTypeUnit;

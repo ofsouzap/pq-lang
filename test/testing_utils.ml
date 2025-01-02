@@ -9,6 +9,34 @@ open Typing
 open Parser
 open Ast_executor
 
+let nonempty_list_arb (v_arb : 'a QCheck.arbitrary) :
+    'a Nonempty_list.t QCheck.arbitrary =
+  QCheck.map
+    ~rev:(fun xs -> Nonempty_list.(head xs, tail xs))
+    (fun (h, ts) -> Nonempty_list.make (h, ts))
+    QCheck.(pair v_arb (list v_arb))
+
+let result_arb (x_arb : 'a QCheck.arbitrary) (y_arb : 'b QCheck.arbitrary) :
+    ('a, 'b) Result.t QCheck.arbitrary =
+  QCheck.map
+    (fun (b, x, y) -> if b then Ok x else Error y)
+    (QCheck.triple QCheck.bool x_arb y_arb)
+
+let filter_gen ?(max_attempts : int option) (x_gen : 'a QCheck.Gen.t)
+    ~(f : 'a -> bool) : 'a QCheck.Gen.t =
+  let open QCheck.Gen in
+  fix
+    (fun self n_opt ->
+      let _ =
+        (* Termination check *)
+        match n_opt with
+        | None -> ()
+        | Some n -> if n < 0 then failwith "Filter ran out of attempts"
+      in
+      x_gen >>= fun x ->
+      if f x then return x else self (Option.map n_opt ~f:(fun n -> n - 1)))
+    max_attempts
+
 type 'a ast_print_method =
   | NoPrint
   | PrintSexp of ('a -> Sexp.t)
@@ -23,11 +51,12 @@ let get_asp_printer_opt : 'a ast_print_method -> ('a expr -> string) option =
 let get_asp_printer (p : 'a ast_print_method) (e : 'a expr) : string =
   match get_asp_printer_opt p with None -> "" | Some f -> f e
 
+(* TODO - change these values back to larger ones *)
 let default_ast_print_method : 'a ast_print_method = PrintExprSource
-let max_gen_rec_depth : int = 10
+let max_gen_rec_depth : int = 3
 let default_max_gen_rec_depth : int = max_gen_rec_depth
-let default_max_custom_type_count : int = 10
-let default_max_custom_type_constructor_count : int = 5
+let default_max_custom_type_count : int = 2
+let default_max_custom_type_constructor_count : int = 2
 
 let sexp_of_token = function
   | END -> Sexp.Atom "END"
@@ -144,6 +173,7 @@ module TestingTypeCtx : sig
   val to_list : t -> custom_type list
   val from_list : custom_type list -> t
   val custom_gen_opt : t -> custom_type QCheck.Gen.t option
+  val sexp_of_t : t -> Sexp.t
 end = struct
   type t = custom_type list
 
@@ -172,6 +202,9 @@ end = struct
     else
       let open QCheck.Gen in
       Some (oneof (List.map ~f:return ctx))
+
+  let sexp_of_t : t -> Sexp.t =
+    Fn.compose (sexp_of_list sexp_of_custom_type) to_list
 end
 
 let vtype_gen ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.Gen.t =
@@ -205,25 +238,30 @@ let typed_var_gen ~(type_ctx : TestingTypeCtx.t) (d : int) :
   let open QCheck.Gen in
   pair varname_gen (vtype_gen ~type_ctx d)
 
-let custom_type_gen ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
-    ~(mrd : int) : custom_type QCheck.Gen.t =
-  let open QCheck.Gen in
-  let gen_constructor =
-    pair custom_type_constructor_name_gen (vtype_gen ~type_ctx mrd)
-  in
-  let gen_constructors =
-    list_size (int_range 1 max_constructors) gen_constructor
-  in
-  pair custom_type_name_gen gen_constructors
-
-let custom_type_arb ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
-    ~(mrd : int) : custom_type QCheck.arbitrary =
-  QCheck.make ~print:custom_type_to_source_code
-    (custom_type_gen ~type_ctx ~max_constructors ~mrd)
-
 let testing_type_ctx_gen ~(max_custom_types : int) ~(max_constructors : int)
     ~(mrd : int) : TestingTypeCtx.t QCheck.Gen.t =
   let open QCheck.Gen in
+  let custom_type_gen ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
+      ~(mrd : int) =
+    let gen_constructor : custom_type_constructor QCheck.Gen.t =
+      (* Filtered so that the constructors don't exist already in the type context *)
+      filter_gen ~max_attempts:10000
+        (pair custom_type_constructor_name_gen (vtype_gen ~type_ctx mrd))
+        ~f:(fun (c_name, _) ->
+          not
+            (List.exists (TestingTypeCtx.to_list type_ctx) ~f:(fun (_, cs) ->
+                 List.exists cs ~f:(fun (x_c_name, _) ->
+                     equal_string x_c_name c_name))))
+    in
+    let gen_constructors =
+      list_size (int_range 1 max_constructors) gen_constructor
+    in
+    pair
+      ((* Filter so that the custom type name doesn't already exist *)
+       filter_gen ~max_attempts:10000 custom_type_name_gen ~f:(fun ct_name ->
+           not (TestingTypeCtx.custom_exists type_ctx ct_name)))
+      gen_constructors
+  in
   int_range 0 max_custom_types >>= fun custom_type_count ->
   fix
     (fun self (n, type_ctx) ->
@@ -351,7 +389,9 @@ let pattern_arb ~(type_ctx : TestingTypeCtx.t) ~(t : vtype) :
     | VTypeFun (t1, t2) -> gen_fun (t1, t2)
     | VTypePair (t1, t2) -> gen_pair (t1, t2)
     | VTypeCustom ct_name ->
-        Option.value_exn (TestingTypeCtx.find_custom type_ctx ct_name)
+        Option.value_exn
+          ~message:"The custom type specified doesn't exist in the context"
+          (TestingTypeCtx.find_custom type_ctx ct_name)
         |> gen_custom
   in
   QCheck.make
@@ -573,7 +613,9 @@ let ast_expr_gen ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
     | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
     | VTypeCustom ct_name ->
-        (Option.value_exn (TestingTypeCtx.find_custom type_ctx ct_name)
+        (Option.value_exn
+           ~message:"The custom type specified doesn't exist in the context"
+           (TestingTypeCtx.find_custom type_ctx ct_name)
         |> gen_custom)
           (d, ctx)
   and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
@@ -621,16 +663,3 @@ let plain_ast_expr_arb_any_default_type_ctx_params :
          (ast_expr_arb_any ~type_ctx PrintExprSource QCheck.Gen.unit))
   in
   QCheck.make ~print:(Fn.compose ast_to_source_code snd) gen
-
-let nonempty_list_arb (v_arb : 'a QCheck.arbitrary) :
-    'a Nonempty_list.t QCheck.arbitrary =
-  QCheck.map
-    ~rev:(fun xs -> Nonempty_list.(head xs, tail xs))
-    (fun (h, ts) -> Nonempty_list.make (h, ts))
-    QCheck.(pair v_arb (list v_arb))
-
-let result_arb (x_arb : 'a QCheck.arbitrary) (y_arb : 'b QCheck.arbitrary) :
-    ('a, 'b) Result.t QCheck.arbitrary =
-  QCheck.map
-    (fun (b, x, y) -> if b then Ok x else Error y)
-    (QCheck.triple QCheck.bool x_arb y_arb)

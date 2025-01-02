@@ -11,6 +11,21 @@ open Typing
 
 (* TODO - make maximum recursion depth parameters labelled (e.g. as "mrd") *)
 
+(** Arbitrary generator for a non-empty list *)
+val nonempty_list_arb :
+  'a QCheck.arbitrary -> 'a Nonempty_list.t QCheck.arbitrary
+
+(** Arbitrary generator for the result type *)
+val result_arb :
+  'a QCheck.arbitrary ->
+  'b QCheck.arbitrary ->
+  ('a, 'b) Result.t QCheck.arbitrary
+
+(** Filter a generator so that it keeps trying until the generated value satisfies the specified predicate.
+    NOTE - this has a risk of causing infinite or near-infinite looping in testing *)
+val filter_gen :
+  ?max_attempts:int -> 'a QCheck.Gen.t -> f:('a -> bool) -> 'a QCheck.Gen.t
+
 (** The printing method for an AST representation of a program *)
 type 'a ast_print_method =
   | NoPrint  (** Don't print the AST *)
@@ -62,11 +77,20 @@ val custom_type_constructor_name_gen : string QCheck.Gen.t
 module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
+  (** Add a custom type to the type context *)
+  val add_custom : t -> custom_type -> t
+
   (** Get the type context as a list *)
   val to_list : t -> custom_type list
 
   (** Creates a type from a list *)
   val from_list : custom_type list -> t
+
+  (** If there are any defined custom types, get a generator for a random one of them *)
+  val custom_gen_opt : t -> custom_type QCheck.Gen.t option
+
+  (** Get the type context as a sexp *)
+  val sexp_of_t : t -> Sexp.t
 end
 
 (** Generator for variable types, taking a maximum recursion depth parameter *)
@@ -78,20 +102,6 @@ val vtype_arb : type_ctx:TestingTypeCtx.t -> int -> vtype QCheck.arbitrary
 (** Generator for a pair of a variable name and a type for it *)
 val typed_var_gen :
   type_ctx:TestingTypeCtx.t -> int -> (string * vtype) QCheck.Gen.t
-
-(** Generator for a custom data type, taking a maximum number of constructors and a maximum recursion depth *)
-val custom_type_gen :
-  type_ctx:TestingTypeCtx.t ->
-  max_constructors:int ->
-  mrd:int ->
-  custom_type QCheck.Gen.t
-
-(** Arbitrary generator for a custom data type, taking a maximum number of constructors and a maximum recursion depth *)
-val custom_type_arb :
-  type_ctx:TestingTypeCtx.t ->
-  max_constructors:int ->
-  mrd:int ->
-  custom_type QCheck.arbitrary
 
 (** Generator for testing type context module context instances *)
 val testing_type_ctx_gen :
@@ -180,13 +190,3 @@ val plain_ast_expr_arb_any :
 (** Arbitrary generator for an untagged AST expression of any type with default type context generation parameters *)
 val plain_ast_expr_arb_any_default_type_ctx_params :
   (TestingTypeCtx.t * unit expr) QCheck.arbitrary
-
-(** Arbitrary generator for a non-empty list *)
-val nonempty_list_arb :
-  'a QCheck.arbitrary -> 'a Nonempty_list.t QCheck.arbitrary
-
-(** Arbitrary generator for the result type *)
-val result_arb :
-  'a QCheck.arbitrary ->
-  'b QCheck.arbitrary ->
-  ('a, 'b) Result.t QCheck.arbitrary
