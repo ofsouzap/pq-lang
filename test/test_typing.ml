@@ -363,7 +363,10 @@ let test_cases_typing_with_var_ctx : test list =
         ~f:(fun acc (xname, xtype) -> ListTypingVarContext.add acc xname xtype)
         ctx_list
     in
-    let name = sprintf "[with var context] %s" (e |> ast_to_source_code) in
+    let name =
+      sprintf "[with var context] %s"
+        (e |> ast_to_source_code ~use_newlines:true)
+    in
     name >:: fun _ ->
     let out = SimpleTypeChecker.type_expr (SetTypingTypeContext.empty, ctx) e in
     match (out, t) with
@@ -498,7 +501,9 @@ let test_cases_arb_compound_expr_typing : test list =
     in
     let e_arb =
       QCheck.make
-        ~print:QCheck.Print.(pair vtype_to_source_code ast_to_source_code)
+        ~print:
+          QCheck.Print.(
+            pair vtype_to_source_code (ast_to_source_code ~use_newlines:true))
         (e_gen type_ctx)
     in
     QCheck_ounit.to_ounit2_test

@@ -79,6 +79,4 @@ exception AstConverionFixError
   Convert an AST expression into source code that corresponds to the AST representation.
   If the input has a malformed usage of the Fix node, this will raise a `AstConversionFixError` exception.
 *)
-val ast_to_source_code : 'a expr -> string
-
-(* TODO - in _to_source_code function, have option for using newlines for ease of reading *)
+val ast_to_source_code : ?use_newlines:bool -> 'a expr -> string

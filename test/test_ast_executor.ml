@@ -28,7 +28,8 @@ let type_expr ?(type_ctx : SetTypingTypeContext.t option) (e : Ast.plain_expr) =
   | Error err ->
       failwith
         (sprintf "Typing error:\nExpression: %s\nError: %s"
-           (Ast.ast_to_source_code e) (print_typing_error err))
+           (Ast.ast_to_source_code ~use_newlines:true e)
+           (print_typing_error err))
 
 let test_cases_unit_value : basic_test_case list =
   let open Ast in

@@ -137,7 +137,10 @@ let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
 
 exception AstConverionFixError
 
-let rec ast_to_source_code = function
+let rec ast_to_source_code ?(use_newlines : bool option) =
+  let use_newlines = Option.value ~default:false use_newlines in
+  let nl = if use_newlines then "\n" else " " in
+  function
   | UnitLit _ -> "()"
   | IntLit (_, i) -> string_of_int i
   | Add (_, e1, e2) ->
@@ -166,35 +169,36 @@ let rec ast_to_source_code = function
   | LtEq (_, e1, e2) ->
       sprintf "(%s) <= (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | If (_, e1, e2, e3) ->
-      sprintf "if (%s) then (%s) else (%s) end" (ast_to_source_code e1)
-        (ast_to_source_code e2) (ast_to_source_code e3)
+      sprintf "if (%s)%sthen%s(%s)%selse%s(%s) end" (ast_to_source_code e1) nl
+        nl (ast_to_source_code e2) nl nl (ast_to_source_code e3)
   | Var (_, vname) -> vname
   | Let (_, xname, e1, e2) -> (
       let eval_default_repr () =
-        sprintf "let %s = (%s) in (%s) end" xname (ast_to_source_code e1)
-          (ast_to_source_code e2)
+        sprintf "let %s =%s(%s)%sin%s(%s) end" xname nl (ast_to_source_code e1)
+          nl nl (ast_to_source_code e2)
       in
       match e1 with
       | Fix (_, (xname2, x2type1, x2type2), (yname, ytype), e1') ->
           let x2type = VTypeFun (x2type1, x2type2) in
           if equal_string xname xname2 then
-            sprintf "let rec (%s : %s) = fun (%s : %s) -> (%s) end in (%s) end"
+            sprintf
+              "let rec (%s : %s) =%sfun (%s : %s) ->%s(%s) end%sin%s(%s)%send"
               xname
               (vtype_to_source_code x2type)
-              yname
+              nl yname
               (vtype_to_source_code ytype)
-              (ast_to_source_code e1') (ast_to_source_code e2)
+              nl (ast_to_source_code e1') nl nl (ast_to_source_code e2) nl
           else eval_default_repr ()
       | _ -> eval_default_repr ())
   | Fun (_, (xname, xtype), e) ->
-      sprintf "fun (%s : %s) -> (%s) end" xname
+      sprintf "fun (%s : %s) ->%s(%s) end" xname
         (vtype_to_source_code xtype)
-        (ast_to_source_code e)
+        nl (ast_to_source_code e)
   | App (_, e1, e2) ->
       sprintf "(%s) (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | Fix _ -> raise AstConverionFixError
   | Match (_, e, cs) ->
-      sprintf "match (%s) with %s end" (ast_to_source_code e)
+      sprintf "match (%s) with%s%s end" (ast_to_source_code e) nl
         (cs
         |> Nonempty_list.map ~f:(fun (p, c_e) ->
                sprintf "| (%s) -> (%s)" (pattern_to_source_code p)

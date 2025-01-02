@@ -676,4 +676,9 @@ let plain_ast_expr_arb_any_default_type_ctx_params :
       (QCheck.get_gen
          (ast_expr_arb_any ~type_ctx PrintExprSource QCheck.Gen.unit))
   in
-  QCheck.make ~print:(Fn.compose ast_to_source_code snd) gen
+  QCheck.make
+    ~print:(fun (type_ctx, e) ->
+      sprintf "[type ctx: %s]\n%s"
+        (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
+        (ast_to_source_code ~use_newlines:true e))
+    gen
