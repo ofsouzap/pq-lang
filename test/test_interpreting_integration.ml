@@ -79,6 +79,22 @@ let suite =
              Ok (Int 1) );
            ("Program Pred-or-Zero-a", program_pred_or_zero 0, Ok (Int 0));
            ("Program Pred-or-Zero-a", program_pred_or_zero 5, Ok (Int 4));
-         ]
+           ( "Program int list sum",
+             {|
+type int_list =
+  | Nil of unit
+  | Cons of (int * int_list)
 
-(* TODO - custom type definitions *)
+let rec (sum_int_list : int_list -> int) =
+  fun (xs : int_list) ->
+    match xs with
+    | (Nil (x : unit)) -> 0
+    | (Cons ((h : int), (ts : int_list))) -> h + sum_int_list ts
+    end
+  end
+in
+  sum_int_list (Cons (1, Cons (2, Cons (3, Cons (4, Nil ())))))
+end
+|},
+             Ok (Int 10) );
+         ]

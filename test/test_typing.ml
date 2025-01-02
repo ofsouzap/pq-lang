@@ -215,11 +215,60 @@ let test_cases_expr_typing : test list =
                 (PatName ("y", VTypeInt), IntLit ((), 5));
               ] ),
         Error (TypeMismatch (VTypeBool, VTypeInt)) );
-      (* TODO - matching with PatConstructor *)
+      ( (* Valid for constructor pattern *)
+        Some
+          (SetTypingTypeContext.create
+             ~custom_types:
+               [
+                 ("empty", []);
+                 ( "int_list",
+                   [
+                     ("Nil", VTypeUnit);
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                   ] );
+               ]),
+        Match
+          ( (),
+            Constructor
+              ( (),
+                "Cons",
+                Pair ((), IntLit ((), 3), Constructor ((), "Nil", UnitLit ()))
+              ),
+            Nonempty_list.from_list_unsafe
+              [
+                ( PatConstructor ("Nil", PatName ("z", VTypeUnit)),
+                  IntLit ((), 0) );
+                ( PatConstructor
+                    ( "Cons",
+                      PatName ("x", VTypePair (VTypeInt, VTypeCustom "int_list"))
+                    ),
+                  IntLit ((), 1) );
+              ] ),
+        Ok VTypeInt );
+      ( (* Non-existant custom type *)
+        Some (SetTypingTypeContext.create ~custom_types:[]),
+        Match
+          ( (),
+            Constructor
+              ( (),
+                "Cons",
+                Pair ((), IntLit ((), 3), Constructor ((), "Nil", UnitLit ()))
+              ),
+            Nonempty_list.from_list_unsafe
+              [
+                ( PatConstructor ("Nil", PatName ("z", VTypeUnit)),
+                  IntLit ((), 0) );
+                ( PatConstructor
+                    ( "Cons",
+                      PatName ("x", VTypePair (VTypeInt, VTypeCustom "int_list"))
+                    ),
+                  IntLit ((), 1) );
+              ] ),
+        Error (UndefinedCustomTypeConstructor "Nil") );
       ( None,
         Constructor ((), "Nil", UnitLit ()),
         Error (UndefinedCustomTypeConstructor "Nil") );
-      ( Some (SetTypingTypeContext.create ~custom_types:[ ("Empty", []) ]),
+      ( Some (SetTypingTypeContext.create ~custom_types:[ ("empty", []) ]),
         Constructor ((), "Nil", UnitLit ()),
         Error (UndefinedCustomTypeConstructor "Nil") );
       ( Some

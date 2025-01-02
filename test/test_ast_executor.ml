@@ -299,12 +299,20 @@ let test_cases_recursion : basic_test_case list =
 
 let test_cases_match : basic_test_case list =
   let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) =
-    (ast_to_source_code x, type_expr x, y)
+  let mapf
+      ( (type_ctx : SetTypingTypeContext.t option),
+        (x : plain_expr),
+        (y : exec_res) ) =
+    ( ast_to_source_code x,
+      type_expr
+        ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
+        x,
+      y )
   in
   List.map ~f:mapf
     [
-      ( Let
+      ( None,
+        Let
           ( (),
             "x",
             IntLit ((), 3),
@@ -317,7 +325,8 @@ let test_cases_match : basic_test_case list =
                       Add ((), Var ((), "y"), IntLit ((), 1)) );
                   ] ) ),
         Ok (Int 4) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "x",
             BoolLit ((), false),
@@ -331,7 +340,8 @@ let test_cases_match : basic_test_case list =
                     (PatName ("z", VTypeBool), IntLit ((), 9));
                   ] ) ),
         Ok (Int 0) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "x",
             Pair ((), BoolLit ((), true), IntLit ((), 1)),
@@ -344,7 +354,8 @@ let test_cases_match : basic_test_case list =
                       If ((), Var ((), "y"), Var ((), "z"), IntLit ((), 0)) );
                   ] ) ),
         Ok (Int 1) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "x",
             Pair
@@ -362,7 +373,56 @@ let test_cases_match : basic_test_case list =
                       Var ((), "y") );
                   ] ) ),
         Ok (Pair (Bool true, Bool true)) );
-      (* TODO - matching with PatConstructor *)
+      ( Some
+          (SetTypingTypeContext.create
+             ~custom_types:
+               [
+                 ("bool_box", [ ("BoolBox", VTypeBool) ]);
+                 ( "int_list",
+                   [
+                     ("Nil", VTypeUnit);
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                   ] );
+               ]),
+        Match
+          ( (),
+            Constructor ((), "BoolBox", BoolLit ((), true)),
+            Nonempty_list.from_list_unsafe
+              [
+                ( PatConstructor ("BoolBox", PatName ("x", VTypeBool)),
+                  Var ((), "x") );
+              ] ),
+        Ok (Bool true) );
+      ( Some
+          (SetTypingTypeContext.create
+             ~custom_types:
+               [
+                 ("bool_box", [ ("BoolBox", VTypeBool) ]);
+                 ( "int_list",
+                   [
+                     ("Nil", VTypeUnit);
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                   ] );
+               ]),
+        Match
+          ( (),
+            Constructor
+              ( (),
+                "Cons",
+                Pair ((), IntLit ((), 7), Constructor ((), "Nil", UnitLit ()))
+              ),
+            Nonempty_list.from_list_unsafe
+              [
+                ( PatConstructor ("Nil", PatName ("x", VTypeUnit)),
+                  IntLit ((), 0) );
+                ( PatConstructor
+                    ( "Cons",
+                      PatPair
+                        ( PatName ("x", VTypeInt),
+                          PatName ("y", VTypeCustom "int_list") ) ),
+                  Var ((), "x") );
+              ] ),
+        Ok (Int 7) );
     ]
 
 let test_cases_constructor : basic_test_case list =
