@@ -390,7 +390,10 @@ let pattern_arb ~(type_ctx : TestingTypeCtx.t) ~(t : vtype) :
     | VTypePair (t1, t2) -> gen_pair (t1, t2)
     | VTypeCustom ct_name ->
         Option.value_exn
-          ~message:"The custom type specified doesn't exist in the context"
+          ~message:
+            (sprintf
+               "The custom type specified (%s) doesn't exist in the context"
+               ct_name)
           (TestingTypeCtx.find_custom type_ctx ct_name)
         |> gen_custom
   in
@@ -614,7 +617,10 @@ let ast_expr_gen ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
     | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
     | VTypeCustom ct_name ->
         (Option.value_exn
-           ~message:"The custom type specified doesn't exist in the context"
+           ~message:
+             (sprintf
+                "The custom type specified (%s) doesn't exist in the context"
+                ct_name)
            (TestingTypeCtx.find_custom type_ctx ct_name)
         |> gen_custom)
           (d, ctx)

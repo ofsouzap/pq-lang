@@ -8,18 +8,14 @@ open Ast
 open Typing
 open Testing_utils
 
-let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
+let create_typed_expr_gen_test (name : string)
+    (types_gen : (TestingTypeCtx.t * vtype) Gen.t) : test =
   let open QCheck in
   QCheck_runner.to_ounit2_test
     (Test.make ~name ~count:1000
        (let open QCheck.Gen in
         let gen : (TestingTypeCtx.t * (vtype * unit Ast.expr)) QCheck.Gen.t =
-          testing_type_ctx_gen
-            ~max_constructors:default_max_custom_type_constructor_count
-            ~max_custom_types:default_max_custom_type_count
-            ~mrd:default_max_gen_rec_depth
-          >>= fun type_ctx ->
-          t_gen >>= fun t ->
+          types_gen >>= fun (type_ctx, t) ->
           QCheck.gen (ast_expr_arb ~type_ctx ~t NoPrint Gen.unit) >|= fun e ->
           (type_ctx, (t, e))
         in
@@ -43,7 +39,8 @@ let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
          | Error _ -> false))
 
 let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
-  create_typed_expr_gen_test name (Gen.return t)
+  create_typed_expr_gen_test name
+    QCheck.Gen.(default_testing_type_ctx_gen >|= fun type_ctx -> (type_ctx, t))
 
 let create_test_vtype_gen_constructors_exist (name : string) : test =
   let open QCheck in
@@ -99,13 +96,13 @@ let suite =
                     pair
                       (vtype_gen ~type_ctx default_max_gen_rec_depth)
                       (vtype_gen ~type_ctx default_max_gen_rec_depth)
-                    >|= fun (t1, t2) -> VTypeFun (t1, t2));
+                    >|= fun (t1, t2) -> (type_ctx, VTypeFun (t1, t2)));
                 create_typed_expr_gen_test "'a * 'b"
                   Gen.(
                     default_testing_type_ctx_gen >>= fun type_ctx ->
                     pair
                       (vtype_gen ~type_ctx default_max_gen_rec_depth)
                       (vtype_gen ~type_ctx default_max_gen_rec_depth)
-                    >|= fun (t1, t2) -> VTypePair (t1, t2));
+                    >|= fun (t1, t2) -> (type_ctx, VTypePair (t1, t2)));
               ];
        ]
