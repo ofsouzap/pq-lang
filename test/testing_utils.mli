@@ -2,10 +2,13 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
+open Custom_types
 open Pattern
 open Ast
 
 (* TODO - move the generators and arbitrary instances for different things into the main lib/ things, and have them as submodules with a consistent name relating to QCheck *)
+
+(* TODO - make maximum recursion depth parameters labelled (e.g. as "mrd") *)
 
 (** The printing method for an AST representation of a program *)
 type 'a ast_print_method =
@@ -42,14 +45,47 @@ val lexer_keywords : string list
 (** Generator for a small-length, non-empty string of lowercase characters *)
 val varname_gen : string QCheck.Gen.t
 
+(** Generator for a small-length, non-empty string of lowercase characters *)
+val custom_type_name_gen : string QCheck.Gen.t
+
+(** Generator for a small-length, non-empty string starting with uppercase character, then with only lowercase characters *)
+val custom_type_constructor_name_gen : string QCheck.Gen.t
+
+(** Implementation of a type context useful for tests *)
+module TestingTypeCtx : sig
+  include Typing.TypingTypeContext
+
+  (** Get the type context as a list *)
+  val to_list : t -> custom_type list
+
+  (** Creates a type from a list *)
+  val from_list : custom_type list -> t
+end
+
 (** Generator for variable types, taking a maximum recursion depth parameter *)
-val vtype_gen : int -> vtype QCheck.Gen.t
+val vtype_gen : type_ctx:TestingTypeCtx.t -> int -> vtype QCheck.Gen.t
 
 (** Arbitrary generator for variable types, taking a maximum recursion depth parameter *)
-val vtype_arb : int -> vtype QCheck.arbitrary
+val vtype_arb : type_ctx:TestingTypeCtx.t -> int -> vtype QCheck.arbitrary
 
 (** Generator for a pair of a variable name and a type for it *)
-val typed_var_gen : int -> (string * vtype) QCheck.Gen.t
+val typed_var_gen :
+  type_ctx:TestingTypeCtx.t -> int -> (string * vtype) QCheck.Gen.t
+
+(** Arbitrary generator for a custom data type, taking a maximum number of constructors and a maximum recursion depth *)
+val custom_type_arb :
+  type_ctx:TestingTypeCtx.t ->
+  max_constructors:int ->
+  mrd:int ->
+  custom_type QCheck.arbitrary
+
+(** Arbitrary generator for testing type context module context instances *)
+val testing_type_ctx_arb :
+  type_ctx:TestingTypeCtx.t ->
+  max_custom_types:int ->
+  max_constructors:int ->
+  mrd:int ->
+  TestingTypeCtx.t QCheck.arbitrary
 
 (** Implementation of a variable context useful for tests *)
 module TestingVarCtx : sig
@@ -66,28 +102,35 @@ module TestingVarCtx : sig
 end
 
 (** Arbitrary generator for testing variable context module context instances *)
-val testing_var_ctx_arb : TestingVarCtx.t QCheck.arbitrary
+val testing_var_ctx_arb :
+  type_ctx:TestingTypeCtx.t -> TestingVarCtx.t QCheck.arbitrary
 
 (** Arbitrary pattern generator that generates a pattern of the specified type as well as a list of the variables it defines *)
-val pattern_arb : t:vtype -> (pattern * (string * vtype) list) QCheck.arbitrary
-
-(* TODO - custom type definitions (arbitrary generator + integrate with ast arbitrary generator) *)
+val pattern_arb :
+  type_ctx:TestingTypeCtx.t ->
+  t:vtype ->
+  (pattern * (string * vtype) list) QCheck.arbitrary
 
 (** Arbitrary generator for an AST expression, possibly of a specified type.
     Must be provided with a printing method for the AST and a generator for the tagging values.
     @param t (optional) The type that the generated output should type to *)
 val ast_expr_arb :
   ?t:vtype ->
+  type_ctx:TestingTypeCtx.t ->
   'a ast_print_method ->
   'a QCheck.Gen.t ->
   'a Ast.expr QCheck.arbitrary
 
 (** Arbitrary generator for an AST expression of any type *)
 val ast_expr_arb_any :
-  'a ast_print_method -> 'a QCheck.Gen.t -> 'a expr QCheck.arbitrary
+  type_ctx:TestingTypeCtx.t ->
+  'a ast_print_method ->
+  'a QCheck.Gen.t ->
+  'a expr QCheck.arbitrary
 
 (** Arbitrary generator for an untagged AST expression of any type *)
-val plain_ast_expr_arb_any : unit expr QCheck.arbitrary
+val plain_ast_expr_arb_any :
+  type_ctx:TestingTypeCtx.t -> unit expr QCheck.arbitrary
 
 (** Arbitrary generator for a non-empty list *)
 val nonempty_list_arb :

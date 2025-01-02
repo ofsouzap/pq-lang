@@ -2,6 +2,7 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
+open Custom_types
 open Pattern
 open Ast
 open Parser
@@ -110,28 +111,19 @@ let varname_gen : string QCheck.Gen.t =
       else return s)
     ()
 
-let vtype_gen (d : int) : vtype QCheck.Gen.t =
-  (* TODO - allow custom type. However, requires type context *)
-  let open QCheck.Gen in
-  let gen =
-    fix (fun self d ->
-        let self' = self (d - 1) in
-        let base_cases =
-          [ return VTypeUnit; return VTypeInt; return VTypeBool ]
-        in
-        let rec_cases =
-          [ (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2)) ]
-        in
-        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
-  in
-  gen d
+let custom_type_name_gen : string QCheck.Gen.t = varname_gen
 
-let vtype_arb (d : int) : vtype QCheck.arbitrary =
-  QCheck.make ~print:vtype_to_source_code (vtype_gen d)
-
-let typed_var_gen (d : int) : (string * vtype) QCheck.Gen.t =
+let custom_type_constructor_name_gen : string QCheck.Gen.t =
   let open QCheck.Gen in
-  pair varname_gen (vtype_gen d)
+  fix
+    (fun self _ ->
+      int_range 0 5 >>= fun n ->
+      ( pair (char_range 'A' 'Z') (list_repeat n (char_range 'a' 'z'))
+      >|= fun (h, ts) -> String.of_char h ^ String.of_char_list ts )
+      >>= fun s ->
+      if List.mem lexer_keywords s ~equal:String.equal then self ()
+      else return s)
+    ()
 
 let gen_unique_pair ~(equal : 'a -> 'a -> bool) (g : 'a QCheck.Gen.t) :
     ('a * 'a) QCheck.Gen.t =
@@ -142,16 +134,110 @@ let gen_unique_pair ~(equal : 'a -> 'a -> bool) (g : 'a QCheck.Gen.t) :
       g >>= fun y -> if equal x y then self () else return (x, y))
     ()
 
+module TestingTypeCtx : sig
+  include Typing.TypingTypeContext
+
+  val to_list : t -> custom_type list
+  val from_list : custom_type list -> t
+  val custom_gen : t -> custom_type QCheck.Gen.t
+end = struct
+  type t = custom_type list
+
+  let empty = []
+  let create ~(custom_types : custom_type list) : t = custom_types
+
+  let find_custom ctx ct_name =
+    List.find ctx ~f:(fun (x_ct_name, _) -> equal_string x_ct_name ct_name)
+
+  let custom_exists ctx ct_name = Option.is_some (find_custom ctx ct_name)
+
+  let find_custom_with_constructor (ctx : t) (c_name : string) :
+      (custom_type * custom_type_constructor) option =
+    let open Option in
+    List.find_map ctx ~f:(fun ((_, cs) as ct) ->
+        List.find_map cs ~f:(fun ((x_c_name, _) as c) ->
+            if equal_string c_name x_c_name then Some c else None)
+        >>| fun c -> (ct, c))
+
+  let to_list = Fn.id
+  let from_list cts = cts
+
+  let custom_gen (ctx : t) : custom_type QCheck.Gen.t =
+    let open QCheck.Gen in
+    oneof (List.map ~f:return ctx)
+end
+
+let vtype_gen ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.Gen.t =
+  let open QCheck.Gen in
+  let gen =
+    fix (fun self d ->
+        let self' = self (d - 1) in
+        let base_cases =
+          [
+            return VTypeUnit;
+            return VTypeInt;
+            return VTypeBool;
+            ( TestingTypeCtx.custom_gen type_ctx >|= fun (ct_name, _) ->
+              VTypeCustom ct_name );
+          ]
+        in
+        let rec_cases =
+          [
+            (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2));
+            (pair self' self' >|= fun (t1, t2) -> VTypePair (t1, t2));
+          ]
+        in
+        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
+  in
+  gen d
+
+let vtype_arb ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.arbitrary
+    =
+  QCheck.make ~print:vtype_to_source_code (vtype_gen ~type_ctx d)
+
+let typed_var_gen ~(type_ctx : TestingTypeCtx.t) (d : int) :
+    (string * vtype) QCheck.Gen.t =
+  let open QCheck.Gen in
+  pair varname_gen (vtype_gen ~type_ctx d)
+
+let custom_type_arb ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
+    ~(mrd : int) : custom_type QCheck.arbitrary =
+  let open QCheck.Gen in
+  let gen_constructor =
+    pair custom_type_constructor_name_gen (vtype_gen ~type_ctx mrd)
+  in
+  let gen_constructors =
+    list_size (int_range 1 max_constructors) gen_constructor
+  in
+  let gen = pair custom_type_name_gen gen_constructors in
+  QCheck.make ~print:custom_type_to_source_code gen
+
+let testing_type_ctx_arb ~(type_ctx : TestingTypeCtx.t)
+    ~(max_custom_types : int) ~(max_constructors : int) ~(mrd : int) :
+    TestingTypeCtx.t QCheck.arbitrary =
+  let gen : TestingTypeCtx.t QCheck.Gen.t =
+    let open QCheck.Gen in
+    list_size
+      (int_range 0 max_custom_types)
+      (QCheck.get_gen (custom_type_arb ~type_ctx ~max_constructors ~mrd))
+    >|= TestingTypeCtx.from_list
+  in
+  let print_custom_type_constructor : custom_type_constructor QCheck.Print.t =
+    QCheck.Print.(pair string vtype_to_source_code)
+  in
+  let print_custom_type : custom_type QCheck.Print.t =
+    QCheck.Print.(pair Fn.id (list print_custom_type_constructor))
+  in
+  QCheck.make
+    ~print:
+      QCheck.Print.(Fn.compose (list print_custom_type) TestingTypeCtx.to_list)
+    gen
+
 module TestingVarCtx : sig
   include Typing.TypingVarContext
 
-  (** Get a list of all the variables who have the given type *)
   val varnames_of_type : vtype -> t -> string list
-
-  (** Get the context as a list *)
   val to_list : t -> (string * vtype) list
-
-  (** Creates a context from a list *)
   val from_list : (string * vtype) list -> t
 end = struct
   type t = (string * vtype) list
@@ -176,10 +262,11 @@ end = struct
   let from_list = List.fold ~init:empty ~f:(fun acc (x, t) -> add acc x t)
 end
 
-let testing_var_ctx_arb : TestingVarCtx.t QCheck.arbitrary =
+let testing_var_ctx_arb ~(type_ctx : TestingTypeCtx.t) :
+    TestingVarCtx.t QCheck.arbitrary =
   let gen =
     let open QCheck.Gen in
-    list (pair varname_gen (vtype_gen default_max_gen_rec_depth))
+    list (pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth))
     >|= TestingVarCtx.from_list
   in
   QCheck.make
@@ -189,7 +276,7 @@ let testing_var_ctx_arb : TestingVarCtx.t QCheck.arbitrary =
          TestingVarCtx.to_list)
     gen
 
-let pattern_arb ~(t : vtype) :
+let pattern_arb ~(type_ctx : TestingTypeCtx.t) ~(t : vtype) :
     (pattern * (string * vtype) list) QCheck.arbitrary =
   let open QCheck in
   let open QCheck.Gen in
@@ -225,6 +312,11 @@ let pattern_arb ~(t : vtype) :
         ( gen t1 ctx >>= fun (p1, ctx1) ->
           gen t2 ctx1 >|= fun (p2, ctx2) -> (PatPair (p1, p2), ctx2) );
       ]
+  and gen_custom ((_, cs) : custom_type) (ctx : TestingVarCtx.t) :
+      (* Generate a pattern that types as the specified custom type *)
+      (pattern * TestingVarCtx.t) Gen.t =
+    oneof (List.map ~f:return cs) >>= fun (c_name, c_t) ->
+    gen c_t ctx >>= fun (p, ctx') -> return (PatConstructor (c_name, p), ctx')
   and gen (t : vtype) : TestingVarCtx.t -> (pattern * TestingVarCtx.t) Gen.t =
     (* Generate a pattern of a specified type *)
     match t with
@@ -233,7 +325,9 @@ let pattern_arb ~(t : vtype) :
     | VTypeBool -> gen_bool
     | VTypeFun (t1, t2) -> gen_fun (t1, t2)
     | VTypePair (t1, t2) -> gen_pair (t1, t2)
-    | VTypeCustom _ -> failwith "TODO"
+    | VTypeCustom ct_name ->
+        Option.value_exn (TestingTypeCtx.find_custom type_ctx ct_name)
+        |> gen_custom
   in
   QCheck.make
     ~print:
@@ -242,8 +336,9 @@ let pattern_arb ~(t : vtype) :
     ( gen t TestingVarCtx.empty >|= fun (p, ctx) ->
       (p, TestingVarCtx.to_list ctx) )
 
-let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
-    (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.arbitrary =
+let ast_expr_arb ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
+    (print : 'a ast_print_method) (v_gen : 'a QCheck.Gen.t) :
+    'a expr QCheck.arbitrary =
   let open QCheck in
   let open QCheck.Gen in
   let rec gen_e_var_of_type
@@ -276,7 +371,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
         ((d : int), (ctx : TestingVarCtx.t)),
         (v : 'a) ) (t2 : vtype) : 'a expr Gen.t =
     (* Shorthand for generating a function application expression *)
-    vtype_gen d >>= fun t1 ->
+    vtype_gen ~type_ctx d >>= fun t1 ->
     pair (gen_fun (t1, t2) (d - 1, ctx)) (gen (d - 1, ctx) t1)
     >|= fun (e1, e2) -> App (v, e1, e2)
   and gen_e_let_rec
@@ -286,7 +381,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     (* Shorthand for generating a let-rec expression *)
     pair
       (gen_unique_pair ~equal:equal_string varname_gen)
-      (pair (vtype_gen d) (vtype_gen d))
+      (pair (vtype_gen ~type_ctx d) (vtype_gen ~type_ctx d))
     >>= fun ((fname, xname), (ftype1, ftype2)) ->
     let ctx_with_f = TestingVarCtx.add ctx fname (VTypeFun (ftype1, ftype2)) in
     let ctx_with_fx = TestingVarCtx.add ctx_with_f xname ftype1 in
@@ -299,7 +394,7 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
         (v : 'a) ) : 'a expr Gen.t =
     (* Shorthand for generating a match expression *)
     gen_any_of_type (d - 1, ctx) >>= fun (e1_t, e1) ->
-    let pat_gen = pattern_arb ~t:e1_t |> QCheck.get_gen in
+    let pat_gen = pattern_arb ~type_ctx ~t:e1_t |> QCheck.get_gen in
     let case_and_pat_gen =
       pat_gen >>= fun (p, p_ctx_list) ->
       let case_ctx =
@@ -393,23 +488,6 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
         in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
-  and gen_pair ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
-      'a expr Gen.t =
-    (* Generate an expression that types as a pair of the provided types *)
-    let t = VTypePair (t1, t2) in
-    fix
-      (fun self (d, ctx) ->
-        v_gen >>= fun v ->
-        let base_cases =
-          [
-            ( pair (gen (d - 1, ctx) t1) (gen (d - 1, ctx) t2)
-            >|= fun (e1, e2) -> Ast.Pair (v, e1, e2) );
-          ]
-          @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
-        in
-        let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
-        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
-      param
   and gen_fun ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
       'a expr Gen.t =
     (* Generate an expression that has type of t1 -> t2
@@ -429,6 +507,40 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
         let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
       param
+  and gen_pair ((t1 : vtype), (t2 : vtype)) (param : int * TestingVarCtx.t) :
+      'a expr Gen.t =
+    (* Generate an expression that types as a pair of the provided types *)
+    let t = VTypePair (t1, t2) in
+    fix
+      (fun self (d, ctx) ->
+        v_gen >>= fun v ->
+        let base_cases =
+          [
+            ( pair (gen (d - 1, ctx) t1) (gen (d - 1, ctx) t2)
+            >|= fun (e1, e2) -> Ast.Pair (v, e1, e2) );
+          ]
+          @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+        in
+        let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
+        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
+      param
+  and gen_custom ((ct_name, cs) : custom_type) (param : int * TestingVarCtx.t) :
+      'a expr Gen.t =
+    (* Generate an expression that types as the provided custom type *)
+    let t = VTypeCustom ct_name in
+    fix
+      (fun self (d, ctx) ->
+        v_gen >>= fun v ->
+        let base_cases =
+          [
+            ( oneof (List.map ~f:return cs) >>= fun (c_name, c_t) ->
+              gen (d - 1, ctx) c_t >|= fun e' -> Constructor (v, c_name, e') );
+          ]
+          @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+        in
+        let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
+        if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
+      param
   and gen ((d : int), (ctx : TestingVarCtx.t)) (t : vtype) : 'a expr Gen.t =
     match t with
     | VTypeUnit -> gen_unit (d, ctx)
@@ -436,10 +548,13 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     | VTypeBool -> gen_bool (d, ctx)
     | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
     | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
-    | VTypeCustom _ -> failwith "TODO"
+    | VTypeCustom ct_name ->
+        (Option.value_exn (TestingTypeCtx.find_custom type_ctx ct_name)
+        |> gen_custom)
+          (d, ctx)
   and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
       (vtype * 'a expr) Gen.t =
-    vtype_gen d >>= fun t ->
+    vtype_gen ~type_ctx d >>= fun t ->
     gen (d, ctx) t >|= fun e -> (t, e)
   in
   let make_fn g =
@@ -452,10 +567,12 @@ let ast_expr_arb ?(t : vtype option) (print : 'a ast_print_method)
     | Some t -> gen (max_gen_rec_depth, TestingVarCtx.empty) t
     | None -> gen_any_of_type (max_gen_rec_depth, TestingVarCtx.empty) >|= snd)
 
-let ast_expr_arb_any print v_gen = ast_expr_arb print v_gen
+let ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) print v_gen =
+  ast_expr_arb ~type_ctx print v_gen
 
-let plain_ast_expr_arb_any : unit expr QCheck.arbitrary =
-  ast_expr_arb_any PrintExprSource QCheck.Gen.unit
+let plain_ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) :
+    unit expr QCheck.arbitrary =
+  ast_expr_arb_any ~type_ctx PrintExprSource QCheck.Gen.unit
 
 let nonempty_list_arb (v_arb : 'a QCheck.arbitrary) :
     'a Nonempty_list.t QCheck.arbitrary =
