@@ -156,15 +156,16 @@ let rec expr_shrink : 'a expr QCheck.Shrink.t =
       triop_shrink (v, e1, e2, e3) (fun (v', e1', e2', e3') ->
           If (v', e1', e2', e3'))
   | Var _ -> empty
-  | Let (v, x, e1, e2) ->
-      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Let (v', x, e1', e2'))
-  | Fun (v, (x, t), e1) ->
-      return e1 <+> expr_shrink e1 >|= fun e1' -> Fun (v, (x, t), e1')
+  | Let _ ->
+      (* Because of let-rec definitions needing a specific form when using AST to source code,
+         this would need a filtered shrink function which I can't be bothered to write at the moment *)
+      empty
+  | Fun (v, (x, t), e1) -> expr_shrink e1 >|= fun e1' -> Fun (v, (x, t), e1')
   | App (v, e1, e2) ->
       binop_shrink (v, e1, e2) (fun (v', e1', e2') -> App (v', e1', e2'))
-  | Fix (v, (f, t1, t2), (x, t), e1) ->
-      return e1 <+> expr_shrink e1 >|= fun e1' ->
-      Fix (v, (f, t1, t2), (x, t), e1')
+  | Fix _ ->
+      (* I won't try have these shrunk, since it's more complicated than most, since let-rec definitions need a specific form *)
+      empty
   | Match (v, e1, ps) ->
       return e1
       <+> ( (* Try shrinking each case expression *)
