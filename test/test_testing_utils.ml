@@ -12,27 +12,29 @@ let create_typed_expr_gen_test (name : string) (t_gen : vtype Gen.t) : test =
   QCheck_runner.to_ounit2_test
     (Test.make ~name ~count:1000
        (let open QCheck.Gen in
-        let te_gen =
+        let gen : (TestingTypeCtx.t * (vtype * unit Ast.expr)) QCheck.Gen.t =
+          testing_type_ctx_gen
+            ~max_constructors:default_max_custom_type_constructor_count
+            ~max_custom_types:default_max_custom_type_count
+            ~mrd:default_max_gen_rec_depth
+          >>= fun type_ctx ->
           t_gen >>= fun t ->
-          QCheck.gen (ast_expr_arb ~t NoPrint Gen.unit) >|= fun e -> (t, e)
+          QCheck.gen (ast_expr_arb ~type_ctx ~t NoPrint Gen.unit) >|= fun e ->
+          (type_ctx, (t, e))
         in
-        let te_arb =
-          make
-            ~print:(fun (t, e) ->
-              sprintf "[type: %s] %s" (vtype_to_source_code t)
-                (ast_to_source_code e))
-            te_gen
-        in
-        te_arb)
-       (fun (t, e) ->
+        QCheck.make
+          ~print:(fun (_, (t, e)) ->
+            sprintf "[with type ctx] [type: %s] %s" (vtype_to_source_code t)
+              (ast_to_source_code e))
+          gen)
+       (fun (type_ctx, (t, e)) ->
          let typed_result =
-           Typing.type_expr ~type_ctx:SetTypingTypeContext.empty e
-           (* TODO - use arbitrary type context once this added to typed expression generation *)
+           TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
          in
          match typed_result with
          | Ok tpe ->
              let et =
-               tpe |> SimpleTypeChecker.typed_program_expression_get_expression
+               tpe |> TestingTypeChecker.typed_program_expression_get_expression
                |> Ast.expr_node_val |> fst
              in
              equal_vtype t et
@@ -50,9 +52,11 @@ let create_list_impl_var_ctx (xs : (string * vtype) list) :
   List.fold xs ~init:ListTypingVarContext.empty ~f:(fun ctx (x, t) ->
       ListTypingVarContext.add ctx x t)
 
-let var_ctx_list_arb =
+let var_ctx_list_arb ~(type_ctx : TestingTypeCtx.t) =
   let open QCheck in
-  list (pair string (vtype_arb default_max_gen_rec_depth))
+  list (pair string (vtype_arb ~type_ctx default_max_gen_rec_depth))
+
+(* TODO - test that TestingTypeChecker types things the same as the SimpleTypeChecker *)
 
 let suite =
   "Utilities Tests"
@@ -64,15 +68,17 @@ let suite =
                 create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
                 create_typed_expr_gen_test "'a -> 'b"
                   Gen.(
+                    default_testing_type_ctx_gen >>= fun type_ctx ->
                     pair
-                      (vtype_gen default_max_gen_rec_depth)
-                      (vtype_gen default_max_gen_rec_depth)
+                      (vtype_gen ~type_ctx default_max_gen_rec_depth)
+                      (vtype_gen ~type_ctx default_max_gen_rec_depth)
                     >|= fun (t1, t2) -> VTypeFun (t1, t2));
                 create_typed_expr_gen_test "'a * 'b"
                   Gen.(
+                    default_testing_type_ctx_gen >>= fun type_ctx ->
                     pair
-                      (vtype_gen default_max_gen_rec_depth)
-                      (vtype_gen default_max_gen_rec_depth)
+                      (vtype_gen ~type_ctx default_max_gen_rec_depth)
+                      (vtype_gen ~type_ctx default_max_gen_rec_depth)
                     >|= fun (t1, t2) -> VTypePair (t1, t2));
               ];
        ]

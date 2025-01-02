@@ -5,6 +5,7 @@ open Vtype
 open Custom_types
 open Pattern
 open Ast
+open Typing
 open Parser
 open Ast_executor
 
@@ -25,6 +26,8 @@ let get_asp_printer (p : 'a ast_print_method) (e : 'a expr) : string =
 let default_ast_print_method : 'a ast_print_method = PrintExprSource
 let max_gen_rec_depth : int = 10
 let default_max_gen_rec_depth : int = max_gen_rec_depth
+let default_max_custom_type_count : int = 10
+let default_max_custom_type_constructor_count : int = 5
 
 let sexp_of_token = function
   | END -> Sexp.Atom "END"
@@ -140,7 +143,7 @@ module TestingTypeCtx : sig
   val add_custom : t -> custom_type -> t
   val to_list : t -> custom_type list
   val from_list : custom_type list -> t
-  val custom_gen : t -> custom_type QCheck.Gen.t
+  val custom_gen_opt : t -> custom_type QCheck.Gen.t option
 end = struct
   type t = custom_type list
 
@@ -164,9 +167,11 @@ end = struct
   let to_list = Fn.id
   let from_list cts = cts
 
-  let custom_gen (ctx : t) : custom_type QCheck.Gen.t =
-    let open QCheck.Gen in
-    oneof (List.map ~f:return ctx)
+  let custom_gen_opt (ctx : t) : custom_type QCheck.Gen.t option =
+    if List.is_empty ctx then None
+    else
+      let open QCheck.Gen in
+      Some (oneof (List.map ~f:return ctx))
 end
 
 let vtype_gen ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.Gen.t =
@@ -175,13 +180,11 @@ let vtype_gen ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.Gen.t =
     fix (fun self d ->
         let self' = self (d - 1) in
         let base_cases =
-          [
-            return VTypeUnit;
-            return VTypeInt;
-            return VTypeBool;
-            ( TestingTypeCtx.custom_gen type_ctx >|= fun (ct_name, _) ->
-              VTypeCustom ct_name );
-          ]
+          [ return VTypeUnit; return VTypeInt; return VTypeBool ]
+          @ Option.(
+              to_list
+                ( TestingTypeCtx.custom_gen_opt type_ctx >>| fun custom_gen ->
+                  custom_gen >|= fun (ct_name, _) -> VTypeCustom ct_name ))
         in
         let rec_cases =
           [
@@ -218,19 +221,20 @@ let custom_type_arb ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
   QCheck.make ~print:custom_type_to_source_code
     (custom_type_gen ~type_ctx ~max_constructors ~mrd)
 
+let testing_type_ctx_gen ~(max_custom_types : int) ~(max_constructors : int)
+    ~(mrd : int) : TestingTypeCtx.t QCheck.Gen.t =
+  let open QCheck.Gen in
+  int_range 0 max_custom_types >>= fun custom_type_count ->
+  fix
+    (fun self (n, type_ctx) ->
+      if n <= 0 then return type_ctx
+      else
+        custom_type_gen ~type_ctx ~max_constructors ~mrd >>= fun new_ct ->
+        self (n - 1, TestingTypeCtx.add_custom type_ctx new_ct))
+    (custom_type_count, TestingTypeCtx.empty)
+
 let testing_type_ctx_arb ~(max_custom_types : int) ~(max_constructors : int)
     ~(mrd : int) : TestingTypeCtx.t QCheck.arbitrary =
-  let gen : TestingTypeCtx.t QCheck.Gen.t =
-    let open QCheck.Gen in
-    int_range 0 max_custom_types >>= fun custom_type_count ->
-    fix
-      (fun self (n, type_ctx) ->
-        if n <= 0 then return type_ctx
-        else
-          custom_type_gen ~type_ctx ~max_constructors ~mrd >>= fun new_ct ->
-          self (n - 1, TestingTypeCtx.add_custom type_ctx new_ct))
-      (custom_type_count, TestingTypeCtx.empty)
-  in
   let print_custom_type_constructor : custom_type_constructor QCheck.Print.t =
     QCheck.Print.(pair string vtype_to_source_code)
   in
@@ -240,7 +244,17 @@ let testing_type_ctx_arb ~(max_custom_types : int) ~(max_constructors : int)
   QCheck.make
     ~print:
       QCheck.Print.(Fn.compose (list print_custom_type) TestingTypeCtx.to_list)
-    gen
+    (testing_type_ctx_gen ~max_custom_types ~max_constructors ~mrd)
+
+let default_testing_type_ctx_gen =
+  testing_type_ctx_gen ~max_custom_types:default_max_custom_type_count
+    ~max_constructors:default_max_custom_type_constructor_count
+    ~mrd:default_max_gen_rec_depth
+
+let default_testing_type_ctx_arb =
+  testing_type_ctx_arb ~max_custom_types:default_max_custom_type_count
+    ~max_constructors:default_max_custom_type_constructor_count
+    ~mrd:default_max_gen_rec_depth
 
 module TestingVarCtx : sig
   include Typing.TypingVarContext
@@ -284,6 +298,8 @@ let testing_var_ctx_arb ~(type_ctx : TestingTypeCtx.t) :
          QCheck.Print.(list (pair string vtype_to_source_code))
          TestingVarCtx.to_list)
     gen
+
+module TestingTypeChecker = TypeChecker (TestingTypeCtx) (TestingVarCtx)
 
 let pattern_arb ~(type_ctx : TestingTypeCtx.t) ~(t : vtype) :
     (pattern * (string * vtype) list) QCheck.arbitrary =
@@ -345,9 +361,8 @@ let pattern_arb ~(type_ctx : TestingTypeCtx.t) ~(t : vtype) :
     ( gen t TestingVarCtx.empty >|= fun (p, ctx) ->
       (p, TestingVarCtx.to_list ctx) )
 
-let ast_expr_arb ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
-    (print : 'a ast_print_method) (v_gen : 'a QCheck.Gen.t) :
-    'a expr QCheck.arbitrary =
+let ast_expr_gen ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
+    (v_gen : 'a QCheck.Gen.t) : 'a expr QCheck.Gen.t =
   let open QCheck in
   let open QCheck.Gen in
   let rec gen_e_var_of_type
@@ -566,22 +581,46 @@ let ast_expr_arb ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
     vtype_gen ~type_ctx d >>= fun t ->
     gen (d, ctx) t >|= fun e -> (t, e)
   in
-  let make_fn g =
-    match get_asp_printer_opt print with
-    | None -> make g
-    | Some printer -> make ~print:printer g
-  in
-  make_fn
-    (match t with
-    | Some t -> gen (max_gen_rec_depth, TestingVarCtx.empty) t
-    | None -> gen_any_of_type (max_gen_rec_depth, TestingVarCtx.empty) >|= snd)
+  match t with
+  | Some t -> gen (max_gen_rec_depth, TestingVarCtx.empty) t
+  | None -> gen_any_of_type (max_gen_rec_depth, TestingVarCtx.empty) >|= snd
+
+let ast_expr_arb ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
+    (print : 'a ast_print_method) (v_gen : 'a QCheck.Gen.t) :
+    'a expr QCheck.arbitrary =
+  QCheck.make
+    ?print:(get_asp_printer_opt print)
+    (ast_expr_gen ?t ~type_ctx v_gen)
 
 let ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) print v_gen =
   ast_expr_arb ~type_ctx print v_gen
 
+let ast_expr_arb_default_type_ctx_params ?(t : vtype option)
+    (print : 'a ast_print_method) (v_gen : 'a QCheck.Gen.t) :
+    (TestingTypeCtx.t * 'a expr) QCheck.arbitrary =
+  let gen : (TestingTypeCtx.t * 'a expr) QCheck.Gen.t =
+    let open QCheck.Gen in
+    default_testing_type_ctx_gen >>= fun type_ctx ->
+    pair (return type_ctx) (ast_expr_gen ?t ~type_ctx v_gen)
+  in
+  QCheck.make
+    ?print:Option.(get_asp_printer_opt print >>| fun p (_, e) -> p e)
+    gen
+
 let plain_ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) :
     unit expr QCheck.arbitrary =
   ast_expr_arb_any ~type_ctx PrintExprSource QCheck.Gen.unit
+
+let plain_ast_expr_arb_any_default_type_ctx_params :
+    (TestingTypeCtx.t * unit expr) QCheck.arbitrary =
+  let gen : (TestingTypeCtx.t * unit expr) QCheck.Gen.t =
+    let open QCheck.Gen in
+    default_testing_type_ctx_gen >>= fun type_ctx ->
+    pair (return type_ctx)
+      (QCheck.get_gen
+         (ast_expr_arb_any ~type_ctx PrintExprSource QCheck.Gen.unit))
+  in
+  QCheck.make ~print:(Fn.compose ast_to_source_code snd) gen
 
 let nonempty_list_arb (v_arb : 'a QCheck.arbitrary) :
     'a Nonempty_list.t QCheck.arbitrary =

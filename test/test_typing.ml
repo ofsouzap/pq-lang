@@ -395,54 +395,63 @@ let test_cases_typing_with_var_ctx : test list =
 
 (* TODO - type context tester module and implementations *)
 
-module MakeVariableContextTester (Ctx : TypingVarContext) = struct
-  let create_test_add_then_get ((ctx : Ctx.t), (xname : string), (xtype : vtype))
-      : bool =
-    let ctx' = Ctx.add ctx xname xtype in
-    (equal_option equal_vtype) (Some xtype) (Ctx.find ctx' xname)
+module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
+  let create_test_add_then_get
+      ((ctx : VarCtx.t), (xname : string), (xtype : vtype)) : bool =
+    let ctx' = VarCtx.add ctx xname xtype in
+    (equal_option equal_vtype) (Some xtype) (VarCtx.find ctx' xname)
 
   let create_test_overwrite
-      ((ctx : Ctx.t), (xname : string), (xtype1 : vtype), (xtype2 : vtype)) :
+      ((ctx : VarCtx.t), (xname : string), (xtype1 : vtype), (xtype2 : vtype)) :
       bool =
-    let ctx' = Ctx.add (Ctx.add ctx xname xtype1) xname xtype2 in
-    (equal_option equal_vtype) (Some xtype2) (Ctx.find ctx' xname)
+    let ctx' = VarCtx.add (VarCtx.add ctx xname xtype1) xname xtype2 in
+    (equal_option equal_vtype) (Some xtype2) (VarCtx.find ctx' xname)
 
   let create_test_append_overwriting
-      ( ((ctx1_ : Ctx.t), (ctx2_ : Ctx.t)),
+      ( ((ctx1_ : VarCtx.t), (ctx2_ : VarCtx.t)),
         ((xname : string), (xtype1 : vtype), (xtype2 : vtype)) ) : bool =
-    let ctx1 = Ctx.add ctx1_ xname xtype1 in
-    let ctx2 = Ctx.add ctx2_ xname xtype2 in
-    let ctx' = Ctx.append ctx1 ctx2 in
-    (equal_option equal_vtype) (Ctx.find ctx2 xname) (Ctx.find ctx' xname)
+    let ctx1 = VarCtx.add ctx1_ xname xtype1 in
+    let ctx2 = VarCtx.add ctx2_ xname xtype2 in
+    let ctx' = VarCtx.append ctx1 ctx2 in
+    (equal_option equal_vtype) (VarCtx.find ctx2 xname) (VarCtx.find ctx' xname)
 
   let all_test_cases : test list =
     let open QCheck in
-    let ctx_from_list : (string * vtype) list -> Ctx.t =
-      List.fold ~init:Ctx.empty ~f:(fun acc (xname, xtype) ->
-          Ctx.add acc xname xtype)
+    let var_ctx_from_list : (string * vtype) list -> VarCtx.t =
+      List.fold ~init:VarCtx.empty ~f:(fun acc (xname, xtype) ->
+          VarCtx.add acc xname xtype)
     in
-    let ctx_arb : Ctx.t QCheck.arbitrary =
-      QCheck.make
-        QCheck.Gen.(
-          list (pair string (vtype_gen default_max_gen_rec_depth))
-          >|= ctx_from_list)
+    let ctx_gen : (TestingTypeCtx.t * VarCtx.t) QCheck.Gen.t =
+      let open QCheck.Gen in
+      default_testing_type_ctx_gen >>= fun type_ctx ->
+      list (pair string (vtype_gen ~type_ctx default_max_gen_rec_depth))
+      >|= fun ctx_list -> (type_ctx, var_ctx_from_list ctx_list)
     in
+    let ctx_two_vtypes_gen :
+        ((TestingTypeCtx.t * VarCtx.t) * (vtype * vtype)) QCheck.Gen.t =
+      let open QCheck.Gen in
+      ctx_gen >>= fun (type_ctx, var_ctx) ->
+      pair
+        (pair (return type_ctx) (return var_ctx))
+        (pair
+           (vtype_gen ~type_ctx default_max_gen_rec_depth)
+           (vtype_gen ~type_ctx default_max_gen_rec_depth))
+    in
+    let ctx_two_vtypes_arb = QCheck.make ctx_two_vtypes_gen in
     List.map ~f:QCheck_runner.to_ounit2_test
       [
         Test.make ~name:"Add then get" ~count:100
-          (triple ctx_arb string (vtype_arb default_max_gen_rec_depth))
-          create_test_add_then_get;
-        Test.make ~name:"Overwrite" ~count:100
-          (quad ctx_arb string
-             (vtype_arb default_max_gen_rec_depth)
-             (vtype_arb default_max_gen_rec_depth))
-          create_test_overwrite;
+          (pair ctx_two_vtypes_arb string)
+          (fun (((_, ctx), (xtype, _)), xname) ->
+            create_test_add_then_get (ctx, xname, xtype));
+        Test.make ~name:"Overwrite" ~count:100 (pair ctx_two_vtypes_arb string)
+          (fun (((_, ctx), (xtype1, xtype2)), xname) ->
+            create_test_overwrite (ctx, xname, xtype1, xtype2));
         Test.make ~name:"Append overwriting" ~count:100
-          (pair (pair ctx_arb ctx_arb)
-             (triple string
-                (vtype_arb default_max_gen_rec_depth)
-                (vtype_arb default_max_gen_rec_depth)))
-          create_test_append_overwriting;
+          (triple string ctx_two_vtypes_arb ctx_two_vtypes_arb)
+          (fun (xname, ((_, ctx1), (xtype1, _)), ((_, ctx2), (xtype2, _))) ->
+            create_test_append_overwriting
+              ((ctx1, ctx2), (xname, xtype1, xtype2)));
       ]
 end
 
@@ -477,32 +486,32 @@ module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in
-  let expr_gen (t : vtype) : unit expr Gen.t =
-    ast_expr_arb ~t NoPrint Gen.unit |> QCheck.gen
+  let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : vtype) : unit expr Gen.t =
+    ast_expr_arb ~type_ctx ~t NoPrint Gen.unit |> QCheck.gen
   in
   let create_test
       ( (name : string),
-        (type_ctx : SetTypingTypeContext.t option),
-        (e_gen : (vtype * plain_expr) Gen.t) ) : test =
+        (type_ctx : TestingTypeCtx.t option),
+        (e_gen : TestingTypeCtx.t -> (vtype * plain_expr) Gen.t) ) : test =
+    let type_ctx : TestingTypeCtx.t =
+      Option.value ~default:TestingTypeCtx.empty type_ctx
+    in
     let e_arb =
       QCheck.make
         ~print:QCheck.Print.(pair vtype_to_source_code ast_to_source_code)
-        e_gen
+        (e_gen type_ctx)
     in
     QCheck_ounit.to_ounit2_test
       (Test.make ~name ~count:100 e_arb (fun (exp_t, e) ->
            let open Result in
            let out =
-             Typing.type_expr
-               ~type_ctx:
-                 (Option.value ~default:SetTypingTypeContext.empty type_ctx)
-               e
+             TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
            in
            match out with
            | Ok tpe ->
                let t =
                  tpe
-                 |> SimpleTypeChecker.typed_program_expression_get_expression
+                 |> TestingTypeChecker.typed_program_expression_get_expression
                  |> expr_node_val |> fst
                in
                equal_vtype exp_t t
@@ -512,103 +521,124 @@ let test_cases_arb_compound_expr_typing : test list =
     [
       ( "Add",
         None,
-        pair (return VTypeInt)
-          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
-            Add ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeInt)
+            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+            >|= fun (e1, e2) -> Add ((), e1, e2) ) );
       ( "Neg",
         None,
-        pair (return VTypeInt) (expr_gen VTypeInt >|= fun e -> Neg ((), e)) );
+        fun type_ctx ->
+          pair (return VTypeInt)
+            (expr_gen ~type_ctx VTypeInt >|= fun e -> Neg ((), e)) );
       ( "Subtr",
         None,
-        pair (return VTypeInt)
-          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
-            Subtr ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeInt)
+            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+            >|= fun (e1, e2) -> Subtr ((), e1, e2) ) );
       ( "Mult",
         None,
-        pair (return VTypeInt)
-          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
-            Mult ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeInt)
+            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+            >|= fun (e1, e2) -> Mult ((), e1, e2) ) );
       ( "BNot",
         None,
-        pair (return VTypeBool) (expr_gen VTypeBool >|= fun e -> BNot ((), e))
-      );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            (expr_gen ~type_ctx VTypeBool >|= fun e -> BNot ((), e)) );
       ( "BOr",
         None,
-        pair (return VTypeBool)
-          ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
-            BOr ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            ( pair (expr_gen ~type_ctx VTypeBool) (expr_gen ~type_ctx VTypeBool)
+            >|= fun (e1, e2) -> BOr ((), e1, e2) ) );
       ( "BAnd",
         None,
-        pair (return VTypeBool)
-          ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
-            BAnd ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            ( pair (expr_gen ~type_ctx VTypeBool) (expr_gen ~type_ctx VTypeBool)
+            >|= fun (e1, e2) -> BAnd ((), e1, e2) ) );
       ( "Eq - int",
         None,
-        pair (return VTypeBool)
-          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
-            Eq ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+            >|= fun (e1, e2) -> Eq ((), e1, e2) ) );
       ( "Eq - bool",
         None,
-        pair (return VTypeBool)
-          ( pair (expr_gen VTypeBool) (expr_gen VTypeBool) >|= fun (e1, e2) ->
-            Eq ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            ( pair (expr_gen ~type_ctx VTypeBool) (expr_gen ~type_ctx VTypeBool)
+            >|= fun (e1, e2) -> Eq ((), e1, e2) ) );
       ( "Gt",
         None,
-        pair (return VTypeBool)
-          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
-            Gt ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+            >|= fun (e1, e2) -> Gt ((), e1, e2) ) );
       ( "GtEq",
         None,
-        pair (return VTypeBool)
-          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
-            GtEq ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+            >|= fun (e1, e2) -> GtEq ((), e1, e2) ) );
       ( "Lt",
         None,
-        pair (return VTypeBool)
-          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
-            Lt ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+            >|= fun (e1, e2) -> Lt ((), e1, e2) ) );
       ( "LtEq",
         None,
-        pair (return VTypeBool)
-          ( pair (expr_gen VTypeInt) (expr_gen VTypeInt) >|= fun (e1, e2) ->
-            LtEq ((), e1, e2) ) );
+        fun type_ctx ->
+          pair (return VTypeBool)
+            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+            >|= fun (e1, e2) -> LtEq ((), e1, e2) ) );
       ( "If",
         None,
-        vtype_gen default_max_gen_rec_depth >>= fun t ->
-        triple (expr_gen VTypeBool) (expr_gen t) (expr_gen t)
-        >|= fun (e1, e2, e3) -> (t, If ((), e1, e2, e3)) );
+        fun type_ctx ->
+          vtype_gen ~type_ctx default_max_gen_rec_depth >>= fun t ->
+          triple
+            (expr_gen ~type_ctx VTypeBool)
+            (expr_gen ~type_ctx t) (expr_gen ~type_ctx t)
+          >|= fun (e1, e2, e3) -> (t, If ((), e1, e2, e3)) );
       ( "Let",
         None,
-        vtype_gen default_max_gen_rec_depth >>= fun t ->
-        pair varname_gen (vtype_gen default_max_gen_rec_depth)
-        >>= fun (xname, xtype) ->
-        pair (expr_gen xtype) (expr_gen t) >|= fun (e1, e2) ->
-        (t, Let ((), xname, e1, e2))
+        fun type_ctx ->
+          vtype_gen ~type_ctx default_max_gen_rec_depth >>= fun t ->
+          pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          >>= fun (xname, xtype) ->
+          pair (expr_gen ~type_ctx xtype) (expr_gen ~type_ctx t)
+          >|= fun (e1, e2) -> (t, Let ((), xname, e1, e2))
         (* Note, the tests here (and for the Fun and Fix cases) don't work with changing variable contexts. But this should be fine *)
       );
       ( "Fun",
         None,
-        vtype_gen default_max_gen_rec_depth >>= fun t2 ->
-        pair varname_gen (vtype_gen default_max_gen_rec_depth)
-        >>= fun (xname, t1) ->
-        expr_gen t2 >|= fun e ->
-        (VTypeFun (t1, t2), Ast.Fun ((), (xname, t1), e)) );
+        fun type_ctx ->
+          vtype_gen ~type_ctx default_max_gen_rec_depth >>= fun t2 ->
+          pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          >>= fun (xname, t1) ->
+          expr_gen ~type_ctx t2 >|= fun e ->
+          (VTypeFun (t1, t2), Ast.Fun ((), (xname, t1), e)) );
       ( "App",
         None,
-        pair
-          (vtype_gen default_max_gen_rec_depth)
-          (vtype_gen default_max_gen_rec_depth)
-        >>= fun (t1, t2) ->
-        pair (expr_gen (VTypeFun (t1, t2))) (expr_gen t1) >|= fun (e1, e2) ->
-        (t2, App ((), e1, e2)) );
+        fun type_ctx ->
+          pair
+            (vtype_gen ~type_ctx default_max_gen_rec_depth)
+            (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          >>= fun (t1, t2) ->
+          pair (expr_gen ~type_ctx (VTypeFun (t1, t2))) (expr_gen ~type_ctx t1)
+          >|= fun (e1, e2) -> (t2, App ((), e1, e2)) );
       ( "Fix",
         None,
-        pair varname_gen (vtype_gen default_max_gen_rec_depth)
-        >>= fun (fname, t1) ->
-        pair varname_gen (vtype_gen default_max_gen_rec_depth)
-        >>= fun (xname, t2) ->
-        expr_gen t2 >|= fun e ->
-        (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );
+        fun type_ctx ->
+          pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          >>= fun (fname, t1) ->
+          pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          >>= fun (xname, t2) ->
+          expr_gen ~type_ctx t2 >|= fun e ->
+          (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );
       (* TODO - test cases for custom type constructors *)
     ]
 
@@ -616,7 +646,8 @@ let test_cases_typing_maintains_structure : test =
   let open QCheck in
   QCheck_ounit.to_ounit2_test
     (Test.make ~name:"Typing maintains structure" ~count:100
-       (ast_expr_arb PrintExprSource Gen.unit) (fun e ->
+       (ast_expr_arb_default_type_ctx_params PrintExprSource Gen.unit)
+       (fun (_, e) ->
          let open Result in
          let out = Typing.type_expr ~type_ctx:SetTypingTypeContext.empty e in
          (* TODO - have an arbitrary type context and use this in test *)

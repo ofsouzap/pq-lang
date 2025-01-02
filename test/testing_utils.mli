@@ -5,6 +5,7 @@ open Vtype
 open Custom_types
 open Pattern
 open Ast
+open Typing
 
 (* TODO - move the generators and arbitrary instances for different things into the main lib/ things, and have them as submodules with a consistent name relating to QCheck *)
 
@@ -28,6 +29,12 @@ val get_asp_printer : 'a ast_print_method -> 'a expr -> string
 
 (** A default AST printing method *)
 val default_ast_print_method : 'a ast_print_method
+
+(** A default maximum number of defined custom types *)
+val default_max_custom_type_count : int
+
+(** A default maximum number of constructors for a custom type *)
+val default_max_custom_type_constructor_count : int
 
 (** A default maximum recursion depth for generation *)
 val default_max_gen_rec_depth : int
@@ -86,12 +93,25 @@ val custom_type_arb :
   mrd:int ->
   custom_type QCheck.arbitrary
 
+(** Generator for testing type context module context instances *)
+val testing_type_ctx_gen :
+  max_custom_types:int ->
+  max_constructors:int ->
+  mrd:int ->
+  TestingTypeCtx.t QCheck.Gen.t
+
 (** Arbitrary generator for testing type context module context instances *)
 val testing_type_ctx_arb :
   max_custom_types:int ->
   max_constructors:int ->
   mrd:int ->
   TestingTypeCtx.t QCheck.arbitrary
+
+(** Generator for testing type context wwith default settings *)
+val default_testing_type_ctx_gen : TestingTypeCtx.t QCheck.Gen.t
+
+(** Arbitrary generator for testing type context wwith default settings *)
+val default_testing_type_ctx_arb : TestingTypeCtx.t QCheck.arbitrary
 
 (** Implementation of a variable context useful for tests *)
 module TestingVarCtx : sig
@@ -111,11 +131,23 @@ end
 val testing_var_ctx_arb :
   type_ctx:TestingTypeCtx.t -> TestingVarCtx.t QCheck.arbitrary
 
+module TestingTypeChecker : sig
+  include module type of TypeChecker (TestingTypeCtx) (TestingVarCtx)
+end
+
 (** Arbitrary pattern generator that generates a pattern of the specified type as well as a list of the variables it defines *)
 val pattern_arb :
   type_ctx:TestingTypeCtx.t ->
   t:vtype ->
   (pattern * (string * vtype) list) QCheck.arbitrary
+
+(** Generator for an AST expression, possibly of a specified type.
+    @param t (optional) The type that the generated output should type to *)
+val ast_expr_gen :
+  ?t:vtype ->
+  type_ctx:TestingTypeCtx.t ->
+  'a QCheck.Gen.t ->
+  'a Ast.expr QCheck.Gen.t
 
 (** Arbitrary generator for an AST expression, possibly of a specified type.
     Must be provided with a printing method for the AST and a generator for the tagging values.
@@ -134,9 +166,20 @@ val ast_expr_arb_any :
   'a QCheck.Gen.t ->
   'a expr QCheck.arbitrary
 
+(** Arbitrary expression and type context using a type context generated with the default parameters *)
+val ast_expr_arb_default_type_ctx_params :
+  ?t:vtype ->
+  'a ast_print_method ->
+  'a QCheck.Gen.t ->
+  (TestingTypeCtx.t * 'a expr) QCheck.arbitrary
+
 (** Arbitrary generator for an untagged AST expression of any type *)
 val plain_ast_expr_arb_any :
   type_ctx:TestingTypeCtx.t -> unit expr QCheck.arbitrary
+
+(** Arbitrary generator for an untagged AST expression of any type with default type context generation parameters *)
+val plain_ast_expr_arb_any_default_type_ctx_params :
+  (TestingTypeCtx.t * unit expr) QCheck.arbitrary
 
 (** Arbitrary generator for a non-empty list *)
 val nonempty_list_arb :
