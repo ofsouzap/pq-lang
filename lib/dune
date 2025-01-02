@@ -6,6 +6,7 @@
   utils
   vtype
   custom_types
+  varname
   pattern
   ast
   program

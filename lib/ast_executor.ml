@@ -1,14 +1,11 @@
 open Core
 open Utils
-open Custom_types
 open Vtype
+open Custom_types
+open Varname
 open Pattern
 
 type ast_tag = unit [@@deriving sexp, equal]
-type varname = string [@@deriving sexp, equal]
-
-module Varname = String
-module VarnameMap = Map.Make_using_comparator (Varname)
 
 type closure_props = {
   param : varname * vtype;

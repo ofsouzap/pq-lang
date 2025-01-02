@@ -1,13 +1,11 @@
 (** This module provides functionality for directly executing an AST of a program. *)
 
-open Custom_types
 open Vtype
+open Custom_types
+open Varname
 
 (** The data that the executor tags the interpreted AST with *)
 type ast_tag = unit [@@deriving sexp, equal]
-
-(** The type of a variable's name in the store *)
-type varname = string
 
 (** Properties of a closure *)
 type closure_props = {
