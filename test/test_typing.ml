@@ -652,15 +652,16 @@ let test_cases_typing_maintains_structure : test =
   QCheck_ounit.to_ounit2_test
     (Test.make ~name:"Typing maintains structure" ~count:100
        (ast_expr_arb_default_type_ctx_params PrintExprSource Gen.unit)
-       (fun (_, e) ->
+       (fun (type_ctx, e) ->
          let open Result in
-         let out = Typing.type_expr ~type_ctx:SetTypingTypeContext.empty e in
-         (* TODO - have an arbitrary type context and use this in test *)
+         let out =
+           TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
+         in
          match out with
          | Ok tpe ->
              let plain_e = expr_to_plain_expr e in
              let plain_typed_e =
-               tpe |> SimpleTypeChecker.typed_program_expression_get_expression
+               tpe |> TestingTypeChecker.typed_program_expression_get_expression
                |> expr_to_plain_expr
              in
              equal_plain_expr plain_e plain_typed_e

@@ -46,7 +46,7 @@ let get_ast_printer_opt : 'a ast_print_method -> ('a expr -> string) option =
   function
   | NoPrint -> None
   | PrintSexp f -> Some (fun e -> Ast.sexp_of_expr f e |> Sexp.to_string)
-  | PrintExprSource -> Some ast_to_source_code
+  | PrintExprSource -> Some (ast_to_source_code ~use_newlines:true)
 
 let get_ast_printer (p : 'a ast_print_method) (e : 'a expr) : string =
   match get_ast_printer_opt p with None -> "" | Some f -> f e
