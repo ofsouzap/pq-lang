@@ -243,7 +243,8 @@ let testing_type_ctx_gen ~(max_custom_types : int) ~(max_constructors : int)
   let open QCheck.Gen in
   let custom_type_gen ~(type_ctx : TestingTypeCtx.t) ~(max_constructors : int)
       ~(mrd : int) =
-    let gen_constructor : custom_type_constructor QCheck.Gen.t =
+    let gen_constructor (used_constructor_names : string list) :
+        custom_type_constructor QCheck.Gen.t =
       (* Filtered so that the constructors don't exist already in the type context *)
       filter_gen ~max_attempts:10000
         (pair custom_type_constructor_name_gen (vtype_gen ~type_ctx mrd))
@@ -251,10 +252,19 @@ let testing_type_ctx_gen ~(max_custom_types : int) ~(max_constructors : int)
           not
             (List.exists (TestingTypeCtx.to_list type_ctx) ~f:(fun (_, cs) ->
                  List.exists cs ~f:(fun (x_c_name, _) ->
-                     equal_string x_c_name c_name))))
+                     equal_string x_c_name c_name))
+            || List.mem used_constructor_names c_name ~equal:equal_string))
     in
     let gen_constructors =
-      list_size (int_range 1 max_constructors) gen_constructor
+      (* Iteratively build up list of constructors, making sure to not have multiply-defined constructors in the same custom type *)
+      int_range 1 max_constructors >>= fun constructor_count ->
+      fix
+        (fun self (n, acc) ->
+          if n <= 0 then return acc
+          else
+            gen_constructor (List.map acc ~f:(fun (c_name, _) -> c_name))
+            >>= fun c -> self (n - 1, c :: acc))
+        (constructor_count, [])
     in
     pair
       ((* Filter so that the custom type name doesn't already exist *)
