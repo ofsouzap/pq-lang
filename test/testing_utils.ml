@@ -104,25 +104,20 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string sexp_of_token) tokens)
 
-let rec expr_shrink : 'a expr QCheck.Shrink.t =
+let rec expr_shrink ~(preserve_type : bool) : 'a expr QCheck.Shrink.t =
   let open QCheck.Iter in
   let unop_shrink (v, e1) (recomb : 'a * 'a expr -> 'a expr) :
       'a expr QCheck.Iter.t =
-    expr_shrink e1 >|= fun e1' -> recomb (v, e1')
+    expr_shrink ~preserve_type e1 >|= fun e1' -> recomb (v, e1')
   in
-  let binop_shrink (v, e1, e2) (recomb : 'a * 'a expr * 'a expr -> 'a expr) :
-      'a expr QCheck.Iter.t =
-    return e1 <+> return e2
-    <+> (expr_shrink e1 >|= fun e1' -> recomb (v, e1', e2))
-    <+> (expr_shrink e2 >|= fun e2' -> recomb (v, e1, e2'))
-  in
-  let triop_shrink (v, e1, e2, e3)
-      (recomb : 'a * 'a expr * 'a expr * 'a expr -> 'a expr) :
-      'a expr QCheck.Iter.t =
-    return e1 <+> return e2 <+> return e3
-    <+> (expr_shrink e1 >|= fun e1' -> recomb (v, e1', e2, e3))
-    <+> (expr_shrink e2 >|= fun e2' -> recomb (v, e1, e2', e3))
-    <+> (expr_shrink e3 >|= fun e3' -> recomb (v, e1, e2, e3'))
+  let binop_shrink ?(allow_return_subexpr : bool option) (v, e1, e2)
+      (recomb : 'a * 'a expr * 'a expr -> 'a expr) : 'a expr QCheck.Iter.t =
+    let allow_return_subexpr =
+      Option.value ~default:true allow_return_subexpr
+    in
+    (if allow_return_subexpr then return e1 <+> return e2 else empty)
+    <+> (expr_shrink ~preserve_type e1 >|= fun e1' -> recomb (v, e1', e2))
+    <+> (expr_shrink ~preserve_type e2 >|= fun e2' -> recomb (v, e1, e2'))
   in
   function
   | UnitLit _ -> empty
@@ -143,34 +138,45 @@ let rec expr_shrink : 'a expr QCheck.Shrink.t =
   | Pair (v, e1, e2) ->
       binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Pair (v', e1', e2'))
   | Eq (v, e1, e2) ->
-      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Eq (v', e1', e2'))
+      binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
+        (fun (v', e1', e2') -> Eq (v', e1', e2'))
   | Gt (v, e1, e2) ->
-      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Gt (v', e1', e2'))
+      binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
+        (fun (v', e1', e2') -> Gt (v', e1', e2'))
   | GtEq (v, e1, e2) ->
-      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> GtEq (v', e1', e2'))
+      binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
+        (fun (v', e1', e2') -> GtEq (v', e1', e2'))
   | Lt (v, e1, e2) ->
-      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> Lt (v', e1', e2'))
+      binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
+        (fun (v', e1', e2') -> Lt (v', e1', e2'))
   | LtEq (v, e1, e2) ->
-      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> LtEq (v', e1', e2'))
+      binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
+        (fun (v', e1', e2') -> LtEq (v', e1', e2'))
   | If (v, e1, e2, e3) ->
-      triop_shrink (v, e1, e2, e3) (fun (v', e1', e2', e3') ->
-          If (v', e1', e2', e3'))
+      (if not preserve_type then return e1 <+> return e2 <+> return e3
+       else empty)
+      <+> (expr_shrink ~preserve_type e1 >|= fun e1' -> If (v, e1', e2, e3))
+      <+> (expr_shrink ~preserve_type e2 >|= fun e2' -> If (v, e1, e2', e3))
+      <+> (expr_shrink ~preserve_type e3 >|= fun e3' -> If (v, e1, e2, e3'))
   | Var _ -> empty
   | Let _ ->
       (* Because of let-rec definitions needing a specific form when using AST to source code,
          this would need a filtered shrink function which I can't be bothered to write at the moment *)
       empty
-  | Fun (v, (x, t), e1) -> expr_shrink e1 >|= fun e1' -> Fun (v, (x, t), e1')
+  | Fun (v, (x, t), e1) ->
+      expr_shrink ~preserve_type e1 >|= fun e1' -> Fun (v, (x, t), e1')
   | App (v, e1, e2) ->
-      binop_shrink (v, e1, e2) (fun (v', e1', e2') -> App (v', e1', e2'))
+      binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
+        (fun (v', e1', e2') -> App (v', e1', e2'))
   | Fix _ ->
       (* I won't try have these shrunk, since it's more complicated than most, since let-rec definitions need a specific form *)
       empty
   | Match (v, e1, ps) ->
-      return e1
+      (if preserve_type then empty else return e1)
       <+> ( (* Try shrinking each case expression *)
             QCheck.Shrink.list_elems
-              (fun (c_p, c_e) -> expr_shrink c_e >|= fun c_e' -> (c_p, c_e'))
+              (fun (c_p, c_e) ->
+                expr_shrink ~preserve_type c_e >|= fun c_e' -> (c_p, c_e'))
               (Nonempty_list.to_list ps)
           >|= fun ps' -> Match (v, e1, Nonempty_list.from_list_unsafe ps') )
   | Constructor (v, c, e1) ->
@@ -718,7 +724,7 @@ let ast_expr_arb ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
     'a expr QCheck.arbitrary =
   QCheck.make
     ?print:(get_ast_printer_opt print)
-    ~shrink:expr_shrink
+    ~shrink:(expr_shrink ~preserve_type:(Option.is_some t))
     (ast_expr_gen ?t ~type_ctx v_gen)
 
 let ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) print v_gen =
@@ -734,7 +740,8 @@ let ast_expr_arb_default_type_ctx_params ?(t : vtype option)
   in
   QCheck.make
     ?print:Option.(get_ast_printer_opt print >>| fun p (_, e) -> p e)
-    ~shrink:QCheck.Shrink.(pair nil expr_shrink)
+    ~shrink:
+      QCheck.Shrink.(pair nil (expr_shrink ~preserve_type:(Option.is_some t)))
     gen
 
 let plain_ast_expr_arb_any ~(type_ctx : TestingTypeCtx.t) :
@@ -755,5 +762,5 @@ let plain_ast_expr_arb_any_default_type_ctx_params :
       sprintf "[type ctx: %s]\n%s"
         (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
         (ast_to_source_code ~use_newlines:true e))
-    ~shrink:QCheck.Shrink.(pair nil expr_shrink)
+    ~shrink:QCheck.Shrink.(pair nil (expr_shrink ~preserve_type:false))
     gen

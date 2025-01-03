@@ -8,6 +8,8 @@ open Ast
 open Typing
 open Testing_utils
 
+(* TODO - test that shrinking an expression with preserve_type option set to true preserves the type *)
+
 let create_typed_expr_gen_test (name : string)
     (types_gen : (TestingTypeCtx.t * vtype) Gen.t) : test =
   let open QCheck in
@@ -24,7 +26,9 @@ let create_typed_expr_gen_test (name : string)
             sprintf "[type ctx: %s]\n[type: %s]\n%s"
               (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
               (vtype_to_source_code t) (ast_to_source_code e))
-          ~shrink:QCheck.Shrink.(pair nil (pair nil expr_shrink))
+          ~shrink:
+            QCheck.Shrink.(
+              pair nil (pair nil (expr_shrink ~preserve_type:true)))
           gen)
        (fun (type_ctx, (t, e)) ->
          let typed_result =

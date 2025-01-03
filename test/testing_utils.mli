@@ -58,7 +58,7 @@ val default_max_gen_rec_depth : int
 val token_printer : Parser.token list -> string
 
 (** Shrinker for AST expressions. It will only try to shrink the expression itself, not the tagging values *)
-val expr_shrink : 'a expr QCheck.Shrink.t
+val expr_shrink : preserve_type:bool -> 'a expr QCheck.Shrink.t
 
 (** A variation of the default `exec_res` comparison function, that considers all typing errors equal *)
 val override_equal_exec_res :
