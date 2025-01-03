@@ -137,110 +137,127 @@ let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
 
 exception AstConverionFixError
 
-let rec ast_to_source_code ?(use_newlines : bool option) =
-  let use_newlines = Option.value ~default:false use_newlines in
-  let nl = if use_newlines then "\n" else " " in
-  function
-  | UnitLit _ -> "()"
-  | IntLit (_, i) -> string_of_int i
-  | Add (_, e1, e2) ->
-      sprintf "(%s) + (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | Neg (_, e) -> sprintf "-(%s)" (ast_to_source_code ~use_newlines e)
-  | Subtr (_, e1, e2) ->
-      sprintf "(%s) - (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | Mult (_, e1, e2) ->
-      sprintf "(%s) * (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | BoolLit (_, b) -> string_of_bool b
-  | BNot (_, e) -> sprintf "~(%s)" (ast_to_source_code ~use_newlines e)
-  | BOr (_, e1, e2) ->
-      sprintf "(%s) || (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | BAnd (_, e1, e2) ->
-      sprintf "(%s) && (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | Pair (_, e1, e2) ->
-      sprintf "(%s, %s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | Eq (_, e1, e2) ->
-      sprintf "(%s) == (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | Gt (_, e1, e2) ->
-      sprintf "(%s) > (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | GtEq (_, e1, e2) ->
-      sprintf "(%s) >= (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | Lt (_, e1, e2) ->
-      sprintf "(%s) < (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | LtEq (_, e1, e2) ->
-      sprintf "(%s) <= (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | If (_, e1, e2, e3) ->
-      sprintf "if (%s)%sthen%s(%s)%selse%s(%s) end"
-        (ast_to_source_code ~use_newlines e1)
-        nl nl
-        (ast_to_source_code ~use_newlines e2)
-        nl nl
-        (ast_to_source_code ~use_newlines e3)
-  | Var (_, vname) -> vname
-  | Let (_, xname, e1, e2) -> (
-      let eval_default_repr () =
-        sprintf "let %s =%s(%s)%sin%s(%s) end" xname nl
-          (ast_to_source_code ~use_newlines e1)
-          nl nl
-          (ast_to_source_code ~use_newlines e2)
-      in
-      match e1 with
-      | Fix (_, (xname2, x2type1, x2type2), (yname, ytype), e1') ->
-          let x2type = VTypeFun (x2type1, x2type2) in
-          if equal_string xname xname2 then
-            sprintf
-              "let rec (%s : %s) =%sfun (%s : %s) ->%s(%s) end%sin%s(%s)%send"
-              xname
-              (vtype_to_source_code x2type)
-              nl yname
-              (vtype_to_source_code ytype)
-              nl
-              (ast_to_source_code ~use_newlines e1')
-              nl nl
-              (ast_to_source_code ~use_newlines e2)
-              nl
-          else eval_default_repr ()
-      | _ -> eval_default_repr ())
-  | Fun (_, (xname, xtype), e) ->
-      sprintf "fun (%s : %s) ->%s(%s) end" xname
-        (vtype_to_source_code xtype)
-        nl
-        (ast_to_source_code ~use_newlines e)
-  | App (_, e1, e2) ->
-      sprintf "(%s) (%s)"
-        (ast_to_source_code ~use_newlines e1)
-        (ast_to_source_code ~use_newlines e2)
-  | Fix _ -> raise AstConverionFixError
-  | Match (_, e, cs) ->
-      sprintf "match (%s) with%s%s%send"
-        (ast_to_source_code ~use_newlines e)
-        nl
-        (cs
-        |> Nonempty_list.map ~f:(fun (p, c_e) ->
-               sprintf "| (%s) -> (%s)" (pattern_to_source_code p)
-                 (ast_to_source_code ~use_newlines c_e))
-        |> Nonempty_list.to_list |> String.concat ~sep:nl)
-        nl
-  | Constructor (_, cname, e) ->
-      sprintf "%s (%s)" cname (ast_to_source_code ~use_newlines e)
+module AstToSourceCodeConverter : sig
+  val ast_to_source_code : use_newlines:bool -> 'a expr -> string
+end = struct
+  type builder = string list
+  type param = { builder : builder; use_newlines : bool; indent_level : int }
+
+  let ( |.> ) (f1 : 'a -> 'b) (f2 : 'b -> 'c) : 'a -> 'c = Fn.compose f2 f1
+
+  let create_param ~(use_newlines : bool) : param =
+    { builder = []; use_newlines; indent_level = 0 }
+
+  let write (s : string) (p : param) : param =
+    {
+      p with
+      builder = (match p.builder with [] -> [ s ] | h :: t -> (h ^ s) :: t);
+    }
+
+  let newline (p : param) : param =
+    let id =
+      if p.use_newlines then String.make (p.indent_level * 2) ' ' else " "
+    in
+    { p with builder = id :: p.builder }
+
+  (** Write a "block" of source code. This will have an increased indent size for the block and start and end with newlines *)
+  let block (f : param -> param) : param -> param =
+    let indent_up (p : param) : param =
+      { p with indent_level = p.indent_level + 1 }
+    in
+    let indent_down (p : param) : param =
+      { p with indent_level = max 0 (p.indent_level - 1) }
+    in
+    newline |.> indent_up |.> f |.> indent_down |.> newline
+
+  let build (p : param) : string =
+    p.builder |> List.rev |> String.concat ~sep:"\n"
+
+  let rec convert ?(bracketed : bool option) (orig_e : 'a expr) (p : param) :
+      param =
+    let bracketed = Option.value bracketed ~default:true in
+    p
+    |> (if bracketed then write "(" else Fn.id)
+    |> (match orig_e with
+       | UnitLit _ -> write "()"
+       | IntLit (_, i) -> write (string_of_int i)
+       | Add (_, e1, e2) -> convert e1 |.> write " + " |.> convert e2
+       | Neg (_, e1) -> write "-" |.> convert e1
+       | Subtr (_, e1, e2) -> convert e1 |.> write " - " |.> convert e2
+       | Mult (_, e1, e2) -> convert e1 |.> write " * " |.> convert e2
+       | BoolLit (_, b) -> write (string_of_bool b)
+       | BNot (_, e1) -> write "~" |.> convert e1
+       | BOr (_, e1, e2) -> convert e1 |.> write " || " |.> convert e2
+       | BAnd (_, e1, e2) -> convert e1 |.> write " && " |.> convert e2
+       | Pair (_, e1, e2) ->
+           write "(" |.> convert e1 |.> write ", " |.> convert e2 |.> write ")"
+       | Eq (_, e1, e2) -> convert e1 |.> write " == " |.> convert e2
+       | Gt (_, e1, e2) -> convert e1 |.> write " > " |.> convert e2
+       | GtEq (_, e1, e2) -> convert e1 |.> write " >= " |.> convert e2
+       | Lt (_, e1, e2) -> convert e1 |.> write " < " |.> convert e2
+       | LtEq (_, e1, e2) -> convert e1 |.> write " <= " |.> convert e2
+       | If (_, e1, e2, e3) ->
+           write "if " |.> convert e1 |.> newline |.> write "then"
+           |.> block (convert e2)
+           |.> write "else"
+           |.> block (convert e3)
+       | Var (_, vname) -> write vname
+       | Let (_, xname, e1, e2) -> (
+           let default_repr : param -> param =
+             write "let " |.> write xname |.> write " = "
+             |.> block (convert e1)
+             |.> write "in"
+             |.> block (convert e2)
+             |.> write "end"
+           in
+           match e1 with
+           | Fix (_, (xname2, x2type1, x2type2), (yname, ytype), e1') ->
+               let x2type = VTypeFun (x2type1, x2type2) in
+               if equal_string xname xname2 then
+                 write "let rec (" |.> write xname |.> write " : "
+                 |.> write (vtype_to_source_code x2type)
+                 |.> write ") ="
+                 |.> block
+                       (write "fun (" |.> write yname |.> write " : "
+                       |.> write (vtype_to_source_code ytype)
+                       |.> write ") ->"
+                       |.> block (convert e1')
+                       |.> write "end")
+                 |.> write "in"
+                 |.> block (convert e2)
+                 |.> write "end"
+               else default_repr
+           | _ -> default_repr)
+       | Fun (_, (xname, xtype), e) ->
+           write "fun (" |.> write xname |.> write " : "
+           |.> write (vtype_to_source_code xtype)
+           |.> write ") ->"
+           |.> block (convert e)
+           |.> write "end"
+       | App (_, e1, e2) -> convert e1 |.> write " " |.> convert e2
+       | Fix _ -> raise AstConverionFixError
+       | Match (_, e, cs) ->
+           let convert_case ((p : pattern), (c_e : 'a expr)) : param -> param =
+             write "| ("
+             |.> write (pattern_to_source_code p)
+             |.> write ") ->"
+             |.> block (convert c_e)
+           in
+           let converted_cases : (param -> param) Nonempty_list.t =
+             Nonempty_list.map ~f:convert_case cs
+           in
+           let cases_converter : param -> param =
+             converted_cases |> Nonempty_list.fold ~init:Fn.id ~f:( |.> )
+           in
+           write "match " |.> convert e |.> write " with"
+           |.> block cases_converter |.> write "end"
+       | Constructor (_, cname, e) -> write cname |.> convert e)
+    |> if bracketed then write ")" else Fn.id
+
+  let ast_to_source_code ~(use_newlines : bool) (orig_e : 'a expr) : string =
+    convert ~bracketed:false orig_e (create_param ~use_newlines) |> build
+end
+
+let ast_to_source_code ?(use_newlines : bool option) : 'a expr -> string =
+  AstToSourceCodeConverter.ast_to_source_code
+    ~use_newlines:(Option.value ~default:true use_newlines)
