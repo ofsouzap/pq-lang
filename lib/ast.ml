@@ -144,38 +144,66 @@ let rec ast_to_source_code ?(use_newlines : bool option) =
   | UnitLit _ -> "()"
   | IntLit (_, i) -> string_of_int i
   | Add (_, e1, e2) ->
-      sprintf "(%s) + (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
-  | Neg (_, e) -> sprintf "-(%s)" (ast_to_source_code e)
+      sprintf "(%s) + (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
+  | Neg (_, e) -> sprintf "-(%s)" (ast_to_source_code ~use_newlines e)
   | Subtr (_, e1, e2) ->
-      sprintf "(%s) - (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) - (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | Mult (_, e1, e2) ->
-      sprintf "(%s) * (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) * (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | BoolLit (_, b) -> string_of_bool b
-  | BNot (_, e) -> sprintf "~(%s)" (ast_to_source_code e)
+  | BNot (_, e) -> sprintf "~(%s)" (ast_to_source_code ~use_newlines e)
   | BOr (_, e1, e2) ->
-      sprintf "(%s) || (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) || (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | BAnd (_, e1, e2) ->
-      sprintf "(%s) && (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) && (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | Pair (_, e1, e2) ->
-      sprintf "(%s, %s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s, %s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | Eq (_, e1, e2) ->
-      sprintf "(%s) == (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) == (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | Gt (_, e1, e2) ->
-      sprintf "(%s) > (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) > (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | GtEq (_, e1, e2) ->
-      sprintf "(%s) >= (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) >= (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | Lt (_, e1, e2) ->
-      sprintf "(%s) < (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) < (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | LtEq (_, e1, e2) ->
-      sprintf "(%s) <= (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) <= (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | If (_, e1, e2, e3) ->
-      sprintf "if (%s)%sthen%s(%s)%selse%s(%s) end" (ast_to_source_code e1) nl
-        nl (ast_to_source_code e2) nl nl (ast_to_source_code e3)
+      sprintf "if (%s)%sthen%s(%s)%selse%s(%s) end"
+        (ast_to_source_code ~use_newlines e1)
+        nl nl
+        (ast_to_source_code ~use_newlines e2)
+        nl nl
+        (ast_to_source_code ~use_newlines e3)
   | Var (_, vname) -> vname
   | Let (_, xname, e1, e2) -> (
       let eval_default_repr () =
-        sprintf "let %s =%s(%s)%sin%s(%s) end" xname nl (ast_to_source_code e1)
-          nl nl (ast_to_source_code e2)
+        sprintf "let %s =%s(%s)%sin%s(%s) end" xname nl
+          (ast_to_source_code ~use_newlines e1)
+          nl nl
+          (ast_to_source_code ~use_newlines e2)
       in
       match e1 with
       | Fix (_, (xname2, x2type1, x2type2), (yname, ytype), e1') ->
@@ -187,22 +215,32 @@ let rec ast_to_source_code ?(use_newlines : bool option) =
               (vtype_to_source_code x2type)
               nl yname
               (vtype_to_source_code ytype)
-              nl (ast_to_source_code e1') nl nl (ast_to_source_code e2) nl
+              nl
+              (ast_to_source_code ~use_newlines e1')
+              nl nl
+              (ast_to_source_code ~use_newlines e2)
+              nl
           else eval_default_repr ()
       | _ -> eval_default_repr ())
   | Fun (_, (xname, xtype), e) ->
       sprintf "fun (%s : %s) ->%s(%s) end" xname
         (vtype_to_source_code xtype)
-        nl (ast_to_source_code e)
+        nl
+        (ast_to_source_code ~use_newlines e)
   | App (_, e1, e2) ->
-      sprintf "(%s) (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
+      sprintf "(%s) (%s)"
+        (ast_to_source_code ~use_newlines e1)
+        (ast_to_source_code ~use_newlines e2)
   | Fix _ -> raise AstConverionFixError
   | Match (_, e, cs) ->
-      sprintf "match (%s) with%s%s%send" (ast_to_source_code e) nl
+      sprintf "match (%s) with%s%s%send"
+        (ast_to_source_code ~use_newlines e)
+        nl
         (cs
         |> Nonempty_list.map ~f:(fun (p, c_e) ->
                sprintf "| (%s) -> (%s)" (pattern_to_source_code p)
-                 (ast_to_source_code c_e))
+                 (ast_to_source_code ~use_newlines c_e))
         |> Nonempty_list.to_list |> String.concat ~sep:nl)
         nl
-  | Constructor (_, cname, e) -> sprintf "%s (%s)" cname (ast_to_source_code e)
+  | Constructor (_, cname, e) ->
+      sprintf "%s (%s)" cname (ast_to_source_code ~use_newlines e)
