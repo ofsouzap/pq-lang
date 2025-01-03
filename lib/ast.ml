@@ -208,6 +208,7 @@ end = struct
            |.> block (convert e2)
            |.> write "else"
            |.> block (convert e3)
+           |.> write "end"
        | Var (_, vname) -> write vname
        | Let (_, xname, e1, e2) -> (
            let default_repr : param -> param =
