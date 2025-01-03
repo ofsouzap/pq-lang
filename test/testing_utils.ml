@@ -51,12 +51,11 @@ let get_ast_printer_opt : 'a ast_print_method -> ('a expr -> string) option =
 let get_ast_printer (p : 'a ast_print_method) (e : 'a expr) : string =
   match get_ast_printer_opt p with None -> "" | Some f -> f e
 
-(* TODO - change these values back to larger ones *)
 let default_ast_print_method : 'a ast_print_method = PrintExprSource
-let max_gen_rec_depth : int = 3
+let max_gen_rec_depth : int = 10
 let default_max_gen_rec_depth : int = max_gen_rec_depth
-let default_max_custom_type_count : int = 2
-let default_max_custom_type_constructor_count : int = 2
+let default_max_custom_type_count : int = 5
+let default_max_custom_type_constructor_count : int = 5
 
 let sexp_of_token = function
   | END -> Sexp.Atom "END"
