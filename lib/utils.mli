@@ -12,6 +12,9 @@ module type Nonempty_list_sig = sig
   val cons : 'a -> 'a t -> 'a t
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
+
+  (* TODO - have a variant of fold that doesn't need an initial value, since the data structure is non-empty *)
+
   val rev : 'a t -> 'a t
 
   val fold_result :
