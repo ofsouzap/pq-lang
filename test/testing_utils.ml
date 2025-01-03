@@ -439,7 +439,7 @@ let pattern_arb ~(type_ctx : TestingTypeCtx.t) ~(t : vtype) :
   let named_var (ctx : TestingVarCtx.t) (t : vtype) :
       (pattern * TestingVarCtx.t) Gen.t =
     gen_new_varname ctx >|= fun vname ->
-    (PatName (vname, t), TestingVarCtx.singleton vname t)
+    (PatName (vname, t), TestingVarCtx.add ctx vname t)
   in
   let rec gen_unit (ctx : TestingVarCtx.t) : (pattern * TestingVarCtx.t) Gen.t =
     (* Generate a pattern that types as unit *)
