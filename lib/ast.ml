@@ -198,10 +198,11 @@ let rec ast_to_source_code ?(use_newlines : bool option) =
       sprintf "(%s) (%s)" (ast_to_source_code e1) (ast_to_source_code e2)
   | Fix _ -> raise AstConverionFixError
   | Match (_, e, cs) ->
-      sprintf "match (%s) with%s%s end" (ast_to_source_code e) nl
+      sprintf "match (%s) with%s%s%send" (ast_to_source_code e) nl
         (cs
         |> Nonempty_list.map ~f:(fun (p, c_e) ->
                sprintf "| (%s) -> (%s)" (pattern_to_source_code p)
                  (ast_to_source_code c_e))
-        |> Nonempty_list.to_list |> String.concat ~sep:" ")
+        |> Nonempty_list.to_list |> String.concat ~sep:nl)
+        nl
   | Constructor (_, cname, e) -> sprintf "%s (%s)" cname (ast_to_source_code e)

@@ -25,7 +25,8 @@ let create_typed_expr_gen_test (name : string)
           ~print:(fun (type_ctx, (t, e)) ->
             sprintf "[type ctx: %s]\n[type: %s]\n%s"
               (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
-              (vtype_to_source_code t) (ast_to_source_code e))
+              (vtype_to_source_code t)
+              (ast_to_source_code ~use_newlines:true e))
           ~shrink:
             QCheck.Shrink.(
               pair nil (pair nil (expr_shrink ~preserve_type:true)))
