@@ -140,7 +140,7 @@ exception AstConverionFixError
 module AstToSourceCodeConverter : sig
   val ast_to_source_code : use_newlines:bool -> 'a expr -> string
 end = struct
-  type builder = string list
+  type builder = (int * string) list
   type param = { builder : builder; use_newlines : bool; indent_level : int }
 
   let ( |.> ) (f1 : 'a -> 'b) (f2 : 'b -> 'c) : 'a -> 'c = Fn.compose f2 f1
@@ -151,14 +151,24 @@ end = struct
   let write (s : string) (p : param) : param =
     {
       p with
-      builder = (match p.builder with [] -> [ s ] | h :: t -> (h ^ s) :: t);
+      builder =
+        (match p.builder with
+        | [] -> [ (0, s) ]
+        | (h_indent, h_str) :: t -> (h_indent, h_str ^ s) :: t);
     }
 
-  let newline (p : param) : param =
-    let id =
-      if p.use_newlines then String.make (p.indent_level * 2) ' ' else " "
-    in
-    { p with builder = id :: p.builder }
+  (** If the current line has contents,
+  create a new empty one with the current indent level,
+  otherwise just set the line's indent level to the current indent level *)
+  let endline (p : param) : param =
+    match p.builder with
+    | [] -> (* No lines exist *) p
+    | (_, "") :: ts ->
+        (* Current line is empty *)
+        { p with builder = (p.indent_level, "") :: ts }
+    | _ :: _ ->
+        (* Current line is non-empty *)
+        { p with builder = (p.indent_level, "") :: p.builder }
 
   (** Write a "block" of source code. This will have an increased indent size for the block and start and end with newlines *)
   let block (f : param -> param) : param -> param =
@@ -168,10 +178,7 @@ end = struct
     let indent_down (p : param) : param =
       { p with indent_level = max 0 (p.indent_level - 1) }
     in
-    newline |.> indent_up |.> f |.> indent_down |.> newline
-
-  let build (p : param) : string =
-    p.builder |> List.rev |> String.concat ~sep:"\n"
+    indent_up |.> endline |.> f |.> indent_down |.> endline
 
   let rec convert ?(bracketed : bool option) (orig_e : 'a expr) (p : param) :
       param =
@@ -197,7 +204,7 @@ end = struct
        | Lt (_, e1, e2) -> convert e1 |.> write " < " |.> convert e2
        | LtEq (_, e1, e2) -> convert e1 |.> write " <= " |.> convert e2
        | If (_, e1, e2, e3) ->
-           write "if " |.> convert e1 |.> newline |.> write "then"
+           write "if " |.> convert e1 |.> endline |.> write "then"
            |.> block (convert e2)
            |.> write "else"
            |.> block (convert e3)
@@ -243,16 +250,26 @@ end = struct
              |.> write ") ->"
              |.> block (convert c_e)
            in
-           let converted_cases : (param -> param) Nonempty_list.t =
-             Nonempty_list.map ~f:convert_case cs
+           let blocked_converted_cases : (param -> param) Nonempty_list.t =
+             Nonempty_list.map ~f:(convert_case |.> block) cs
            in
            let cases_converter : param -> param =
-             converted_cases |> Nonempty_list.fold ~init:Fn.id ~f:( |.> )
+             Nonempty_list.fold ~init:Fn.id ~f:( |.> ) blocked_converted_cases
            in
-           write "match " |.> convert e |.> write " with"
-           |.> block cases_converter |.> write "end"
+           write "match"
+           |.> block (convert e)
+           |.> write "with" |.> block cases_converter |.> write "end"
        | Constructor (_, cname, e) -> write cname |.> convert e)
     |> if bracketed then write ")" else Fn.id
+
+  let build (p : param) : string =
+    let build_fun : (int * string) list -> string =
+      if p.use_newlines then
+        List.map ~f:(fun (indent, str) -> String.make (indent * 2) ' ' ^ str)
+        |.> String.concat ~sep:"\n"
+      else List.map ~f:snd |.> String.concat ~sep:" "
+    in
+    p.builder |> List.rev |> build_fun
 
   let ast_to_source_code ~(use_newlines : bool) (orig_e : 'a expr) : string =
     convert ~bracketed:false orig_e (create_param ~use_newlines) |> build
