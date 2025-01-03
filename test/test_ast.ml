@@ -130,8 +130,16 @@ let test_cases_to_source_code_inv =
   Test.make ~count:100 ~name:"AST to source code"
     plain_ast_expr_arb_any_default_type_ctx_params (fun (_, e) ->
       match run_frontend_string (ast_to_source_code e) with
-      | Ok prog -> equal_plain_expr e prog.e
-      | _ -> false)
+      | Ok prog ->
+          if equal_plain_expr e prog.e then true
+          else
+            Test.fail_reportf
+              "Got different AST. Expected:\n\n%s\n\nActual:\n\n%s"
+              (get_ast_printer (PrintSexp sexp_of_unit) e)
+              (get_ast_printer (PrintSexp sexp_of_unit) prog.e)
+      | Error err ->
+          Test.fail_reportf "Got frontend error: %s"
+            (err |> sexp_of_frontend_error |> Sexp.to_string))
 
 let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
     (type_eq : 'a -> 'a -> bool) =
