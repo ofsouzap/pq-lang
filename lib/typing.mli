@@ -2,21 +2,6 @@ open Custom_types
 open Vtype
 open Pattern
 
-(** Typing errors for typing patterns *)
-type pattern_typing_error =
-  | MultipleVariableDefinitions of string
-      (** Multiple definitions of some variable name in the pattern have been found *)
-  | UndefinedCustomTypeConstructor of string
-      (** The specified type constructor was used but hasn't been defined *)
-  | PatternTypeMismatch of vtype * vtype
-      (** A pattern was expected to have the first type but had the second *)
-[@@deriving sexp, equal]
-
-val equal_pattern_typing_error_variant :
-  pattern_typing_error -> pattern_typing_error -> bool
-
-val print_pattern_typing_error : pattern_typing_error -> string
-
 (** Typing errors *)
 type typing_error =
   | UndefinedVariable of string
@@ -29,10 +14,10 @@ type typing_error =
       (** An application of the equality operation had a type mismatch as the operands had the specified types instead of compatible ones *)
   | ExpectedFunctionOf of vtype
       (** A value is used as a function but isn't a function. The expected input type of the function is the value *)
-  | PatternTypingError of pattern_typing_error
-      (** There was an error when typing a pattern *)
   | UndefinedCustomTypeConstructor of string
       (** The specified type constructor was used but hasn't been defined *)
+  | PatternMultipleVariableDefinitions of string
+      (** In a pattern, there are multiple definitions of some variable name *)
 [@@deriving sexp, equal]
 
 val equal_typing_error_variant : typing_error -> typing_error -> bool
@@ -114,7 +99,7 @@ module type TypeCheckerSig = functor
   val type_pattern :
     checked_type_ctx * VarCtx.t ->
     pattern ->
-    (vtype * VarCtx.t, pattern_typing_error) Result.t
+    (vtype * VarCtx.t, typing_error) Result.t
 
   (** Type checks an expression in the given context, returning either
       a typed expression or a typing error *)

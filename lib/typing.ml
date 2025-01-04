@@ -5,49 +5,35 @@ open Vtype
 open Pattern
 open Ast
 
-type pattern_typing_error =
-  | MultipleVariableDefinitions of string
-  | UndefinedCustomTypeConstructor of string
-  | PatternTypeMismatch of vtype * vtype
-[@@deriving sexp, equal]
-
-let equal_pattern_typing_error_variant x y =
-  match (x, y) with
-  | MultipleVariableDefinitions _, MultipleVariableDefinitions _ -> true
-  | MultipleVariableDefinitions _, _ -> false
-  | UndefinedCustomTypeConstructor _, UndefinedCustomTypeConstructor _ -> true
-  | UndefinedCustomTypeConstructor _, _ -> false
-  | PatternTypeMismatch _, PatternTypeMismatch _ -> true
-  | PatternTypeMismatch _, _ -> false
-
-let print_pattern_typing_error = function
-  | MultipleVariableDefinitions xname ->
-      sprintf "Variable named \"%s\" has been defined twice in the pattern"
-        xname
-  | UndefinedCustomTypeConstructor c_name ->
-      sprintf "Undefined custom type constructor: %s" c_name
-  | PatternTypeMismatch (t1, t2) ->
-      sprintf "Type mismatch in pattern: expected %s but got %s"
-        (vtype_to_source_code t1) (vtype_to_source_code t2)
-
 type typing_error =
   | UndefinedVariable of string
   | TypeMismatch of vtype * vtype
   | PatternTypeMismatch of pattern * vtype * vtype
   | EqualOperatorTypeMistmatch of vtype * vtype
   | ExpectedFunctionOf of vtype
-  | PatternTypingError of pattern_typing_error
   | UndefinedCustomTypeConstructor of string
+  | PatternMultipleVariableDefinitions of string
 [@@deriving sexp, equal]
 
 let equal_typing_error_variant x y =
   match (x, y) with
   | UndefinedVariable _, UndefinedVariable _
   | TypeMismatch _, TypeMismatch _
+  | PatternTypeMismatch _, PatternTypeMismatch _
   | EqualOperatorTypeMistmatch _, EqualOperatorTypeMistmatch _
-  | ExpectedFunctionOf _, ExpectedFunctionOf _ ->
+  | ExpectedFunctionOf _, ExpectedFunctionOf _
+  | UndefinedCustomTypeConstructor _, UndefinedCustomTypeConstructor _
+  | PatternMultipleVariableDefinitions _, PatternMultipleVariableDefinitions _
+    ->
       true
-  | _, _ -> false
+  | UndefinedVariable _, _
+  | TypeMismatch _, _
+  | PatternTypeMismatch _, _
+  | EqualOperatorTypeMistmatch _, _
+  | ExpectedFunctionOf _, _
+  | UndefinedCustomTypeConstructor _, _
+  | PatternMultipleVariableDefinitions _, _ ->
+      false
 
 let print_typing_error = function
   | UndefinedVariable x -> "Undefined variable: " ^ x
@@ -63,10 +49,10 @@ let print_typing_error = function
         (vtype_to_source_code t1) (vtype_to_source_code t2)
   | ExpectedFunctionOf t ->
       "Expected a function taking input of " ^ vtype_to_source_code t
-  | PatternTypingError err ->
-      sprintf "Error typing pattern: %s" (print_pattern_typing_error err)
   | UndefinedCustomTypeConstructor c_name ->
       sprintf "Undefined custom type constructor: %s" c_name
+  | PatternMultipleVariableDefinitions xname ->
+      sprintf "Variable named \"%s\" has been defined twice in a pattern" xname
 
 module type TypingTypeContext = sig
   type t
@@ -159,7 +145,7 @@ module type TypeCheckerSig = functor
   val type_pattern :
     checked_type_ctx * VarCtx.t ->
     pattern ->
-    (vtype * VarCtx.t, pattern_typing_error) Result.t
+    (vtype * VarCtx.t, typing_error) Result.t
 
   val type_expr :
     checked_type_ctx * VarCtx.t ->
@@ -188,12 +174,12 @@ functor
 
     let rec type_pattern
         (((type_ctx : checked_type_ctx), (var_ctx : VarCtx.t)) as ctx)
-        (orig_p : pattern) : (vtype * VarCtx.t, pattern_typing_error) Result.t =
+        (orig_p : pattern) : (vtype * VarCtx.t, typing_error) Result.t =
       let open Result in
       match orig_p with
       | PatName (x_name, x_t) ->
           if VarCtx.exists var_ctx x_name then
-            Error (MultipleVariableDefinitions x_name)
+            Error (PatternMultipleVariableDefinitions x_name)
           else Ok (x_t, VarCtx.add var_ctx x_name x_t)
       | PatPair (p1, p2) ->
           type_pattern ctx p1 >>= fun (p1_t, var_ctx_from_p1) ->
@@ -207,7 +193,7 @@ functor
               type_pattern ctx p >>= fun (p_t, var_ctx_from_p) ->
               if equal_vtype c_t p_t then
                 Ok (VTypeCustom ct_name, var_ctx_from_p)
-              else Error (PatternTypeMismatch (c_t, p_t)))
+              else Error (PatternTypeMismatch (p, c_t, p_t)))
 
     let type_expr :
         checked_type_ctx * VarCtx.t ->
@@ -365,25 +351,23 @@ functor
                   ((p : pattern), (c_e : 'a expr))
                 ->
                 (* First, try type the pattern *)
-                match type_pattern (type_ctx, VarCtx.empty) p with
-                | Ok (p_t, p_ctx) ->
-                    (* Check the pattern's type *)
-                    if equal_vtype t_in p_t then
-                      let case_ctx = VarCtx.append var_ctx p_ctx in
-                      (* Then, type the case's expression using the extended context *)
-                      type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
-                      let t_c_e = e_type c_e' in
-                      match acc with
-                      | First _ ->
-                          (* If this is the first case, use this as the output type *)
-                          Ok (t_c_e, Nonempty_list.singleton (p, c_e'))
-                      | Second (t_out, cs_prev_rev) ->
-                          (* If this isn't the first case, check the case's expression's type *)
-                          if equal_vtype t_out t_c_e then
-                            Ok (t_out, Nonempty_list.cons (p, c_e') cs_prev_rev)
-                          else Error (TypeMismatch (t_out, t_c_e))
-                    else Error (PatternTypeMismatch (p, t_in, p_t))
-                | Error err -> Error (PatternTypingError err))
+                type_pattern (type_ctx, VarCtx.empty) p >>= fun (p_t, p_ctx) ->
+                (* Check the pattern's type *)
+                if equal_vtype t_in p_t then
+                  let case_ctx = VarCtx.append var_ctx p_ctx in
+                  (* Then, type the case's expression using the extended context *)
+                  type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
+                  let t_c_e = e_type c_e' in
+                  match acc with
+                  | First _ ->
+                      (* If this is the first case, use this as the output type *)
+                      Ok (t_c_e, Nonempty_list.singleton (p, c_e'))
+                  | Second (t_out, cs_prev_rev) ->
+                      (* If this isn't the first case, check the case's expression's type *)
+                      if equal_vtype t_out t_c_e then
+                        Ok (t_out, Nonempty_list.cons (p, c_e') cs_prev_rev)
+                      else Error (TypeMismatch (t_out, t_c_e))
+                else Error (PatternTypeMismatch (p, t_in, p_t)))
               cs
             >>| fun ( (t_out : vtype),
                       (cs_typed_rev :
