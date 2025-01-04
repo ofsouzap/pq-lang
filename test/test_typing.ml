@@ -654,7 +654,57 @@ let test_cases_arb_compound_expr_typing : test list =
           >>= fun (xname, t2) ->
           expr_gen ~type_ctx t2 >|= fun e ->
           (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );
-      (* TODO - test cases for custom type constructors *)
+      ( "Constructor - list Nil",
+        Some
+          (TestingTypeCtx.create
+             ~custom_types:
+               [
+                 ( "list",
+                   [
+                     ("Nil", VTypeUnit);
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                   ] );
+                 ("int_box", [ ("IntBox", VTypeInt) ]);
+               ]),
+        fun type_ctx ->
+          pair
+            (return (VTypeCustom "list"))
+            ( expr_gen ~type_ctx VTypeUnit >|= fun e1 ->
+              Constructor ((), "Nil", e1) ) );
+      ( "Constructor - list Cons",
+        Some
+          (TestingTypeCtx.create
+             ~custom_types:
+               [
+                 ( "list",
+                   [
+                     ("Nil", VTypeUnit);
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                   ] );
+                 ("int_box", [ ("IntBox", VTypeInt) ]);
+               ]),
+        fun type_ctx ->
+          pair
+            (return (VTypeCustom "list"))
+            ( expr_gen ~type_ctx (VTypePair (VTypeInt, VTypeCustom "list"))
+            >|= fun e1 -> Constructor ((), "Cons", e1) ) );
+      ( "Constructor - int_box",
+        Some
+          (TestingTypeCtx.create
+             ~custom_types:
+               [
+                 ( "list",
+                   [
+                     ("Nil", VTypeUnit);
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                   ] );
+                 ("int_box", [ ("IntBox", VTypeInt) ]);
+               ]),
+        fun type_ctx ->
+          pair
+            (return (VTypeCustom "int_box"))
+            ( expr_gen ~type_ctx VTypeInt >|= fun e1 ->
+              Constructor ((), "IntBox", e1) ) );
     ]
 
 let test_cases_typing_maintains_structure : test =
