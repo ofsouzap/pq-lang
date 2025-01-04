@@ -44,39 +44,47 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
        (function
          | None -> true
          | Some (type_ctx, e, e_shrunk) -> (
-             match
-               TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
-             with
-             | Ok e_tpe -> (
-                 let e_type =
-                   e_tpe
-                   |> TestingTypeChecker.typed_program_expression_get_expression
-                   |> Ast.expr_node_val |> fst
-                 in
+             match TestingTypeChecker.check_type_ctx type_ctx with
+             | Error err ->
+                 Test.fail_reportf "Failed to check type ctx, with error: %s"
+                   (print_typing_error err)
+             | Ok type_ctx -> (
                  match
                    TestingTypeChecker.type_expr
                      (type_ctx, TestingVarCtx.empty)
-                     e_shrunk
+                     e
                  with
-                 | Ok e_shrunk_tpe ->
-                     let e_shrunk_type =
-                       e_shrunk_tpe
+                 | Ok e_tpe -> (
+                     let e_type =
+                       e_tpe
                        |> TestingTypeChecker
                           .typed_program_expression_get_expression
                        |> Ast.expr_node_val |> fst
                      in
-                     if equal_vtype e_type e_shrunk_type then true
-                     else
-                       Test.fail_reportf
-                         "Types don't match. Original: %s, shrunk: %s"
-                         (vtype_to_source_code e_type)
-                         (vtype_to_source_code e_shrunk_type)
+                     match
+                       TestingTypeChecker.type_expr
+                         (type_ctx, TestingVarCtx.empty)
+                         e_shrunk
+                     with
+                     | Ok e_shrunk_tpe ->
+                         let e_shrunk_type =
+                           e_shrunk_tpe
+                           |> TestingTypeChecker
+                              .typed_program_expression_get_expression
+                           |> Ast.expr_node_val |> fst
+                         in
+                         if equal_vtype e_type e_shrunk_type then true
+                         else
+                           Test.fail_reportf
+                             "Types don't match. Original: %s, shrunk: %s"
+                             (vtype_to_source_code e_type)
+                             (vtype_to_source_code e_shrunk_type)
+                     | Error err ->
+                         Test.fail_reportf "Typing error for shrunk e: %s"
+                           (err |> sexp_of_typing_error |> Sexp.to_string))
                  | Error err ->
-                     Test.fail_reportf "Typing error for shrunk e: %s"
-                       (err |> sexp_of_typing_error |> Sexp.to_string))
-             | Error err ->
-                 Test.fail_reportf "Typing error for original e: %s"
-                   (err |> sexp_of_typing_error |> Sexp.to_string))))
+                     Test.fail_reportf "Typing error for original e: %s"
+                       (err |> sexp_of_typing_error |> Sexp.to_string)))))
 
 let create_typed_expr_gen_test (name : string)
     (types_gen : (TestingTypeCtx.t * vtype) Gen.t) : test =
@@ -100,17 +108,22 @@ let create_typed_expr_gen_test (name : string)
               pair nil (pair nil (expr_shrink ~preserve_type:true)))
           gen)
        (fun (type_ctx, (t, e)) ->
-         let typed_result =
-           TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
-         in
-         match typed_result with
-         | Ok tpe ->
-             let et =
-               tpe |> TestingTypeChecker.typed_program_expression_get_expression
-               |> Ast.expr_node_val |> fst
-             in
-             equal_vtype t et
-         | Error _ -> false))
+         match TestingTypeChecker.check_type_ctx type_ctx with
+         | Error err ->
+             Test.fail_reportf "Failed to check type ctx, with error: %s"
+               (print_typing_error err)
+         | Ok type_ctx -> (
+             match
+               TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
+             with
+             | Ok tpe ->
+                 let et =
+                   tpe
+                   |> TestingTypeChecker.typed_program_expression_get_expression
+                   |> Ast.expr_node_val |> fst
+                 in
+                 equal_vtype t et
+             | Error _ -> false)))
 
 let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
   create_typed_expr_gen_test name
@@ -124,7 +137,7 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
           ~print:
             (Core.Fn.compose Sexp.to_string
                (let sexp_of_type_ctx (type_ctx : TestingTypeCtx.t) : Sexp.t =
-                  TestingTypeCtx.to_list type_ctx
+                  TestingTypeCtx.customs_to_list type_ctx
                   |> sexp_of_list sexp_of_custom_type
                 in
                 sexp_of_pair sexp_of_type_ctx sexp_of_vtype))

@@ -13,6 +13,8 @@ type typing_error =
   | ExpectedFunctionOf of vtype
   | UndefinedCustomTypeConstructor of string
   | PatternMultipleVariableDefinitions of string
+  | MultipleCustomTypeDefinitions of string
+  | MultipleCustomTypeConstructorDefinitions of string
 [@@deriving sexp, equal]
 
 let equal_typing_error_variant x y =
@@ -24,7 +26,9 @@ let equal_typing_error_variant x y =
   | ExpectedFunctionOf _, ExpectedFunctionOf _
   | UndefinedCustomTypeConstructor _, UndefinedCustomTypeConstructor _
   | PatternMultipleVariableDefinitions _, PatternMultipleVariableDefinitions _
-    ->
+  | MultipleCustomTypeDefinitions _, MultipleCustomTypeDefinitions _
+  | ( MultipleCustomTypeConstructorDefinitions _,
+      MultipleCustomTypeConstructorDefinitions _ ) ->
       true
   | UndefinedVariable _, _
   | TypeMismatch _, _
@@ -32,7 +36,9 @@ let equal_typing_error_variant x y =
   | EqualOperatorTypeMistmatch _, _
   | ExpectedFunctionOf _, _
   | UndefinedCustomTypeConstructor _, _
-  | PatternMultipleVariableDefinitions _, _ ->
+  | PatternMultipleVariableDefinitions _, _
+  | MultipleCustomTypeDefinitions _, _
+  | MultipleCustomTypeConstructorDefinitions _, _ ->
       false
 
 let print_typing_error = function
@@ -53,6 +59,12 @@ let print_typing_error = function
       sprintf "Undefined custom type constructor: %s" c_name
   | PatternMultipleVariableDefinitions xname ->
       sprintf "Variable named \"%s\" has been defined twice in a pattern" xname
+  | MultipleCustomTypeDefinitions ct_name ->
+      sprintf "Custom type named \"%s\" has been defined multiple times" ct_name
+  | MultipleCustomTypeConstructorDefinitions c_name ->
+      sprintf
+        "Custom type constructor named \"%s\" has been defined multiple times"
+        c_name
 
 module type TypingTypeContext = sig
   type t
@@ -64,7 +76,11 @@ module type TypingTypeContext = sig
 
   val find_custom_with_constructor :
     t -> string -> (custom_type * custom_type_constructor) option
+
+  val customs_to_list : t -> custom_type list
 end
+
+module StringSet = Set.Make (String)
 
 module CustomTypeComparatorByName = struct
   type t = custom_type
@@ -99,6 +115,9 @@ module SetTypingTypeContext : TypingTypeContext = struct
         let open Option in
         List.find cs ~f:(fun (c_name', _) -> equal_string c_name c_name')
         >>| fun c -> (ct, c))
+
+  let customs_to_list (ctx : t) : custom_type list =
+    Set.to_list ctx.custom_types
 end
 
 module type TypingVarContext = sig
@@ -132,6 +151,7 @@ module type TypeCheckerSig = functor
   -> sig
   type checked_type_ctx
 
+  val checked_empty_type_ctx : checked_type_ctx
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
 
   type 'a typed_program_expression
@@ -161,11 +181,29 @@ functor
   struct
     type checked_type_ctx = TypeCtx.t
 
-    let check_type_ctx (_ : TypeCtx.t) :
+    let checked_empty_type_ctx = TypeCtx.empty
+
+    type checking_type_ctx_acc = {
+      types : StringSet.t;
+      constructors : StringSet.t;
+    }
+
+    let check_type_ctx (ctx : TypeCtx.t) :
         (checked_type_ctx, typing_error) Result.t =
-      failwith
-        "TODO - checked that there are no duplicate custom type names or \
-         constructor names"
+      let open Result in
+      List.fold_result (TypeCtx.customs_to_list ctx)
+        ~init:{ types = StringSet.empty; constructors = StringSet.empty }
+        ~f:(fun acc (ct_name, ct_cs) ->
+          if Set.mem acc.types ct_name then
+            Error (MultipleCustomTypeDefinitions ct_name)
+          else
+            let acc = { acc with types = Set.add acc.types ct_name } in
+            List.fold_result ct_cs ~init:acc ~f:(fun acc (c_name, _) ->
+                if Set.mem acc.constructors c_name then
+                  Error (MultipleCustomTypeConstructorDefinitions c_name)
+                else
+                  Ok { acc with constructors = Set.add acc.constructors c_name }))
+      >>| fun _ -> ctx
 
     type 'a typed_program_expression = TypeCtx.t * (vtype * 'a) Ast.expr
 
@@ -392,4 +430,6 @@ module SimpleTypeChecker =
 
 let type_expr ~(type_ctx : SetTypingTypeContext.t) (e : 'a Ast.expr) :
     ('a SimpleTypeChecker.typed_program_expression, typing_error) result =
+  let open Result in
+  SimpleTypeChecker.check_type_ctx type_ctx >>= fun type_ctx ->
   SimpleTypeChecker.type_expr (type_ctx, ListTypingVarContext.empty) e

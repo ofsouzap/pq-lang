@@ -8,6 +8,8 @@ open Ast
 open Typing
 open Testing_utils
 
+(* TODO - tests for type context checking *)
+
 let test_cases_expr_typing : test list =
   let open Result in
   let create_test
@@ -368,7 +370,11 @@ let test_cases_typing_with_var_ctx : test list =
         (e |> ast_to_source_code ~use_newlines:true)
     in
     name >:: fun _ ->
-    let out = SimpleTypeChecker.type_expr (SetTypingTypeContext.empty, ctx) e in
+    let out =
+      SimpleTypeChecker.type_expr
+        (SimpleTypeChecker.checked_empty_type_ctx, ctx)
+        e
+    in
     match (out, t) with
     | Ok tpe, Ok exp_t ->
         let out_t =
@@ -508,19 +514,23 @@ let test_cases_arb_compound_expr_typing : test list =
     in
     QCheck_ounit.to_ounit2_test
       (Test.make ~name ~count:100 e_arb (fun (exp_t, e) ->
-           let open Result in
-           let out =
-             TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
-           in
-           match out with
-           | Ok tpe ->
-               let t =
-                 tpe
-                 |> TestingTypeChecker.typed_program_expression_get_expression
-                 |> expr_node_val |> fst
-               in
-               equal_vtype exp_t t
-           | Error _ -> false))
+           match TestingTypeChecker.check_type_ctx type_ctx with
+           | Error err ->
+               Test.fail_reportf "Failed to check type ctx, with error: %s"
+                 (print_typing_error err)
+           | Ok type_ctx -> (
+               match
+                 TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
+               with
+               | Ok tpe ->
+                   let t =
+                     tpe
+                     |> TestingTypeChecker
+                        .typed_program_expression_get_expression
+                     |> expr_node_val |> fst
+                   in
+                   equal_vtype exp_t t
+               | Error _ -> false)))
   in
   List.map ~f:create_test
     [
@@ -653,19 +663,23 @@ let test_cases_typing_maintains_structure : test =
     (Test.make ~name:"Typing maintains structure" ~count:100
        (ast_expr_arb_default_type_ctx_params PrintExprSource Gen.unit)
        (fun (type_ctx, e) ->
-         let open Result in
-         let out =
-           TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
-         in
-         match out with
-         | Ok tpe ->
-             let plain_e = expr_to_plain_expr e in
-             let plain_typed_e =
-               tpe |> TestingTypeChecker.typed_program_expression_get_expression
-               |> expr_to_plain_expr
-             in
-             equal_plain_expr plain_e plain_typed_e
-         | Error _ -> false))
+         match TestingTypeChecker.check_type_ctx type_ctx with
+         | Error err ->
+             Test.fail_reportf "Failed to check type ctx, with error: %s"
+               (print_typing_error err)
+         | Ok type_ctx -> (
+             match
+               TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
+             with
+             | Ok tpe ->
+                 let plain_e = expr_to_plain_expr e in
+                 let plain_typed_e =
+                   tpe
+                   |> TestingTypeChecker.typed_program_expression_get_expression
+                   |> expr_to_plain_expr
+                 in
+                 equal_plain_expr plain_e plain_typed_e
+             | Error _ -> false)))
 
 (* TODO - custom type definitions (typing custom type definitions) *)
 

@@ -83,9 +83,6 @@ module TestingTypeCtx : sig
   (** Add a custom type to the type context *)
   val add_custom : t -> custom_type -> t
 
-  (** Get the type context as a list *)
-  val to_list : t -> custom_type list
-
   (** Creates a type from a list *)
   val from_list : custom_type list -> t
 

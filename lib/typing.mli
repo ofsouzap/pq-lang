@@ -18,6 +18,10 @@ type typing_error =
       (** The specified type constructor was used but hasn't been defined *)
   | PatternMultipleVariableDefinitions of string
       (** In a pattern, there are multiple definitions of some variable name *)
+  | MultipleCustomTypeDefinitions of string
+      (** The specified custom type name has been defined multiple times *)
+  | MultipleCustomTypeConstructorDefinitions of string
+      (** The specified custom type constructor name has been defined multiple times *)
 [@@deriving sexp, equal]
 
 val equal_typing_error_variant : typing_error -> typing_error -> bool
@@ -42,6 +46,9 @@ module type TypingTypeContext = sig
   (** Find a custom type in the type context with a custom of the specified name. If multiple exist, only one is returned *)
   val find_custom_with_constructor :
     t -> string -> (custom_type * custom_type_constructor) option
+
+  (** Get a list of the custom types defined in the context *)
+  val customs_to_list : t -> custom_type list
 end
 
 (** Typing context of types using a simple set-based approach *)
@@ -80,6 +87,9 @@ module type TypeCheckerSig = functor
   -> sig
   (** The type of a type context that has been checked to be valid *)
   type checked_type_ctx
+
+  (** A checked version of the empty type context *)
+  val checked_empty_type_ctx : checked_type_ctx
 
   (** Check a type context is valid *)
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t

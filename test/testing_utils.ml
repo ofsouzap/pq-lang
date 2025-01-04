@@ -247,7 +247,7 @@ module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
   val add_custom : t -> custom_type -> t
-  val to_list : t -> custom_type list
+  val customs_to_list : t -> custom_type list
   val from_list : custom_type list -> t
   val custom_gen_opt : t -> custom_type QCheck.Gen.t option
   val sexp_of_t : t -> Sexp.t
@@ -271,7 +271,7 @@ end = struct
         >>| fun c -> (ct, c))
 
   let add_custom (ctx : t) (ct : custom_type) : t = ct :: ctx
-  let to_list = Fn.id
+  let customs_to_list = Fn.id
   let from_list cts = cts
 
   let custom_gen_opt (ctx : t) : custom_type QCheck.Gen.t option =
@@ -281,7 +281,7 @@ end = struct
       Some (oneof (List.map ~f:return ctx))
 
   let sexp_of_t : t -> Sexp.t =
-    Fn.compose (sexp_of_list sexp_of_custom_type) to_list
+    Fn.compose (sexp_of_list sexp_of_custom_type) customs_to_list
 end
 
 let vtype_gen ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.Gen.t =
@@ -327,7 +327,8 @@ let testing_type_ctx_gen ~(max_custom_types : int) ~(max_constructors : int)
         (pair custom_type_constructor_name_gen (vtype_gen ~type_ctx mrd))
         ~f:(fun (c_name, _) ->
           not
-            (List.exists (TestingTypeCtx.to_list type_ctx) ~f:(fun (_, cs) ->
+            (List.exists (TestingTypeCtx.customs_to_list type_ctx)
+               ~f:(fun (_, cs) ->
                  List.exists cs ~f:(fun (x_c_name, _) ->
                      equal_string x_c_name c_name))
             || List.mem used_constructor_names c_name ~equal:equal_string))
@@ -368,7 +369,8 @@ let testing_type_ctx_arb ~(max_custom_types : int) ~(max_constructors : int)
   in
   QCheck.make
     ~print:
-      QCheck.Print.(Fn.compose (list print_custom_type) TestingTypeCtx.to_list)
+      QCheck.Print.(
+        Fn.compose (list print_custom_type) TestingTypeCtx.customs_to_list)
     (testing_type_ctx_gen ~max_custom_types ~max_constructors ~mrd)
 
 let default_testing_type_ctx_gen =
