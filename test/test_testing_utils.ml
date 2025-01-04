@@ -150,7 +150,7 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
          | VTypeCustom ct_name -> TestingTypeCtx.custom_exists type_ctx ct_name
          | _ -> true))
 
-(* TODO - test that the type contexts generated don't contain duplicated constructor names or type names *)
+(* TODO - test that the type contexts generated can check correctly *)
 
 let create_test_var_ctx (xs : (string * vtype) list) : TestingVarCtx.t =
   List.fold xs ~init:TestingVarCtx.empty ~f:(fun ctx (x, t) ->

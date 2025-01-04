@@ -681,10 +681,6 @@ let test_cases_typing_maintains_structure : test =
                  equal_plain_expr plain_e plain_typed_e
              | Error _ -> false)))
 
-(* TODO - custom type definitions (typing custom type definitions) *)
-
-(* TODO - custom type definitions (typing when custom types have been defined) *)
-
 let suite =
   "Typing"
   >::: [
