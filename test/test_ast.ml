@@ -127,7 +127,7 @@ let test_cases_equality : test list =
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:100 ~name:"AST to source code"
+  Test.make ~count:1000 ~name:"AST to source code"
     plain_ast_expr_arb_any_default_type_ctx_params (fun (_, e) ->
       match run_frontend_string (ast_to_source_code e) with
       | Ok prog ->

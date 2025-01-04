@@ -5,6 +5,7 @@ open Vtype
 open Custom_types
 open Pattern
 open Ast
+open Program
 open Typing
 open Parser
 open Ast_executor
@@ -765,3 +766,43 @@ let plain_ast_expr_arb_any_default_type_ctx_params :
         (ast_to_source_code ~use_newlines:true e))
     ~shrink:QCheck.Shrink.(pair nil (expr_shrink ~preserve_type:false))
     gen
+
+let get_program_printer (ast_print : 'a ast_print_method) : 'a program -> string
+    =
+ fun prog ->
+  sprintf "[custom types: %s]\n%s"
+    QCheck.Print.(
+      list
+        (fun ct -> ct |> sexp_of_custom_type |> Sexp.to_string)
+        prog.custom_types)
+    (get_ast_printer ast_print prog.e)
+
+let program_gen ?(max_custom_types : int option)
+    ?(max_custom_type_constructors : int option) ?(t : vtype option)
+    (v_gen : 'a QCheck.Gen.t) : 'a program QCheck.Gen.t =
+  let open QCheck.Gen in
+  testing_type_ctx_gen
+    ~max_custom_types:
+      (Option.value max_custom_types ~default:default_max_custom_type_count)
+    ~max_constructors:
+      (Option.value max_custom_type_constructors
+         ~default:default_max_custom_type_constructor_count)
+    ~mrd:default_max_gen_rec_depth
+  >>= fun type_ctx ->
+  let custom_types_list = TestingTypeCtx.customs_to_list type_ctx in
+  ast_expr_gen ?t ~type_ctx v_gen >|= fun e ->
+  { custom_types = custom_types_list; e }
+
+let program_arb ?(max_custom_types : int option)
+    ?(max_custom_type_constructors : int option) ?(t : vtype option)
+    (ast_print : 'a ast_print_method) (v_gen : 'a QCheck.Gen.t) :
+    'a program QCheck.arbitrary =
+  QCheck.make
+    ~print:(get_program_printer ast_print)
+    ~shrink:
+      (let open QCheck.Iter in
+       let preserve_type = Option.is_some t in
+       fun prog ->
+         (* NOTE - we can't simply try and shrink the custom types list because this may make the expression invalid *)
+         expr_shrink ~preserve_type prog.e >|= fun e' -> { prog with e = e' })
+    (program_gen ?max_custom_types ?max_custom_type_constructors ?t v_gen)

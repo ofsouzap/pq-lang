@@ -5,6 +5,7 @@ open Vtype
 open Custom_types
 open Pattern
 open Ast
+open Program
 open Typing
 
 (* TODO - move the generators and arbitrary instances for different things into the main lib/ things, and have them as submodules with a consistent name relating to QCheck *)
@@ -188,3 +189,24 @@ val plain_ast_expr_arb_any :
 (** Arbitrary generator for an untagged AST expression of any type with default type context generation parameters *)
 val plain_ast_expr_arb_any_default_type_ctx_params :
   (TestingTypeCtx.t * unit expr) QCheck.arbitrary
+
+(** Take an AST printing method and return a function that implements the printing method for an entire program.
+    Returns a function always returning the empty string if no printing is specified. *)
+val get_program_printer : 'a ast_print_method -> 'a program -> string
+
+(** Generator for a valid program, optionally with a specified main expression type *)
+val program_gen :
+  ?max_custom_types:int ->
+  ?max_custom_type_constructors:int ->
+  ?t:vtype ->
+  'a QCheck.Gen.t ->
+  'a program QCheck.Gen.t
+
+(** Arbitrary generator for a valid prgram, optionally with a specified main expression type *)
+val program_arb :
+  ?max_custom_types:int ->
+  ?max_custom_type_constructors:int ->
+  ?t:vtype ->
+  'a ast_print_method ->
+  'a QCheck.Gen.t ->
+  'a program QCheck.arbitrary

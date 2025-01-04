@@ -129,6 +129,9 @@ let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
   create_typed_expr_gen_test name
     QCheck.Gen.(default_testing_type_ctx_gen >|= fun type_ctx -> (type_ctx, t))
 
+(* TODO - typed program generation tests.
+   Just reuse the code for expression generation tests but type context comes from program *)
+
 let create_test_vtype_gen_constructors_exist (name : string) : test =
   let open QCheck in
   QCheck_runner.to_ounit2_test
