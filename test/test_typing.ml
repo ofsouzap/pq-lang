@@ -433,7 +433,7 @@ module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
     let ctx_gen : (TestingTypeCtx.t * VarCtx.t) QCheck.Gen.t =
       let open QCheck.Gen in
       default_testing_type_ctx_gen >>= fun type_ctx ->
-      list (pair string (vtype_gen ~type_ctx default_max_gen_rec_depth))
+      list (pair string (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth))
       >|= fun ctx_list -> (type_ctx, var_ctx_from_list ctx_list)
     in
     let ctx_two_vtypes_gen :
@@ -443,8 +443,8 @@ module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
       pair
         (pair (return type_ctx) (return var_ctx))
         (pair
-           (vtype_gen ~type_ctx default_max_gen_rec_depth)
-           (vtype_gen ~type_ctx default_max_gen_rec_depth))
+           (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
+           (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth))
     in
     let ctx_two_vtypes_arb = QCheck.make ctx_two_vtypes_gen in
     List.map ~f:QCheck_runner.to_ounit2_test
@@ -613,7 +613,7 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "If",
         None,
         fun type_ctx ->
-          vtype_gen ~type_ctx default_max_gen_rec_depth >>= fun t ->
+          vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth >>= fun t ->
           triple
             (expr_gen ~type_ctx VTypeBool)
             (expr_gen ~type_ctx t) (expr_gen ~type_ctx t)
@@ -621,8 +621,8 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Let",
         None,
         fun type_ctx ->
-          vtype_gen ~type_ctx default_max_gen_rec_depth >>= fun t ->
-          pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth >>= fun t ->
+          pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
           >>= fun (xname, xtype) ->
           pair (expr_gen ~type_ctx xtype) (expr_gen ~type_ctx t)
           >|= fun (e1, e2) -> (t, Let ((), xname, e1, e2))
@@ -631,8 +631,8 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Fun",
         None,
         fun type_ctx ->
-          vtype_gen ~type_ctx default_max_gen_rec_depth >>= fun t2 ->
-          pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth >>= fun t2 ->
+          pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
           >>= fun (xname, t1) ->
           expr_gen ~type_ctx t2 >|= fun e ->
           (VTypeFun (t1, t2), Ast.Fun ((), (xname, t1), e)) );
@@ -640,17 +640,17 @@ let test_cases_arb_compound_expr_typing : test list =
         None,
         fun type_ctx ->
           pair
-            (vtype_gen ~type_ctx default_max_gen_rec_depth)
-            (vtype_gen ~type_ctx default_max_gen_rec_depth)
+            (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
+            (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
           >>= fun (t1, t2) ->
           pair (expr_gen ~type_ctx (VTypeFun (t1, t2))) (expr_gen ~type_ctx t1)
           >|= fun (e1, e2) -> (t2, App ((), e1, e2)) );
       ( "Fix",
         None,
         fun type_ctx ->
-          pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
           >>= fun (fname, t1) ->
-          pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth)
+          pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
           >>= fun (xname, t2) ->
           expr_gen ~type_ctx t2 >|= fun e ->
           (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );

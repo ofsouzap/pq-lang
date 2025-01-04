@@ -284,7 +284,7 @@ end = struct
     Fn.compose (sexp_of_list sexp_of_custom_type) customs_to_list
 end
 
-let vtype_gen ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.Gen.t =
+let vtype_gen ~(type_ctx : TestingTypeCtx.t) ~(mrd : int) : vtype QCheck.Gen.t =
   let open QCheck.Gen in
   let gen =
     fix (fun self d ->
@@ -304,16 +304,16 @@ let vtype_gen ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.Gen.t =
         in
         if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
   in
-  gen d
+  gen mrd
 
-let vtype_arb ~(type_ctx : TestingTypeCtx.t) (d : int) : vtype QCheck.arbitrary
-    =
-  QCheck.make ~print:vtype_to_source_code (vtype_gen ~type_ctx d)
+let vtype_arb ~(type_ctx : TestingTypeCtx.t) ~(mrd : int) :
+    vtype QCheck.arbitrary =
+  QCheck.make ~print:vtype_to_source_code (vtype_gen ~type_ctx ~mrd)
 
-let typed_var_gen ~(type_ctx : TestingTypeCtx.t) (d : int) :
+let typed_var_gen ~(type_ctx : TestingTypeCtx.t) ~(mrd : int) :
     (string * vtype) QCheck.Gen.t =
   let open QCheck.Gen in
-  pair varname_gen (vtype_gen ~type_ctx d)
+  pair varname_gen (vtype_gen ~type_ctx ~mrd)
 
 let testing_type_ctx_gen ~(max_custom_types : int) ~(max_constructors : int)
     ~(mrd : int) : TestingTypeCtx.t QCheck.Gen.t =
@@ -324,7 +324,7 @@ let testing_type_ctx_gen ~(max_custom_types : int) ~(max_constructors : int)
         custom_type_constructor QCheck.Gen.t =
       (* Filtered so that the constructors don't exist already in the type context *)
       filter_gen ~max_attempts:10000
-        (pair custom_type_constructor_name_gen (vtype_gen ~type_ctx mrd))
+        (pair custom_type_constructor_name_gen (vtype_gen ~type_ctx ~mrd))
         ~f:(fun (c_name, _) ->
           not
             (List.exists (TestingTypeCtx.customs_to_list type_ctx)
@@ -416,7 +416,7 @@ let testing_var_ctx_arb ~(type_ctx : TestingTypeCtx.t) :
     TestingVarCtx.t QCheck.arbitrary =
   let gen =
     let open QCheck.Gen in
-    list (pair varname_gen (vtype_gen ~type_ctx default_max_gen_rec_depth))
+    list (pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth))
     >|= TestingVarCtx.from_list
   in
   QCheck.make
@@ -527,7 +527,7 @@ let ast_expr_gen ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
         ((d : int), (ctx : TestingVarCtx.t)),
         (v : 'a) ) (t2 : vtype) : 'a expr Gen.t =
     (* Shorthand for generating a function application expression *)
-    vtype_gen ~type_ctx d >>= fun t1 ->
+    vtype_gen ~type_ctx ~mrd:d >>= fun t1 ->
     pair (gen_fun (t1, t2) (d - 1, ctx)) (gen (d - 1, ctx) t1)
     >|= fun (e1, e2) -> App (v, e1, e2)
   and gen_e_let_rec
@@ -537,7 +537,7 @@ let ast_expr_gen ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
     (* Shorthand for generating a let-rec expression *)
     pair
       (gen_unique_pair ~equal:equal_string varname_gen)
-      (pair (vtype_gen ~type_ctx d) (vtype_gen ~type_ctx d))
+      (pair (vtype_gen ~type_ctx ~mrd:d) (vtype_gen ~type_ctx ~mrd:d))
     >>= fun ((fname, xname), (ftype1, ftype2)) ->
     let ctx_with_f = TestingVarCtx.add ctx fname (VTypeFun (ftype1, ftype2)) in
     let ctx_with_fx = TestingVarCtx.add ctx_with_f xname ftype1 in
@@ -713,7 +713,7 @@ let ast_expr_gen ?(t : vtype option) ~(type_ctx : TestingTypeCtx.t)
           (d, ctx)
   and gen_any_of_type ((d : int), (ctx : TestingVarCtx.t)) :
       (vtype * 'a expr) Gen.t =
-    vtype_gen ~type_ctx d >>= fun t ->
+    vtype_gen ~type_ctx ~mrd:d >>= fun t ->
     gen (d, ctx) t >|= fun e -> (t, e)
   in
   match t with

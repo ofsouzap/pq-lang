@@ -143,7 +143,7 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
                 sexp_of_pair sexp_of_type_ctx sexp_of_vtype))
           QCheck.Gen.(
             default_testing_type_ctx_gen >>= fun type_ctx ->
-            vtype_gen ~type_ctx default_max_gen_rec_depth >|= fun t ->
+            vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth >|= fun t ->
             (type_ctx, t)))
        (fun (type_ctx, t) ->
          match t with
@@ -163,7 +163,7 @@ let create_list_impl_var_ctx (xs : (string * vtype) list) :
 
 let var_ctx_list_arb ~(type_ctx : TestingTypeCtx.t) =
   let open QCheck in
-  list (pair string (vtype_arb ~type_ctx default_max_gen_rec_depth))
+  list (pair string (vtype_arb ~type_ctx ~mrd:default_max_gen_rec_depth))
 
 (* TODO - test that TestingTypeChecker types things the same as the SimpleTypeChecker *)
 
@@ -181,15 +181,15 @@ let suite =
                   Gen.(
                     default_testing_type_ctx_gen >>= fun type_ctx ->
                     pair
-                      (vtype_gen ~type_ctx default_max_gen_rec_depth)
-                      (vtype_gen ~type_ctx default_max_gen_rec_depth)
+                      (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
+                      (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
                     >|= fun (t1, t2) -> (type_ctx, VTypeFun (t1, t2)));
                 create_typed_expr_gen_test "'a * 'b"
                   Gen.(
                     default_testing_type_ctx_gen >>= fun type_ctx ->
                     pair
-                      (vtype_gen ~type_ctx default_max_gen_rec_depth)
-                      (vtype_gen ~type_ctx default_max_gen_rec_depth)
+                      (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
+                      (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
                     >|= fun (t1, t2) -> (type_ctx, VTypePair (t1, t2)));
               ];
        ]

@@ -9,8 +9,6 @@ open Typing
 
 (* TODO - move the generators and arbitrary instances for different things into the main lib/ things, and have them as submodules with a consistent name relating to QCheck *)
 
-(* TODO - make maximum recursion depth parameters labelled (e.g. as "mrd") *)
-
 (** Arbitrary generator for a non-empty list *)
 val nonempty_list_arb :
   'a QCheck.arbitrary -> 'a Nonempty_list.t QCheck.arbitrary
@@ -94,14 +92,14 @@ module TestingTypeCtx : sig
 end
 
 (** Generator for variable types, taking a maximum recursion depth parameter *)
-val vtype_gen : type_ctx:TestingTypeCtx.t -> int -> vtype QCheck.Gen.t
+val vtype_gen : type_ctx:TestingTypeCtx.t -> mrd:int -> vtype QCheck.Gen.t
 
 (** Arbitrary generator for variable types, taking a maximum recursion depth parameter *)
-val vtype_arb : type_ctx:TestingTypeCtx.t -> int -> vtype QCheck.arbitrary
+val vtype_arb : type_ctx:TestingTypeCtx.t -> mrd:int -> vtype QCheck.arbitrary
 
 (** Generator for a pair of a variable name and a type for it *)
 val typed_var_gen :
-  type_ctx:TestingTypeCtx.t -> int -> (string * vtype) QCheck.Gen.t
+  type_ctx:TestingTypeCtx.t -> mrd:int -> (string * vtype) QCheck.Gen.t
 
 (** Generator for testing type context module context instances *)
 val testing_type_ctx_gen :
