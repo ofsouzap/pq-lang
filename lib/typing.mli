@@ -93,6 +93,12 @@ module type TypeCheckerSig = functor
   (TypeCtx : TypingTypeContext)
   (VarCtx : TypingVarContext)
   -> sig
+  (** The type of a type context that has been checked to be valid *)
+  type checked_type_ctx
+
+  (** Check a type context is valid *)
+  val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
+
   (** The type of a program's expression that has passed type checking *)
   type 'a typed_program_expression
 
@@ -106,14 +112,14 @@ module type TypeCheckerSig = functor
 
   (** Type checks a pattern in the given context, returning either the pattern's type and declared variables, or a pattern typing error *)
   val type_pattern :
-    TypeCtx.t * VarCtx.t ->
+    checked_type_ctx * VarCtx.t ->
     pattern ->
     (vtype * VarCtx.t, pattern_typing_error) Result.t
 
   (** Type checks an expression in the given context, returning either
       a typed expression or a typing error *)
   val type_expr :
-    TypeCtx.t * VarCtx.t ->
+    checked_type_ctx * VarCtx.t ->
     'a Ast.expr ->
     ('a typed_program_expression, typing_error) result
 end
