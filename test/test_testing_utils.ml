@@ -153,7 +153,18 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
          | VTypeCustom ct_name -> TestingTypeCtx.custom_exists type_ctx ct_name
          | _ -> true))
 
-(* TODO - test that the type contexts generated can check correctly *)
+let create_test_type_ctx_gen_valid (name : string) : test =
+  let open QCheck in
+  QCheck_runner.to_ounit2_test
+    (Test.make ~name ~count:1000
+       (testing_type_ctx_arb ~max_custom_types:default_max_custom_type_count
+          ~max_constructors:default_max_custom_type_constructor_count
+          ~mrd:default_max_gen_rec_depth) (fun type_ctx ->
+         match TestingTypeChecker.check_type_ctx type_ctx with
+         | Ok _ -> true
+         | Error err ->
+             Test.fail_reportf "Failed to check type ctx, with error: %s"
+               (print_typing_error err)))
 
 let create_test_var_ctx (xs : (string * vtype) list) : TestingVarCtx.t =
   List.fold xs ~init:TestingVarCtx.empty ~f:(fun ctx (x, t) ->
@@ -175,6 +186,8 @@ let suite =
   >::: [
          "Value type generator"
          >::: [ create_test_vtype_gen_constructors_exist "Custom types exist" ];
+         "Type context generator"
+         >::: [ create_test_type_ctx_gen_valid "Type context is valid" ];
          "Typed expression generator"
          >::: [
                 create_typed_expr_gen_test_for_fixed_type "unit" VTypeUnit;
