@@ -5,8 +5,11 @@
  (modules
   utils
   vtype
+  custom_types
+  varname
   pattern
   ast
+  program
   typing
   parsing_errors
   parser

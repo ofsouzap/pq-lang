@@ -6,9 +6,6 @@ open Utils
 open Vtype
 open Pattern
 
-(* TODO - have programs composed of optional custom type defintions then a concluding expression to evaluate, instead of just allowing a single main expression to evaluate.
-   Defining functions can just be done with "let f = ... in" *)
-
 (**
   Expressions in the language.
   Tagged with arbitrary values on each node.
@@ -47,6 +44,9 @@ type 'a expr =
   (* Pattern matching *)
   | Match of 'a * 'a expr * (pattern * 'a expr) Nonempty_list.t
       (** Match expression *)
+  (* Custom data types *)
+  | Constructor of 'a * string * 'a expr
+      (** Constructor for a custom data type *)
 [@@deriving sexp, equal]
 
 (** Extract the value attached to a single node of a tagged AST expression *)
@@ -79,4 +79,4 @@ exception AstConverionFixError
   Convert an AST expression into source code that corresponds to the AST representation.
   If the input has a malformed usage of the Fix node, this will raise a `AstConversionFixError` exception.
 *)
-val ast_to_source_code : 'a expr -> string
+val ast_to_source_code : ?use_newlines:bool -> 'a expr -> string

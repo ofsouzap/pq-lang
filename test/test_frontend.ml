@@ -4,14 +4,20 @@ open Pq_lang
 open Utils
 open Pattern
 open Ast
+open Program
 open Parser
 open Frontend
 open Testing_utils
 
-type test_case = string * string * token list * run_frontend_res
+type test_case_no_custom_types =
+  string * string * token list * (plain_expr, frontend_error) Result.t
+
+type test_case_full_prog =
+  string * string * token list * (plain_program, frontend_error) Result.t
+
 type test_case_precedence = string * string * Ast.plain_expr
 
-let test_cases_unit_value : test_case list =
+let test_cases_unit_value : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -21,7 +27,7 @@ let test_cases_unit_value : test_case list =
         Ok (Add ((), UnitLit (), IntLit ((), 5))) );
     ]
 
-let test_cases_arithmetic : test_case list =
+let test_cases_arithmetic : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -94,7 +100,7 @@ let test_cases_arithmetic : test_case list =
       ("+**+", [ PLUS; STAR; STAR; PLUS ], Error ParsingError);
     ]
 
-let test_cases_booleans : test_case list =
+let test_cases_booleans : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -108,10 +114,10 @@ let test_cases_booleans : test_case list =
         [ TRUE; BOR; FALSE ],
         Ok (BOr ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true == false",
-        [ TRUE; EQ; FALSE ],
+        [ TRUE; EQUATE; FALSE ],
         Ok (Eq ((), BoolLit ((), true), BoolLit ((), false))) );
       ( "true == false || true",
-        [ TRUE; EQ; FALSE; BOR; TRUE ],
+        [ TRUE; EQUATE; FALSE; BOR; TRUE ],
         Ok
           (BOr
              ( (),
@@ -119,7 +125,7 @@ let test_cases_booleans : test_case list =
                BoolLit ((), true) )) );
     ]
 
-let test_cases_pairs : test_case list =
+let test_cases_pairs : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -149,12 +155,12 @@ let test_cases_pairs : test_case list =
       );
     ]
 
-let test_cases_integer_comparisons : test_case list =
+let test_cases_integer_comparisons : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( "0 == 0",
-        [ INTLIT 0; EQ; INTLIT 0 ],
+        [ INTLIT 0; EQUATE; INTLIT 0 ],
         Ok (Eq ((), IntLit ((), 0), IntLit ((), 0))) );
       ( "1 > 0",
         [ INTLIT 1; GT; INTLIT 0 ],
@@ -168,10 +174,10 @@ let test_cases_integer_comparisons : test_case list =
       ( "0 <= 1",
         [ INTLIT 0; LTEQ; INTLIT 1 ],
         Ok (LtEq ((), IntLit ((), 0), IntLit ((), 1))) );
-      ("== <=", [ EQ; LTEQ ], Error ParsingError);
+      ("== <=", [ EQUATE; LTEQ ], Error ParsingError);
     ]
 
-let test_cases_if_then_else : test_case list =
+let test_cases_if_then_else : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -249,33 +255,40 @@ let test_cases_if_then_else : test_case list =
                IntLit ((), 3) )) );
     ]
 
-let test_cases_variables : test_case list =
+let test_cases_variables : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
-      ("x", [ NAME "x" ], Ok (Var ((), "x")));
-      ("_", [ NAME "_" ], Ok (Var ((), "_")));
-      ("one_thing", [ NAME "one_thing" ], Ok (Var ((), "one_thing")));
-      ("_something", [ NAME "_something" ], Ok (Var ((), "_something")));
+      ("x", [ LNAME "x" ], Ok (Var ((), "x")));
+      ("one_thing", [ LNAME "one_thing" ], Ok (Var ((), "one_thing")));
       ( "let x = 1 in x end",
-        [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
+        [ LET; LNAME "x"; ASSIGN; INTLIT 1; IN; LNAME "x"; END ],
         Ok (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
       ( "let x = 1 in x end",
-        [ LET; NAME "x"; ASSIGN; INTLIT 1; IN; NAME "x"; END ],
+        [ LET; LNAME "x"; ASSIGN; INTLIT 1; IN; LNAME "x"; END ],
         Ok (Let ((), "x", IntLit ((), 1), Var ((), "x"))) );
       ( "let x = 1 in let y in x end",
         [
-          LET; NAME "x"; ASSIGN; INTLIT 1; IN; LET; NAME "y"; IN; NAME "x"; END;
+          LET;
+          LNAME "x";
+          ASSIGN;
+          INTLIT 1;
+          IN;
+          LET;
+          LNAME "y";
+          IN;
+          LNAME "x";
+          END;
         ],
         Error ParsingError );
       ( "let f = fun (x : int) -> true end in f 1 end",
         [
           LET;
-          NAME "f";
+          LNAME "f";
           ASSIGN;
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
@@ -283,7 +296,7 @@ let test_cases_variables : test_case list =
           TRUE;
           END;
           IN;
-          NAME "f";
+          LNAME "f";
           INTLIT 1;
           END;
         ],
@@ -295,23 +308,23 @@ let test_cases_variables : test_case list =
                App ((), Var ((), "f"), IntLit ((), 1)) )) );
     ]
 
-let test_cases_functions : test_case list =
+let test_cases_functions : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( "fun (x : int) -> x end",
-        [ FUN; LPAREN; NAME "x"; COLON; INT; RPAREN; ARROW; NAME "x"; END ],
+        [ FUN; LPAREN; LNAME "x"; COLON; INT; RPAREN; ARROW; LNAME "x"; END ],
         Ok (Fun ((), ("x", VTypeInt), Var ((), "x"))) );
       ( "fun (x : int) -> x + 1 end",
         [
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "x";
+          LNAME "x";
           PLUS;
           INTLIT 1;
           END;
@@ -322,21 +335,21 @@ let test_cases_functions : test_case list =
         [
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
           FUN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "x";
+          LNAME "x";
           PLUS;
-          NAME "y";
+          LNAME "y";
           END;
           END;
         ],
@@ -351,12 +364,12 @@ let test_cases_functions : test_case list =
           LPAREN;
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "x";
+          LNAME "x";
           PLUS;
           INTLIT 1;
           END;
@@ -369,10 +382,10 @@ let test_cases_functions : test_case list =
                Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
                IntLit ((), 4) )) );
       ( "x 5",
-        [ NAME "x"; INTLIT 5 ],
+        [ LNAME "x"; INTLIT 5 ],
         Ok (App ((), Var ((), "x"), IntLit ((), 5))) );
       ( "x y",
-        [ NAME "x"; NAME "y" ],
+        [ LNAME "x"; LNAME "y" ],
         Ok (App ((), Var ((), "x"), Var ((), "y"))) );
       ( "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x else \
          y end end end end ) true 1 2",
@@ -380,31 +393,31 @@ let test_cases_functions : test_case list =
           LPAREN;
           FUN;
           LPAREN;
-          NAME "b";
+          LNAME "b";
           COLON;
           BOOL;
           RPAREN;
           ARROW;
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
           FUN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
           IF;
-          NAME "b";
+          LNAME "b";
           THEN;
-          NAME "x";
+          LNAME "x";
           ELSE;
-          NAME "y";
+          LNAME "y";
           END;
           END;
           END;
@@ -439,12 +452,12 @@ let test_cases_functions : test_case list =
                    IntLit ((), 1) ),
                IntLit ((), 2) )) );
       ( "f1 f2 f3",
-        [ NAME "f1"; NAME "f2"; NAME "f3" ],
+        [ LNAME "f1"; LNAME "f2"; LNAME "f3" ],
         Ok (App ((), App ((), Var ((), "f1"), Var ((), "f2")), Var ((), "f3")))
       );
     ]
 
-let test_cases_recursion : test_case list =
+let test_cases_recursion : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -454,7 +467,7 @@ let test_cases_recursion : test_case list =
           LET;
           REC;
           LPAREN;
-          NAME "f";
+          LNAME "f";
           COLON;
           INT;
           ARROW;
@@ -463,30 +476,30 @@ let test_cases_recursion : test_case list =
           ASSIGN;
           FUN;
           LPAREN;
-          NAME "x";
+          LNAME "x";
           COLON;
           INT;
           RPAREN;
           ARROW;
           IF;
-          NAME "x";
-          EQ;
+          LNAME "x";
+          EQUATE;
           INTLIT 0;
           THEN;
           INTLIT 0;
           ELSE;
-          NAME "x";
+          LNAME "x";
           PLUS;
-          NAME "f";
+          LNAME "f";
           LPAREN;
-          NAME "x";
+          LNAME "x";
           MINUS;
           INTLIT 1;
           RPAREN;
           END;
           END;
           IN;
-          NAME "f";
+          LNAME "f";
           INTLIT 5;
           END;
         ],
@@ -516,7 +529,7 @@ let test_cases_recursion : test_case list =
           LET;
           REC;
           LPAREN;
-          NAME "f";
+          LNAME "f";
           COLON;
           INT;
           ARROW;
@@ -525,7 +538,7 @@ let test_cases_recursion : test_case list =
           ASSIGN;
           INTLIT 2;
           IN;
-          NAME "f";
+          LNAME "f";
           END;
         ],
         Error ParsingError );
@@ -534,7 +547,7 @@ let test_cases_recursion : test_case list =
           LET;
           REC;
           LPAREN;
-          NAME "f";
+          LNAME "f";
           COLON;
           INT;
           ARROW;
@@ -543,15 +556,15 @@ let test_cases_recursion : test_case list =
           ASSIGN;
           FUN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
           IN;
-          NAME "f";
+          LNAME "f";
           INTLIT 5;
           END;
         ],
@@ -564,7 +577,7 @@ let test_cases_recursion : test_case list =
                App ((), Var ((), "f"), IntLit ((), 5)) )) );
     ]
 
-let test_cases_match : test_case list =
+let test_cases_match : test_case_no_custom_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -572,15 +585,15 @@ let test_cases_match : test_case list =
         "match x with (y : int) -> y end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
         ],
         Ok
@@ -593,16 +606,16 @@ let test_cases_match : test_case list =
         "match x with | (y : int) -> y end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           PIPE;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
         ],
         Ok
@@ -622,7 +635,7 @@ let test_cases_match : test_case list =
           IF;
           TRUE;
           THEN;
-          NAME "x";
+          LNAME "x";
           ELSE;
           INTLIT 4;
           END;
@@ -630,12 +643,12 @@ let test_cases_match : test_case list =
           RPAREN;
           WITH;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
         ],
         Ok
@@ -651,23 +664,23 @@ let test_cases_match : test_case list =
         "match x with (y : int) -> y | (z : int) -> z end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           PIPE;
           LPAREN;
-          NAME "z";
+          LNAME "z";
           COLON;
           INT;
           RPAREN;
           ARROW;
-          NAME "z";
+          LNAME "z";
           END;
         ],
         Ok
@@ -683,23 +696,23 @@ let test_cases_match : test_case list =
         "match x with ((y : int), (z : bool)) -> y end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           LPAREN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           INT;
           RPAREN;
           COMMA;
           LPAREN;
-          NAME "z";
+          LNAME "z";
           COLON;
           BOOL;
           RPAREN;
           RPAREN;
           ARROW;
-          NAME "y";
+          LNAME "y";
           END;
         ],
         Ok
@@ -716,24 +729,24 @@ let test_cases_match : test_case list =
          else z2 end end",
         [
           MATCH;
-          NAME "x";
+          LNAME "x";
           WITH;
           LPAREN;
           LPAREN;
-          NAME "y";
+          LNAME "y";
           COLON;
           BOOL;
           RPAREN;
           COMMA;
           LPAREN;
           LPAREN;
-          NAME "z1";
+          LNAME "z1";
           COLON;
           BOOL;
           RPAREN;
           COMMA;
           LPAREN;
-          NAME "z2";
+          LNAME "z2";
           COLON;
           BOOL;
           RPAREN;
@@ -741,11 +754,11 @@ let test_cases_match : test_case list =
           RPAREN;
           ARROW;
           IF;
-          NAME "y";
+          LNAME "y";
           THEN;
-          NAME "z1";
+          LNAME "z1";
           ELSE;
-          NAME "z2";
+          LNAME "z2";
           END;
           END;
         ],
@@ -762,6 +775,247 @@ let test_cases_match : test_case list =
                        ),
                      If ((), Var ((), "y"), Var ((), "z1"), Var ((), "z2")) );
                  ] )) );
+      ( (* Matching custom data type constructor *)
+        "match x with (Nil (z : int)) -> 0 | (Cons ((h : int), (ts : \
+         int_list))) -> 1 end",
+        [
+          MATCH;
+          LNAME "x";
+          WITH;
+          LPAREN;
+          UNAME "Nil";
+          LPAREN;
+          LNAME "z";
+          COLON;
+          INT;
+          RPAREN;
+          RPAREN;
+          ARROW;
+          INTLIT 0;
+          PIPE;
+          LPAREN;
+          UNAME "Cons";
+          LPAREN;
+          LPAREN;
+          LNAME "h";
+          COLON;
+          INT;
+          RPAREN;
+          COMMA;
+          LPAREN;
+          LNAME "ts";
+          COLON;
+          LNAME "int_list";
+          RPAREN;
+          RPAREN;
+          RPAREN;
+          ARROW;
+          INTLIT 1;
+          END;
+        ],
+        Ok
+          (Match
+             ( (),
+               Var ((), "x"),
+               Nonempty_list.from_list_unsafe
+                 [
+                   ( PatConstructor ("Nil", PatName ("z", VTypeInt)),
+                     IntLit ((), 0) );
+                   ( PatConstructor
+                       ( "Cons",
+                         PatPair
+                           ( PatName ("h", VTypeInt),
+                             PatName ("ts", VTypeCustom "int_list") ) ),
+                     IntLit ((), 1) );
+                 ] )) );
+    ]
+
+let test_cases_custom_type_defn : test_case_full_prog list =
+  List.map
+    ~f:(fun (x, y, z) -> (x, x, y, z))
+    [
+      ( (* No type definition *)
+        {|
+1
+|},
+        [ INTLIT 1 ],
+        Ok { custom_types = []; e = IntLit ((), 1) } );
+      ( (* Simple type definition *)
+        {|
+        type int_or_bool = Int of int | Bool of bool
+
+        1
+        |},
+        [
+          TYPE;
+          LNAME "int_or_bool";
+          ASSIGN;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          UNAME "Bool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Ok
+          {
+            custom_types =
+              [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
+            e = IntLit ((), 1);
+          } );
+      ( (* Simple type definition (with leading pipe) *)
+        {|
+        type int_or_bool = | Int of int | Bool of bool
+
+        1
+        |},
+        [
+          TYPE;
+          LNAME "int_or_bool";
+          ASSIGN;
+          PIPE;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          UNAME "Bool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Ok
+          {
+            custom_types =
+              [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
+            e = IntLit ((), 1);
+          } );
+      ( (* Incorrectly using upper-name for type name *)
+        {|
+        type Int_or_bool = Int of int | Bool of bool
+
+        1
+        |},
+        [
+          TYPE;
+          UNAME "Int_or_bool";
+          ASSIGN;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          UNAME "Bool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Error ParsingError );
+      ( (* Incorrectly using lower-name for constructor name *)
+        {|
+        type int_or_bool = Int of int | thisisabool of bool
+
+        1
+        |},
+        [
+          TYPE;
+          LNAME "int_or_bool";
+          ASSIGN;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          LNAME "thisisabool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Error ParsingError );
+      ( (* Recursive type definition *)
+        {|
+        type int_list = Nil of unit | Cons of int * int_list
+
+        1
+        |},
+        [
+          TYPE;
+          LNAME "int_list";
+          ASSIGN;
+          UNAME "Nil";
+          OF;
+          UNIT;
+          PIPE;
+          UNAME "Cons";
+          OF;
+          INT;
+          STAR;
+          LNAME "int_list";
+          INTLIT 1;
+        ],
+        Ok
+          {
+            custom_types =
+              [
+                ( "int_list",
+                  [
+                    ("Nil", VTypeUnit);
+                    ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                  ] );
+              ];
+            e = IntLit ((), 1);
+          } );
+    ]
+
+let test_cases_custom_type_referencing : test_case_no_custom_types list =
+  List.map
+    ~f:(fun (x, y, z) -> (x, x, y, z))
+    [
+      ( "fun (x : int_or_bool) -> x end",
+        [
+          FUN;
+          LPAREN;
+          LNAME "x";
+          COLON;
+          LNAME "int_or_bool";
+          RPAREN;
+          ARROW;
+          LNAME "x";
+          END;
+        ],
+        Ok (Fun ((), ("x", VTypeCustom "int_or_bool"), Var ((), "x"))) );
+      ( "fun (x : Int_or_bool) -> x end",
+        [
+          FUN;
+          LPAREN;
+          LNAME "x";
+          COLON;
+          UNAME "Int_or_bool";
+          RPAREN;
+          ARROW;
+          LNAME "x";
+          END;
+        ],
+        Error ParsingError );
+    ]
+
+let test_cases_custom_type_construction : test_case_no_custom_types list =
+  List.map
+    ~f:(fun (x, y, z) -> (x, x, y, z))
+    [
+      ( "Nil ()",
+        [ UNAME "Nil"; UNIT_VAL ],
+        Ok (Constructor ((), "Nil", UnitLit ())) );
+      ( "Meters 6",
+        [ UNAME "Meters"; INTLIT 6 ],
+        Ok (Constructor ((), "Meters", IntLit ((), 6))) );
+      ( "Cons (1, Nil ())",
+        [ UNAME "Cons"; LPAREN; INTLIT 1; COMMA; UNAME "Nil"; UNIT_VAL; RPAREN ],
+        Ok
+          (Constructor
+             ( (),
+               "Cons",
+               Pair ((), IntLit ((), 1), Constructor ((), "Nil", UnitLit ())) ))
+      );
     ]
 
 let test_cases_precedence : test_case_precedence list =
@@ -780,7 +1034,7 @@ let test_cases_precedence : test_case_precedence list =
         Add ((), App ((), Var ((), "f"), Var ((), "x")), Var ((), "y")) );
     ]
 
-let create_lexer_test ((name, inp, exp, _) : test_case) =
+let create_lexer_test ((name, inp, exp, _) : test_case_full_prog) =
   name >:: fun _ ->
   let lexbuf = Lexing.from_string inp in
   let rec collect_tokens acc =
@@ -789,14 +1043,17 @@ let create_lexer_test ((name, inp, exp, _) : test_case) =
     | token -> collect_tokens (token :: acc)
   in
   let out = collect_tokens [] in
-  assert_equal exp out ~printer:token_printer
+  assert_equal ~cmp:(equal_list Stdlib.( = )) exp out ~printer:token_printer
 
-let create_frontend_test ((name, inp, _, exp) : test_case) =
+let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
-  assert_equal exp out ~printer:(fun x ->
+  assert_equal
+    ~cmp:(equal_result (equal_program equal_unit) equal_frontend_error)
+    exp out
+    ~printer:(fun x ->
       match x with
-      | Ok e -> ast_to_source_code e
+      | Ok prog -> program_to_source_code prog
       | Error (LexingError c) -> sprintf "LexingError %c" c
       | Error ParsingError -> "ParsingError")
 
@@ -804,31 +1061,48 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
   match out with
-  | Ok e -> assert_equal exp e ~printer:ast_to_source_code
+  | Ok prog ->
+      assert_equal exp prog.e ~printer:(ast_to_source_code ~use_newlines:true)
   | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
   | Error ParsingError -> assert_failure "ParsingError"
 
-let test_suites test_create_func =
+let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
+    test list =
+  let f =
+    Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
+        (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
+  in
   [
-    "Unit Value" >::: List.map ~f:test_create_func test_cases_unit_value;
-    "Arithmetic" >::: List.map ~f:test_create_func test_cases_arithmetic;
-    "Booleans" >::: List.map ~f:test_create_func test_cases_booleans;
-    "Pairs" >::: List.map ~f:test_create_func test_cases_pairs;
-    "Integer Comparisons"
-    >::: List.map ~f:test_create_func test_cases_integer_comparisons;
-    "If-Then-Else" >::: List.map ~f:test_create_func test_cases_if_then_else;
-    "Variables" >::: List.map ~f:test_create_func test_cases_variables;
-    "Functions" >::: List.map ~f:test_create_func test_cases_functions;
-    "Recursion" >::: List.map ~f:test_create_func test_cases_recursion;
-    "Match" >::: List.map ~f:test_create_func test_cases_match;
+    "Unit Value" >::: List.map ~f test_cases_unit_value;
+    "Arithmetic" >::: List.map ~f test_cases_arithmetic;
+    "Booleans" >::: List.map ~f test_cases_booleans;
+    "Pairs" >::: List.map ~f test_cases_pairs;
+    "Integer Comparisons" >::: List.map ~f test_cases_integer_comparisons;
+    "If-Then-Else" >::: List.map ~f test_cases_if_then_else;
+    "Variables" >::: List.map ~f test_cases_variables;
+    "Functions" >::: List.map ~f test_cases_functions;
+    "Recursion" >::: List.map ~f test_cases_recursion;
+    "Match" >::: List.map ~f test_cases_match;
+    "Custom type referencing"
+    >::: List.map ~f test_cases_custom_type_referencing;
+    "Custom type construction"
+    >::: List.map ~f test_cases_custom_type_construction;
   ]
+
+let tests_full_prog (test_create_func : test_case_full_prog -> test) : test list
+    =
+  let f = test_create_func in
+  [ "Custom type definition" >::: List.map ~f test_cases_custom_type_defn ]
 
 let suite =
   "Frontend Tests"
   >::: [
-         "Lexer" >::: test_suites create_lexer_test;
+         "Lexer"
+         >::: tests_no_custom_types create_lexer_test
+              @ tests_full_prog create_lexer_test;
          "Frontend"
-         >::: test_suites create_frontend_test
+         >::: tests_no_custom_types create_frontend_test
+              @ tests_full_prog create_frontend_test
               @ [
                   "Precedence"
                   >::: List.map ~f:create_precedence_test test_cases_precedence;

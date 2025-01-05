@@ -8,9 +8,13 @@ let () =
       match err with
       | LexingError c -> eprintf "Lexing error: %c\n" c
       | ParsingError -> eprintf "Parsing error\n")
-  | Ok ast -> (
-      match Typing.type_expr ast with
-      | Ok typed_e ->
-          let result = Ast_executor.execute typed_e in
+  | Ok prog -> (
+      let open Typing in
+      let type_ctx =
+        SetTypingTypeContext.create ~custom_types:prog.custom_types
+      in
+      match type_expr ~type_ctx prog.e with
+      | Ok tpe ->
+          let result = Ast_executor.SimpleExecutor.execute_program tpe in
           printf "%s\n" (Ast_executor.show_exec_res result)
       | Error _ -> eprintf "Typing error\n")

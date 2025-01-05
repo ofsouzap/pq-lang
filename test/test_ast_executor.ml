@@ -2,9 +2,15 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
+open Vtype
+open Custom_types
 open Pattern
+open Typing
 open Ast_executor
 open Testing_utils
+
+type basic_test_case =
+  string * unit SimpleTypeChecker.typed_program_expression * exec_res
 
 let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     =
@@ -12,16 +18,20 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
     ~init:Ast_executor.empty_store
 
-let type_expr (e : Ast.plain_expr) =
-  match Typing.type_expr e with
+let type_expr ?(type_ctx : SetTypingTypeContext.t option) (e : Ast.plain_expr) =
+  match
+    type_expr
+      ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
+      e
+  with
   | Ok x -> x
   | Error err ->
       failwith
         (sprintf "Typing error:\nExpression: %s\nError: %s"
-           (Ast.ast_to_source_code e)
-           (Typing.print_typing_error err))
+           (Ast.ast_to_source_code ~use_newlines:true e)
+           (print_typing_error err))
 
-let test_cases_unit_value : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_unit_value : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : value)) =
     (ast_to_source_code x, type_expr x, Ok y)
@@ -32,7 +42,7 @@ let test_cases_unit_value : (string * Ast.plain_typed_expr * exec_res) list =
       (If ((), BoolLit ((), true), UnitLit (), UnitLit ()), Unit);
     ]
 
-let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_arithmetic : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : int)) =
     (ast_to_source_code x, type_expr x, Ok (Int y))
@@ -65,7 +75,7 @@ let test_cases_arithmetic : (string * Ast.plain_typed_expr * exec_res) list =
         0 );
     ]
 
-let test_cases_booleans : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_booleans : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : bool)) =
     (ast_to_source_code x, type_expr x, Ok (Bool y))
@@ -90,7 +100,7 @@ let test_cases_booleans : (string * Ast.plain_typed_expr * exec_res) list =
       (Eq ((), BoolLit ((), false), BoolLit ((), false)), true);
     ]
 
-let test_cases_pairs : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_pairs : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : value)) =
     (ast_to_source_code x, type_expr x, Ok y)
@@ -106,8 +116,7 @@ let test_cases_pairs : (string * Ast.plain_typed_expr * exec_res) list =
         Ast_executor.Pair (Int 6, Bool true) );
     ]
 
-let test_cases_integer_comparisons :
-    (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_integer_comparisons : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : bool)) =
     (ast_to_source_code x, type_expr x, Ok (Bool y))
@@ -136,7 +145,7 @@ let test_cases_integer_comparisons :
       (LtEq ((), IntLit ((), 1), IntLit ((), 1)), true);
     ]
 
-let test_cases_control_flow : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_control_flow : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -159,7 +168,7 @@ let test_cases_control_flow : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 3) );
     ]
 
-let test_cases_variables : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_variables : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -191,7 +200,7 @@ let test_cases_variables : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 8) );
     ]
 
-let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_functions : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -260,7 +269,7 @@ let test_cases_functions : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 1) );
     ]
 
-let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_recursion : basic_test_case list =
   let open Ast in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
@@ -289,14 +298,22 @@ let test_cases_recursion : (string * Ast.plain_typed_expr * exec_res) list =
         Ok (Int 15) );
     ]
 
-let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
+let test_cases_match : basic_test_case list =
   let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) =
-    (ast_to_source_code x, type_expr x, y)
+  let mapf
+      ( (type_ctx : SetTypingTypeContext.t option),
+        (x : plain_expr),
+        (y : exec_res) ) =
+    ( ast_to_source_code x,
+      type_expr
+        ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
+        x,
+      y )
   in
   List.map ~f:mapf
     [
-      ( Let
+      ( None,
+        Let
           ( (),
             "x",
             IntLit ((), 3),
@@ -309,7 +326,8 @@ let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
                       Add ((), Var ((), "y"), IntLit ((), 1)) );
                   ] ) ),
         Ok (Int 4) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "x",
             BoolLit ((), false),
@@ -323,7 +341,8 @@ let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
                     (PatName ("z", VTypeBool), IntLit ((), 9));
                   ] ) ),
         Ok (Int 0) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "x",
             Pair ((), BoolLit ((), true), IntLit ((), 1)),
@@ -336,7 +355,8 @@ let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
                       If ((), Var ((), "y"), Var ((), "z"), IntLit ((), 0)) );
                   ] ) ),
         Ok (Int 1) );
-      ( Let
+      ( None,
+        Let
           ( (),
             "x",
             Pair
@@ -354,12 +374,105 @@ let test_cases_match : (string * Ast.plain_typed_expr * exec_res) list =
                       Var ((), "y") );
                   ] ) ),
         Ok (Pair (Bool true, Bool true)) );
+      ( Some
+          (SetTypingTypeContext.create
+             ~custom_types:
+               [
+                 ("bool_box", [ ("BoolBox", VTypeBool) ]);
+                 ( "int_list",
+                   [
+                     ("Nil", VTypeUnit);
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                   ] );
+               ]),
+        Match
+          ( (),
+            Constructor ((), "BoolBox", BoolLit ((), true)),
+            Nonempty_list.from_list_unsafe
+              [
+                ( PatConstructor ("BoolBox", PatName ("x", VTypeBool)),
+                  Var ((), "x") );
+              ] ),
+        Ok (Bool true) );
+      ( Some
+          (SetTypingTypeContext.create
+             ~custom_types:
+               [
+                 ("bool_box", [ ("BoolBox", VTypeBool) ]);
+                 ( "int_list",
+                   [
+                     ("Nil", VTypeUnit);
+                     ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                   ] );
+               ]),
+        Match
+          ( (),
+            Constructor
+              ( (),
+                "Cons",
+                Pair ((), IntLit ((), 7), Constructor ((), "Nil", UnitLit ()))
+              ),
+            Nonempty_list.from_list_unsafe
+              [
+                ( PatConstructor ("Nil", PatName ("x", VTypeUnit)),
+                  IntLit ((), 0) );
+                ( PatConstructor
+                    ( "Cons",
+                      PatPair
+                        ( PatName ("x", VTypeInt),
+                          PatName ("y", VTypeCustom "int_list") ) ),
+                  Var ((), "x") );
+              ] ),
+        Ok (Int 7) );
     ]
 
-let create_test ((name : string), (inp : Ast.plain_typed_expr), (exp : exec_res))
-    =
+let test_cases_constructor : basic_test_case list =
+  let open Ast in
+  let mapf ((x : custom_type list), (y : plain_expr), (z : exec_res)) =
+    ( ast_to_source_code y,
+      type_expr ~type_ctx:(SetTypingTypeContext.create ~custom_types:x) y,
+      z )
+  in
+  let ct_list : custom_type =
+    ( "list",
+      [ ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeCustom "list")) ]
+    )
+  in
+  let ct_int_box : custom_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
+  List.map ~f:mapf
+    [
+      ( [ ct_list ],
+        Constructor ((), "Nil", UnitLit ()),
+        Ok (CustomTypeValue (ct_list, "Nil", Unit)) );
+      ( [ ct_list ],
+        Constructor
+          ( (),
+            "Cons",
+            Pair ((), IntLit ((), 1), Constructor ((), "Nil", UnitLit ())) ),
+        Ok
+          (CustomTypeValue
+             ( ct_list,
+               "Cons",
+               Pair (Int 1, CustomTypeValue (ct_list, "Nil", Unit)) )) );
+      ( [ ct_int_box ],
+        Constructor ((), "IntBox", Add ((), IntLit ((), 2), IntLit ((), 5))),
+        Ok (CustomTypeValue (ct_int_box, "IntBox", Int 7)) );
+      ( [ ct_int_box ],
+        Let
+          ( (),
+            "x",
+            IntLit ((), 2),
+            Constructor ((), "IntBox", Add ((), Var ((), "x"), IntLit ((), 5)))
+          ),
+        Ok (CustomTypeValue (ct_int_box, "IntBox", Int 7)) );
+    ]
+
+let create_test
+    ( (name : string),
+      (inp : unit SimpleTypeChecker.typed_program_expression),
+      (exp : exec_res) ) =
   name >:: fun _ ->
-  let out = Ast_executor.execute inp in
+  let out = Ast_executor.SimpleExecutor.execute_program inp in
   assert_equal exp out ~cmp:override_equal_exec_res
     ~printer:Ast_executor.show_exec_res
 
@@ -377,4 +490,5 @@ let suite =
          "Functions" >::: List.map ~f:create_test test_cases_functions;
          "Recursion" >::: List.map ~f:create_test test_cases_recursion;
          "Match" >::: List.map ~f:create_test test_cases_match;
+         "Constructor" >::: List.map ~f:create_test test_cases_constructor;
        ]

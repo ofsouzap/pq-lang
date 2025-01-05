@@ -9,16 +9,16 @@ let test_cases_equality : test list =
   let create_positive_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (get_asp_printer (PrintSexp sexp_of_unit) x)
-        (get_asp_printer (PrintSexp sexp_of_unit) y)
+        (get_ast_printer (PrintSexp sexp_of_unit) x)
+        (get_ast_printer (PrintSexp sexp_of_unit) y)
     in
     name >:: fun _ -> assert_bool "not equal" (equal_plain_expr x y)
   in
   let create_negative_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (get_asp_printer (PrintSexp sexp_of_unit) x)
-        (get_asp_printer (PrintSexp sexp_of_unit) y)
+        (get_ast_printer (PrintSexp sexp_of_unit) x)
+        (get_ast_printer (PrintSexp sexp_of_unit) y)
     in
     name >:: fun _ -> assert_bool "equal" (not (equal_plain_expr x y))
   in
@@ -127,16 +127,26 @@ let test_cases_equality : test list =
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:100 ~name:"AST to source code" plain_ast_expr_arb_any
-    (fun e ->
+  Test.make ~count:1000 ~name:"AST to source code"
+    plain_ast_expr_arb_any_default_type_ctx_params (fun (_, e) ->
       match run_frontend_string (ast_to_source_code e) with
-      | Ok e' -> equal_plain_expr e e'
-      | _ -> false)
+      | Ok prog ->
+          if equal_plain_expr e prog.e then true
+          else
+            Test.fail_reportf
+              "Got different AST. Expected:\n\n%s\n\nActual:\n\n%s"
+              (get_ast_printer (PrintSexp sexp_of_unit) e)
+              (get_ast_printer (PrintSexp sexp_of_unit) prog.e)
+      | Error err ->
+          Test.fail_reportf "Got frontend error: %s"
+            (err |> sexp_of_frontend_error |> Sexp.to_string))
 
 let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
     (type_eq : 'a -> 'a -> bool) =
   let open QCheck in
-  Test.make ~count:100 (pair type_arb plain_ast_expr_arb_any) (fun (x, e_raw) ->
+  Test.make ~count:100
+    (pair type_arb plain_ast_expr_arb_any_default_type_ctx_params)
+    (fun (x, (_, e_raw)) ->
       let e = fmap ~f:(const x) e_raw in
       type_eq (expr_node_val e) x)
 
@@ -146,8 +156,9 @@ let create_test_cases_expr_node_map_val (t1_arb : 'a QCheck.arbitrary)
   let open QCheck in
   Test.make ~count:100
     (pair (fun1 t1_obs t1_arb)
-       (ast_expr_arb_any (PrintSexp t1_sexp) (QCheck.gen t1_arb)))
-    (fun (f_, e) ->
+       (ast_expr_arb_default_type_ctx_params (PrintSexp t1_sexp)
+          (QCheck.get_gen t1_arb)))
+    (fun (f_, (_, e)) ->
       let f = QCheck.Fn.apply f_ in
       let e' = expr_node_map_val ~f e in
       t1_eq (expr_node_val e') (e |> expr_node_val |> f))
@@ -158,8 +169,9 @@ let create_test_cases_expr_fmap_root (t1_arb : 'a QCheck.arbitrary)
   let open QCheck in
   Test.make ~count:100
     (triple t1_arb (fun1 t1_obs t2_arb)
-       (ast_expr_arb_any (PrintSexp t1_sexp) (QCheck.gen t1_arb)))
-    (fun (x, f_, e) ->
+       (ast_expr_arb_default_type_ctx_params (PrintSexp t1_sexp)
+          (QCheck.gen t1_arb)))
+    (fun (x, f_, (_, e)) ->
       let f = QCheck.Fn.apply f_ in
       let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
       t2_eq (expr_node_val e') (f x))

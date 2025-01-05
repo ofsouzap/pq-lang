@@ -1,12 +1,11 @@
 (** This module provides functionality for directly executing an AST of a program. *)
 
 open Vtype
+open Custom_types
+open Varname
 
 (** The data that the executor tags the interpreted AST with *)
 type ast_tag = unit [@@deriving sexp, equal]
-
-(** The type of a variable's name in the store *)
-type varname = string
 
 (** Properties of a closure *)
 type closure_props = {
@@ -24,6 +23,8 @@ and value =
   | Bool of bool  (** A boolean value *)
   | Closure of closure_props  (** A function closure *)
   | Pair of value * value  (** A pair value *)
+  | CustomTypeValue of custom_type * string * value
+      (** A value of a custom type, with the type itself and the constructor name specified *)
 [@@deriving sexp, equal]
 
 (** A store, containing the values of variables under the current context *)
@@ -67,6 +68,8 @@ type exec_err =
       (** The maximum recursion depth of the execution has been exceeded so the program was terminated *)
   | IncompleteMatchError
       (** No cases could be found that match the provided value in a match statement *)
+  | UnknownCustomTypeConstructor of string
+      (** No custom type could be found with a constructor of the specified name *)
 
 (** The result of executing an AST *)
 type exec_res = (value, exec_err) Result.t
@@ -77,5 +80,18 @@ val equal_exec_res : exec_res -> exec_res -> bool
 (** String representation of an execution result *)
 val show_exec_res : exec_res -> string
 
-(** Execute an AST representation of a program *)
-val execute : 'a Ast.typed_expr -> exec_res
+(** Provides AST execution functionality, given a typing context and variable context used for a type checker implementation *)
+module Executor : functor
+  (TypeCtx : Typing.TypingTypeContext)
+  (VarCtx : Typing.TypingVarContext)
+  -> sig
+  (** Execute a typed program using the type checker constructed from TypeCtx and VarCtx *)
+  val execute_program :
+    'a Typing.TypeChecker(TypeCtx)(VarCtx).typed_program_expression -> exec_res
+end
+
+(** An implementation of the AST executor using the simple type checker implementation *)
+module SimpleExecutor : sig
+  include module type of
+      Executor (Typing.SetTypingTypeContext) (Typing.ListTypingVarContext)
+end

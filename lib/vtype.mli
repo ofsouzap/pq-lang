@@ -5,6 +5,7 @@ type vtype =
   | VTypeBool
   | VTypePair of vtype * vtype
   | VTypeFun of vtype * vtype
+  | VTypeCustom of string
 [@@deriving sexp, equal]
 
 (** Convert a vtype to a string representation compatible with the source code *)
