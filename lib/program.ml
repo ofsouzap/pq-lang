@@ -23,13 +23,23 @@ end) : sig
     max_custom_types : int;
     max_custom_type_constructors : int;
     ast_gen_options : Ast.QCheck_testing(Tag).gen_options;
-    v_gen : Tag.t QCheck.Gen.t;
+  }
+
+  type arb_options = {
+    max_custom_types : int;
+    max_custom_type_constructors : int;
+    ast_arb_options : Ast.QCheck_testing(Tag).arb_options;
+    print : Ast.QCheck_testing(Tag).ast_print_method;
+    shrink : Ast.QCheck_testing(Tag).shrink_options;
   }
 
   include
     QCheck_testing_sig
       with type t = Tag.t program
        and type gen_options := gen_options
+       and type print_options = Ast.QCheck_testing(Tag).ast_print_method
+       and type shrink_options = Ast.QCheck_testing(Tag).shrink_options
+       and type arb_options := arb_options
 end = struct
   type t = Tag.t program
 
@@ -39,14 +49,15 @@ end = struct
     max_custom_types : int;
     max_custom_type_constructors : int;
     ast_gen_options : Ast_qcheck_testing.gen_options;
-    v_gen : Tag.t QCheck.Gen.t;
   }
 
   type print_options = Ast_qcheck_testing.ast_print_method
   type shrink_options = Ast_qcheck_testing.shrink_options
 
   type arb_options = {
-    gen : gen_options;
+    max_custom_types : int;
+    max_custom_type_constructors : int;
+    ast_arb_options : Ast.QCheck_testing(Tag).arb_options;
     print : print_options;
     shrink : shrink_options;
   }
@@ -114,5 +125,10 @@ end = struct
 
   let arbitrary (opts : arb_options) : t QCheck.arbitrary =
     QCheck.make ~print:(print opts.print) ~shrink:(shrink opts.shrink)
-      (gen opts.gen)
+      (gen
+         {
+           max_custom_types = opts.max_custom_types;
+           max_custom_type_constructors = opts.max_custom_type_constructors;
+           ast_gen_options = opts.ast_arb_options.gen;
+         })
 end
