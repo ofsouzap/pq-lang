@@ -19,13 +19,11 @@ module QCheck_testing : sig
     t : vtype;
   }
 
-  type shrink_options = { preserve_type : bool }
-
   include
     QCheck_testing_sig
       with type t = pattern * (string * vtype) list
        and type gen_options := gen_options
        and type print_options = unit
-       and type shrink_options := shrink_options
-       and type arb_options = unit
+       and type shrink_options = unit
+       and type arb_options = gen_options
 end

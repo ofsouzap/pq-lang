@@ -25,15 +25,13 @@ module QCheck_testing : sig
     t : vtype;
   }
 
-  type shrink_options = { preserve_type : bool }
-
   include
     QCheck_testing_sig
       with type t = pattern * (string * vtype) list
        and type gen_options := gen_options
        and type print_options = unit
-       and type shrink_options := shrink_options
-       and type arb_options = unit
+       and type shrink_options = unit
+       and type arb_options = gen_options
 end = struct
   type this_t = pattern * (string * vtype) list
   type t = this_t
@@ -45,8 +43,8 @@ end = struct
   }
 
   type print_options = unit
-  type shrink_options = { preserve_type : bool }
-  type arb_options = unit
+  type shrink_options = unit
+  type arb_options = gen_options
 
   let gen (opts : gen_options) : this_t QCheck.Gen.t =
     let open QCheck.Gen in
@@ -103,7 +101,12 @@ end = struct
     in
     gen opts.t []
 
-  let print = failwith "TODO"
-  let shrink = failwith "TODO"
-  let arbitrary = failwith "TODO"
+  let print () : this_t QCheck.Print.t =
+    QCheck.Print.(
+      pair pattern_to_source_code (list (pair string vtype_to_source_code)))
+
+  let shrink () : this_t QCheck.Shrink.t = QCheck.Shrink.nil
+
+  let arbitrary (opts : arb_options) : this_t QCheck.arbitrary =
+    QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen opts)
 end
