@@ -1,3 +1,5 @@
+open Utils
+open Vtype
 open Custom_types
 open Ast
 
@@ -10,3 +12,21 @@ type plain_program = unit program [@@deriving sexp, equal]
 
 (** Convert a program into source code.  *)
 val program_to_source_code : 'a program -> string
+
+module QCheck_testing : functor
+  (Tag : sig
+     type t
+   end)
+  -> sig
+  type gen_options = {
+    max_custom_types : int;
+    max_custom_type_constructors : int;
+    t : vtype option;
+    v_gen : Tag.t QCheck.Gen.t;
+  }
+
+  include
+    QCheck_testing_sig
+      with type t = Tag.t program
+       and type gen_options := gen_options
+end
