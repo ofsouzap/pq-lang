@@ -63,9 +63,15 @@ end = struct
       ~f:(fun (c_name, _) ->
         not (Set.mem opts.used_custom_type_constructor_names c_name))
 
-  let print _ = failwith "TODO"
-  let shrink _ = failwith "TODO"
-  let arbitrary _ = failwith "TODO"
+  let print () : t QCheck.Print.t = custom_type_constructor_to_source_code
+
+  let shrink () : t QCheck.Shrink.t =
+   fun (c_name, c_type) ->
+    let open QCheck.Iter in
+    Vtype.QCheck_testing.shrink () c_type >|= fun c_type' -> (c_name, c_type')
+
+  let arbitrary (opts : arb_options) : t QCheck.arbitrary =
+    QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen opts)
 end
 
 type custom_type = string * custom_type_constructor list
