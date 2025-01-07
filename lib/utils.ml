@@ -23,6 +23,9 @@ let lexer_keywords : string list =
   ]
 
 module type QCheck_utils_sig = sig
+  val gen_unique_pair :
+    equal:('a -> 'a -> bool) -> 'a QCheck.Gen.t -> ('a * 'a) QCheck.Gen.t
+
   val result_arb :
     'a QCheck.arbitrary ->
     'b QCheck.arbitrary ->
@@ -33,6 +36,15 @@ module type QCheck_utils_sig = sig
 end
 
 module QCheck_utils : QCheck_utils_sig = struct
+  let gen_unique_pair ~(equal : 'a -> 'a -> bool) (g : 'a QCheck.Gen.t) :
+      ('a * 'a) QCheck.Gen.t =
+    let open QCheck.Gen in
+    fix
+      (fun self _ ->
+        g >>= fun x ->
+        g >>= fun y -> if equal x y then self () else return (x, y))
+      ()
+
   let result_arb (x_arb : 'a QCheck.arbitrary) (y_arb : 'b QCheck.arbitrary) :
       ('a, 'b) Result.t QCheck.arbitrary =
     QCheck.map

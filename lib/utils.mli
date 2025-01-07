@@ -5,6 +5,10 @@ module StringSet : Set.S with type Elt.t = String.t
 val lexer_keywords : string list
 
 module QCheck_utils : sig
+  (* A generator to take two values and keep generating until they are not equal *)
+  val gen_unique_pair :
+    equal:('a -> 'a -> bool) -> 'a QCheck.Gen.t -> ('a * 'a) QCheck.Gen.t
+
   (** Arbitrary generator for the result type *)
   val result_arb :
     'a QCheck.arbitrary ->

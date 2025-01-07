@@ -58,7 +58,7 @@ end = struct
     let open QCheck.Gen in
     filter_gen ~max_attempts:10000
       (pair custom_type_constructor_name_gen
-         (Vtype.QCheck_utils.gen
+         (Vtype.QCheck_testing.gen
             { custom_types = opts.used_custom_type_names; mrd = opts.mrd }))
       ~f:(fun (c_name, _) ->
         not (Set.mem opts.used_custom_type_constructor_names c_name))

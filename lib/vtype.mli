@@ -13,7 +13,7 @@ type vtype =
 (** Convert a vtype to a string representation compatible with the source code *)
 val vtype_to_source_code : vtype -> string
 
-module QCheck_utils : sig
+module QCheck_testing : sig
   type gen_options = { custom_types : StringSet.t; mrd : int }
 
   include

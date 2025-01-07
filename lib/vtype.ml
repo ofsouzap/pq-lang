@@ -22,7 +22,7 @@ let rec vtype_to_source_code = function
         (vtype_to_source_code t2)
   | VTypeCustom tname -> tname
 
-module QCheck_utils : sig
+module QCheck_testing : sig
   type gen_options = { custom_types : StringSet.t; mrd : int }
 
   include
