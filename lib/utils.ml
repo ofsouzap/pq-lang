@@ -1,4 +1,74 @@
 open Core
+module StringSet = Set.Make (String)
+
+let lexer_keywords : string list =
+  [
+    "end";
+    "if";
+    "then";
+    "else";
+    "let";
+    "rec";
+    "in";
+    "true";
+    "false";
+    "fun";
+    "unit";
+    "int";
+    "bool";
+    "match";
+    "with";
+    "type";
+    "of";
+  ]
+
+module type QCheck_utils_sig = sig
+  val result_arb :
+    'a QCheck.arbitrary ->
+    'b QCheck.arbitrary ->
+    ('a, 'b) Result.t QCheck.arbitrary
+
+  val filter_gen :
+    ?max_attempts:int -> 'a QCheck.Gen.t -> f:('a -> bool) -> 'a QCheck.Gen.t
+end
+
+module QCheck_utils : QCheck_utils_sig = struct
+  let result_arb (x_arb : 'a QCheck.arbitrary) (y_arb : 'b QCheck.arbitrary) :
+      ('a, 'b) Result.t QCheck.arbitrary =
+    QCheck.map
+      (fun (b, x, y) -> if b then Ok x else Error y)
+      (QCheck.triple QCheck.bool x_arb y_arb)
+
+  let filter_gen ?(max_attempts : int option) (x_gen : 'a QCheck.Gen.t)
+      ~(f : 'a -> bool) : 'a QCheck.Gen.t =
+    let open QCheck.Gen in
+    fix
+      (fun self n_opt ->
+        let _ =
+          (* Termination check *)
+          match n_opt with
+          | None -> ()
+          | Some n -> if n < 0 then failwith "Filter ran out of attempts"
+        in
+        x_gen >>= fun x ->
+        if f x then return x else self (Option.map n_opt ~f:(fun n -> n - 1)))
+      max_attempts
+end
+
+module type QCheck_testing_sig = sig
+  open QCheck
+
+  type t
+  type gen_options
+  type print_options
+  type shrink_options
+  type arb_options
+
+  val gen : gen_options -> t Gen.t
+  val print : print_options -> t Print.t
+  val shrink : shrink_options -> t Shrink.t
+  val arbitrary : arb_options -> t arbitrary
+end
 
 module type Nonempty_list_sig = sig
   type 'a t = 'a * 'a list [@@deriving sexp, equal]
@@ -22,6 +92,8 @@ module type Nonempty_list_sig = sig
     init:'init ->
     f:(('init, 'acc) Either.t -> 'a -> ('acc, 'err) Result.t) ->
     ('acc, 'err) Result.t
+
+  val nonempty_list_arb : 'a QCheck.arbitrary -> 'a t QCheck.arbitrary
 end
 
 module Nonempty_list : Nonempty_list_sig = struct
@@ -57,4 +129,10 @@ module Nonempty_list : Nonempty_list_sig = struct
     match f (First init) h with
     | Ok h_y -> List.fold_result ts ~init:h_y ~f:(fun x -> f (Second x))
     | Error err -> Error err
+
+  let nonempty_list_arb (v_arb : 'a QCheck.arbitrary) : 'a t QCheck.arbitrary =
+    QCheck.map
+      ~rev:(fun xs -> (head xs, tail xs))
+      (fun (h, ts) -> make (h, ts))
+      QCheck.(pair v_arb (list v_arb))
 end

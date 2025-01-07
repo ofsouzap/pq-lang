@@ -80,8 +80,6 @@ module type TypingTypeContext = sig
   val customs_to_list : t -> custom_type list
 end
 
-module StringSet = Set.Make (String)
-
 module CustomTypeComparatorByName = struct
   type t = custom_type
 
