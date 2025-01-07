@@ -105,11 +105,30 @@ module type Nonempty_list_sig = sig
     f:(('init, 'acc) Either.t -> 'a -> ('acc, 'err) Result.t) ->
     ('acc, 'err) Result.t
 
-  val nonempty_list_arb : 'a QCheck.arbitrary -> 'a t QCheck.arbitrary
+  module QCheck_testing : functor
+    (V : sig
+       type t
+     end)
+    -> sig
+    type arb_options = {
+      gen : V.t QCheck.Gen.t;
+      print : V.t QCheck.Print.t;
+      shrink : V.t QCheck.Shrink.t;
+    }
+
+    include
+      QCheck_testing_sig
+        with type t = V.t t
+         and type gen_options = V.t QCheck.Gen.t
+         and type print_options = V.t QCheck.Print.t
+         and type shrink_options = V.t QCheck.Shrink.t
+         and type arb_options := arb_options
+  end
 end
 
 module Nonempty_list : Nonempty_list_sig = struct
   type 'a t = 'a * 'a list [@@deriving sexp, equal]
+  type 'a nonempty_list_t = 'a t
 
   let make = Fn.id
   let to_list ((h, ts) : 'a t) = h :: ts
@@ -142,9 +161,56 @@ module Nonempty_list : Nonempty_list_sig = struct
     | Ok h_y -> List.fold_result ts ~init:h_y ~f:(fun x -> f (Second x))
     | Error err -> Error err
 
-  let nonempty_list_arb (v_arb : 'a QCheck.arbitrary) : 'a t QCheck.arbitrary =
-    QCheck.map
-      ~rev:(fun xs -> (head xs, tail xs))
-      (fun (h, ts) -> make (h, ts))
-      QCheck.(pair v_arb (list v_arb))
+  module QCheck_testing (V : sig
+    type t
+  end) : sig
+    type arb_options = {
+      gen : V.t QCheck.Gen.t;
+      print : V.t QCheck.Print.t;
+      shrink : V.t QCheck.Shrink.t;
+    }
+
+    include
+      QCheck_testing_sig
+        with type t = V.t t
+         and type gen_options = V.t QCheck.Gen.t
+         and type print_options = V.t QCheck.Print.t
+         and type shrink_options = V.t QCheck.Shrink.t
+         and type arb_options := arb_options
+  end = struct
+    type t = V.t nonempty_list_t
+    type gen_options = V.t QCheck.Gen.t
+    type print_options = V.t QCheck.Print.t
+    type shrink_options = V.t QCheck.Shrink.t
+
+    type arb_options = {
+      gen : V.t QCheck.Gen.t;
+      print : V.t QCheck.Print.t;
+      shrink : V.t QCheck.Shrink.t;
+    }
+
+    let gen (v_gen : V.t QCheck.Gen.t) : t QCheck.Gen.t =
+      let open QCheck.Gen in
+      pair v_gen (list v_gen) >|= make
+
+    let print (v_print : V.t QCheck.Print.t) : t QCheck.Print.t =
+      QCheck.Print.(pair v_print (list v_print))
+
+    let shrink (v_shrink : V.t QCheck.Shrink.t) : t QCheck.Shrink.t =
+      let open QCheck in
+      let open QCheck.Iter in
+      fun xs ->
+        match xs with
+        | h, [] -> v_shrink h >|= fun h' -> (h', [])
+        | (h, (ts_h :: ts_ts as ts)) as xs ->
+            (* Shrink the list elements, preserving the length *)
+            to_list xs |> Shrink.list_elems v_shrink >|= from_list_unsafe
+            <+> (* Shrink the tail elements, preserving the head *)
+            (Shrink.list_spine ts >|= fun ts' -> (h, ts'))
+            <+> (* Drop the head *) return (ts_h, ts_ts)
+
+    let arbitrary (opts : arb_options) : t QCheck.arbitrary =
+      QCheck.make ~print:(print opts.print) ~shrink:(shrink opts.shrink)
+        (gen opts.gen)
+  end
 end

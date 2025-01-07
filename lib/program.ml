@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Vtype
 open Custom_types
 open Ast
 

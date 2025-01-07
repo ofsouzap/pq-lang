@@ -78,8 +78,25 @@ module type Nonempty_list_sig = sig
     f:(('init, 'acc) Either.t -> 'a -> ('acc, 'err) Result.t) ->
     ('acc, 'err) Result.t
 
-  (** Arbitrary generator for a non-empty list *)
-  val nonempty_list_arb : 'a QCheck.arbitrary -> 'a t QCheck.arbitrary
+  module QCheck_testing : functor
+    (V : sig
+       type t
+     end)
+    -> sig
+    type arb_options = {
+      gen : V.t QCheck.Gen.t;
+      print : V.t QCheck.Print.t;
+      shrink : V.t QCheck.Shrink.t;
+    }
+
+    include
+      QCheck_testing_sig
+        with type t = V.t t
+         and type gen_options = V.t QCheck.Gen.t
+         and type print_options = V.t QCheck.Print.t
+         and type shrink_options = V.t QCheck.Shrink.t
+         and type arb_options := arb_options
+  end
 end
 
 module Nonempty_list : Nonempty_list_sig
