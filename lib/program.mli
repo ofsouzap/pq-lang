@@ -1,5 +1,4 @@
 open Utils
-open Vtype
 open Custom_types
 open Ast
 
@@ -21,7 +20,7 @@ module QCheck_testing : functor
   type gen_options = {
     max_custom_types : int;
     max_custom_type_constructors : int;
-    t : vtype option;
+    ast_gen_options : Ast.QCheck_testing(Tag).gen_options;
     v_gen : Tag.t QCheck.Gen.t;
   }
 
