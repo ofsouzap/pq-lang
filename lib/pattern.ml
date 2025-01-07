@@ -18,24 +18,34 @@ let rec pattern_to_source_code = function
   | PatConstructor (cname, p) ->
       sprintf "%s (%s)" cname (pattern_to_source_code p)
 
-type _gen_options = {
-  get_custom_type_constructors :
-    string -> Custom_types.custom_type_constructor list;
-  t : vtype;
-}
+module QCheck_testing : sig
+  type gen_options = {
+    get_custom_type_constructors :
+      string -> Custom_types.custom_type_constructor list;
+    t : vtype;
+  }
 
-module QCheck_testing :
-  QCheck_testing_sig
-    with type t = pattern * (string * vtype) list
-     and type gen_options = _gen_options
-     and type print_options = unit
-     and type shrink_options = unit
-     and type arb_options = unit = struct
+  type shrink_options = { preserve_type : bool }
+
+  include
+    QCheck_testing_sig
+      with type t = pattern * (string * vtype) list
+       and type gen_options := gen_options
+       and type print_options = unit
+       and type shrink_options := shrink_options
+       and type arb_options = unit
+end = struct
   type this_t = pattern * (string * vtype) list
   type t = this_t
-  type gen_options = _gen_options
+
+  type gen_options = {
+    get_custom_type_constructors :
+      string -> Custom_types.custom_type_constructor list;
+    t : vtype;
+  }
+
   type print_options = unit
-  type shrink_options = unit
+  type shrink_options = { preserve_type : bool }
   type arb_options = unit
 
   let gen (opts : gen_options) : this_t QCheck.Gen.t =

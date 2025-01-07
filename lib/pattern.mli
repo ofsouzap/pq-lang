@@ -12,16 +12,20 @@ type pattern =
 (** Convert a pattern to a source code representation *)
 val pattern_to_source_code : pattern -> string
 
-type _gen_options = {
-  get_custom_type_constructors :
-    string -> Custom_types.custom_type_constructor list;
-  t : vtype;
-}
+module QCheck_testing : sig
+  type gen_options = {
+    get_custom_type_constructors :
+      string -> Custom_types.custom_type_constructor list;
+    t : vtype;
+  }
 
-module QCheck_testing :
-  QCheck_testing_sig
-    with type t = pattern * (string * vtype) list
-     and type gen_options = _gen_options
-     and type print_options = unit
-     and type shrink_options = unit
-     and type arb_options = unit
+  type shrink_options = { preserve_type : bool }
+
+  include
+    QCheck_testing_sig
+      with type t = pattern * (string * vtype) list
+       and type gen_options := gen_options
+       and type print_options = unit
+       and type shrink_options := shrink_options
+       and type arb_options = unit
+end

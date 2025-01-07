@@ -14,24 +14,32 @@ let custom_type_constructors_to_source_code (cs : custom_type_constructor list)
   List.map ~f:custom_type_constructor_to_source_code cs
   |> String.concat ~sep:" | "
 
-type _gen_options_constructors = {
-  used_custom_type_names : StringSet.t;
-  used_custom_type_constructor_names : StringSet.t;
-  mrd : int;
-}
+module QCheck_testing_constructors : sig
+  type gen_options = {
+    used_custom_type_names : StringSet.t;
+    used_custom_type_constructor_names : StringSet.t;
+    mrd : int;
+  }
 
-module QCheck_testing_constructors :
-  QCheck_testing_sig
-    with type t = custom_type_constructor
-     and type gen_options = _gen_options_constructors
-     and type print_options = unit
-     and type shrink_options = unit
-     and type arb_options = _gen_options = struct
+  include
+    QCheck_testing_sig
+      with type t = custom_type_constructor
+       and type gen_options := gen_options
+       and type print_options = unit
+       and type shrink_options = unit
+       and type arb_options := gen_options
+end = struct
   type t = custom_type_constructor
-  type gen_options = _gen_options_constructors
+
+  type gen_options = {
+    used_custom_type_names : StringSet.t;
+    used_custom_type_constructor_names : StringSet.t;
+    mrd : int;
+  }
+
   type print_options = unit
   type shrink_options = unit
-  type arb_options = _gen_options
+  type arb_options = gen_options
 
   let custom_type_constructor_name_gen : string QCheck.Gen.t =
     let open QCheck.Gen in
@@ -66,25 +74,34 @@ type custom_type = string * custom_type_constructor list
 let custom_type_to_source_code ((ct_name, ct_cs) : custom_type) : string =
   sprintf "type %s = %s" ct_name (custom_type_constructors_to_source_code ct_cs)
 
-type _gen_options = {
-  used_custom_type_names : StringSet.t;
-  used_custom_type_constructor_names : StringSet.t;
-  max_constructors : int;
-  mrd : int;
-}
+module QCheck_testing : sig
+  type gen_options = {
+    used_custom_type_names : StringSet.t;
+    used_custom_type_constructor_names : StringSet.t;
+    max_constructors : int;
+    mrd : int;
+  }
 
-module QCheck_testing :
-  QCheck_testing_sig
-    with type t = custom_type
-     and type gen_options = _gen_options
-     and type print_options = unit
-     and type shrink_options = unit
-     and type arb_options = _gen_options = struct
+  include
+    QCheck_testing_sig
+      with type t = custom_type
+       and type gen_options := gen_options
+       and type print_options = unit
+       and type shrink_options = unit
+       and type arb_options := gen_options
+end = struct
   type t = custom_type
-  type gen_options = _gen_options
+
+  type gen_options = {
+    used_custom_type_names : StringSet.t;
+    used_custom_type_constructor_names : StringSet.t;
+    max_constructors : int;
+    mrd : int;
+  }
+
   type print_options = unit
   type shrink_options = unit
-  type arb_options = _gen_options
+  type arb_options = gen_options
 
   let custom_type_name_gen : string QCheck.Gen.t = Varname.QCheck_testing.gen ()
 

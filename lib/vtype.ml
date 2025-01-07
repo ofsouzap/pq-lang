@@ -22,20 +22,22 @@ let rec vtype_to_source_code = function
         (vtype_to_source_code t2)
   | VTypeCustom tname -> tname
 
-type _gen_options = { custom_types : StringSet.t; mrd : int }
+module QCheck_utils : sig
+  type gen_options = { custom_types : StringSet.t; mrd : int }
 
-module QCheck_utils :
-  Utils.QCheck_testing_sig
-    with type t = vtype
-     and type gen_options = _gen_options
-     and type print_options = unit
-     and type shrink_options = unit
-     and type arb_options = _gen_options = struct
+  include
+    Utils.QCheck_testing_sig
+      with type t = vtype
+       and type gen_options := gen_options
+       and type print_options = unit
+       and type shrink_options = unit
+       and type arb_options := gen_options
+end = struct
   type t = vtype
-  type gen_options = _gen_options
+  type gen_options = { custom_types : StringSet.t; mrd : int }
   type print_options = unit
   type shrink_options = unit
-  type arb_options = _gen_options
+  type arb_options = gen_options
 
   let gen =
     let open QCheck.Gen in
