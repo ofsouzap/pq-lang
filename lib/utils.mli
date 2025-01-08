@@ -81,22 +81,18 @@ module type Nonempty_list_sig = sig
   module QCheck_testing : functor
     (V : sig
        type t
-     end)
-    -> sig
-    type arb_options = {
-      gen : V.t QCheck.Gen.t;
-      print : V.t QCheck.Print.t;
-      shrink : V.t QCheck.Shrink.t;
-    }
 
-    include
-      QCheck_testing_sig
-        with type t = V.t t
-         and type gen_options = V.t QCheck.Gen.t
-         and type print_options = V.t QCheck.Print.t
-         and type shrink_options = V.t QCheck.Shrink.t
-         and type arb_options := arb_options
-  end
+       val gen : t QCheck.Gen.t
+       val print : t QCheck.Print.t
+       val shrink : t QCheck.Shrink.t
+     end)
+    ->
+    QCheck_testing_sig
+      with type t = V.t t
+       and type gen_options = unit
+       and type print_options = unit
+       and type shrink_options = unit
+       and type arb_options = unit
 end
 
 module Nonempty_list : Nonempty_list_sig

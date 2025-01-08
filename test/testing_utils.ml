@@ -206,3 +206,26 @@ let testing_var_ctx_arb ~(type_ctx : TestingTypeCtx.t) :
     gen
 
 module TestingTypeChecker = TypeChecker (TestingTypeCtx) (TestingVarCtx)
+
+module UnitTag = struct
+  type t = unit
+end
+
+module Unit_ast_qcheck_testing = Ast.QCheck_testing (UnitTag)
+module Unit_program_qcheck_testing = Program.QCheck_testing (UnitTag)
+
+let unit_program_arbitrary_with_default_options =
+  Unit_program_qcheck_testing.arbitrary
+    {
+      gen =
+        {
+          mrd = default_max_gen_rec_depth;
+          max_custom_types = default_max_custom_type_count;
+          max_custom_type_constructors =
+            default_max_custom_type_constructor_count;
+          ast_type = None;
+          v_gen = QCheck.Gen.unit;
+        };
+      print = Unit_ast_qcheck_testing.PrintExprSource;
+      shrink = { preserve_type = false };
+    }

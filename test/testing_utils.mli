@@ -78,3 +78,18 @@ val testing_var_ctx_arb :
 module TestingTypeChecker : sig
   include module type of TypeChecker (TestingTypeCtx) (TestingVarCtx)
 end
+
+module UnitTag : sig
+  type t = unit
+end
+
+module Unit_ast_qcheck_testing : sig
+  include module type of Ast.QCheck_testing (UnitTag)
+end
+
+module Unit_program_qcheck_testing : sig
+  include module type of Program.QCheck_testing (UnitTag)
+end
+
+val unit_program_arbitrary_with_default_options :
+  Unit_program_qcheck_testing.t QCheck.arbitrary
