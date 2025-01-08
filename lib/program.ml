@@ -1,5 +1,6 @@
 open Core
 open Utils
+open Vtype
 open Custom_types
 open Ast
 
@@ -20,15 +21,15 @@ module QCheck_testing (Tag : sig
   type t
 end) : sig
   type gen_options = {
+    mrd : int;
     max_custom_types : int;
     max_custom_type_constructors : int;
-    ast_gen_options : Ast.QCheck_testing(Tag).gen_options;
+    ast_type : vtype option;
+    v_gen : Tag.t QCheck.Gen.t;
   }
 
   type arb_options = {
-    max_custom_types : int;
-    max_custom_type_constructors : int;
-    ast_arb_options : Ast.QCheck_testing(Tag).arb_options;
+    gen : gen_options;
     print : Ast.QCheck_testing(Tag).ast_print_method;
     shrink : Ast.QCheck_testing(Tag).shrink_options;
   }
@@ -46,18 +47,18 @@ end = struct
   module Ast_qcheck_testing = Ast.QCheck_testing (Tag)
 
   type gen_options = {
+    mrd : int;
     max_custom_types : int;
     max_custom_type_constructors : int;
-    ast_gen_options : Ast_qcheck_testing.gen_options;
+    ast_type : vtype option;
+    v_gen : Tag.t QCheck.Gen.t;
   }
 
   type print_options = Ast_qcheck_testing.ast_print_method
   type shrink_options = Ast_qcheck_testing.shrink_options
 
   type arb_options = {
-    max_custom_types : int;
-    max_custom_type_constructors : int;
-    ast_arb_options : Ast.QCheck_testing(Tag).arb_options;
+    gen : gen_options;
     print : print_options;
     shrink : shrink_options;
   }
@@ -105,9 +106,11 @@ end = struct
     let open QCheck.Gen in
     gen_custom_types_list ~max_custom_types:opts.max_custom_types
       ~max_custom_type_constructors:opts.max_custom_type_constructors
-      ~mrd:opts.ast_gen_options.mrd
+      ~mrd:opts.mrd
     >>= fun custom_types ->
-    Ast_qcheck_testing.gen opts.ast_gen_options >|= fun e -> { custom_types; e }
+    Ast_qcheck_testing.gen
+      { t = opts.ast_type; custom_types; v_gen = opts.v_gen; mrd = opts.mrd }
+    >|= fun e -> { custom_types; e }
 
   let print (print_method : print_options) : t QCheck.Print.t =
    fun prog ->
@@ -125,10 +128,5 @@ end = struct
 
   let arbitrary (opts : arb_options) : t QCheck.arbitrary =
     QCheck.make ~print:(print opts.print) ~shrink:(shrink opts.shrink)
-      (gen
-         {
-           max_custom_types = opts.max_custom_types;
-           max_custom_type_constructors = opts.max_custom_type_constructors;
-           ast_gen_options = opts.ast_arb_options.gen;
-         })
+      (gen opts.gen)
 end

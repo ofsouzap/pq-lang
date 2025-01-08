@@ -1,4 +1,5 @@
 open Utils
+open Vtype
 open Custom_types
 open Ast
 
@@ -18,15 +19,15 @@ module QCheck_testing : functor
    end)
   -> sig
   type gen_options = {
+    mrd : int;
     max_custom_types : int;
     max_custom_type_constructors : int;
-    ast_gen_options : Ast.QCheck_testing(Tag).gen_options;
+    ast_type : vtype option;
+    v_gen : Tag.t QCheck.Gen.t;
   }
 
   type arb_options = {
-    max_custom_types : int;
-    max_custom_type_constructors : int;
-    ast_arb_options : Ast.QCheck_testing(Tag).arb_options;
+    gen : gen_options;
     print : Ast.QCheck_testing(Tag).ast_print_method;
     shrink : Ast.QCheck_testing(Tag).shrink_options;
   }
