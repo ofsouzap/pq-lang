@@ -138,7 +138,9 @@ end = struct
            not (Set.mem opts.used_custom_type_names ct_name)))
       gen_constructors
 
-  let print (_ : print_options) : t QCheck.Print.t = failwith "TODO"
+  let print () : t QCheck.Print.t = custom_type_to_source_code
   let shrink () = QCheck.Shrink.nil
-  let arbitrary (_ : arb_options) = failwith "TODO"
+
+  let arbitrary (opts : arb_options) =
+    QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen opts)
 end
