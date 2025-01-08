@@ -73,8 +73,25 @@ module TestingTypeCtx : sig
   val from_list : custom_type list -> t
   val custom_gen_opt : t -> custom_type QCheck.Gen.t option
   val sexp_of_t : t -> Sexp.t
+
+  module QCheck_testing : sig
+    type gen_options = {
+      max_custom_types : int;
+      max_constructors : int;
+      mrd : int;
+    }
+
+    include
+      QCheck_testing_sig
+        with type t = t
+         and type gen_options := gen_options
+         and type print_options = unit
+         and type shrink_options = unit
+         and type arb_options := gen_options
+  end
 end = struct
   type t = custom_type list
+  type this_t = t
 
   let empty = []
   let create ~(custom_types : custom_type list) : t = custom_types
@@ -104,54 +121,76 @@ end = struct
 
   let sexp_of_t : t -> Sexp.t =
     Fn.compose (sexp_of_list sexp_of_custom_type) customs_to_list
+
+  module QCheck_testing = struct
+    type t = this_t
+
+    type gen_options = {
+      max_custom_types : int;
+      max_constructors : int;
+      mrd : int;
+    }
+
+    type print_options = unit
+    type shrink_options = unit
+    type arb_options = gen_options
+
+    let gen (opts : gen_options) : t QCheck.Gen.t =
+      let open QCheck.Gen in
+      int_range 0 opts.max_custom_types >>= fun custom_type_count ->
+      fix
+        (fun self (n, type_ctx) ->
+          if n <= 0 then return type_ctx
+          else
+            Custom_types.QCheck_testing.gen
+              {
+                mrd = opts.mrd;
+                used_custom_type_names =
+                  type_ctx |> customs_to_list |> List.map ~f:fst
+                  |> StringSet.of_list;
+                used_custom_type_constructor_names =
+                  type_ctx |> customs_to_list
+                  |> List.concat_map ~f:(fun (_, cs) ->
+                         List.map ~f:(fun (c_name, _) -> c_name) cs)
+                  |> StringSet.of_list;
+                max_constructors = opts.max_constructors;
+              }
+            >>= fun new_ct -> self (n - 1, add_custom type_ctx new_ct))
+        (custom_type_count, empty)
+
+    let print () =
+      let print_custom_type_constructor : custom_type_constructor QCheck.Print.t
+          =
+        QCheck.Print.(pair string vtype_to_source_code)
+      in
+      let print_custom_type : custom_type QCheck.Print.t =
+        QCheck.Print.(pair Fn.id (list print_custom_type_constructor))
+      in
+      QCheck.Print.(Fn.compose (list print_custom_type) customs_to_list)
+
+    let shrink () =
+      QCheck.Shrink.(list ~shrink:(Custom_types.QCheck_testing.shrink ()))
+
+    let arbitrary (opts : arb_options) : t QCheck.arbitrary =
+      QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen opts)
+  end
 end
 
-let testing_type_ctx_gen ~(max_custom_types : int) ~(max_constructors : int)
-    ~(mrd : int) : TestingTypeCtx.t QCheck.Gen.t =
-  let open QCheck.Gen in
-  int_range 0 max_custom_types >>= fun custom_type_count ->
-  fix
-    (fun self (n, type_ctx) ->
-      if n <= 0 then return type_ctx
-      else
-        Custom_types.QCheck_testing.gen
-          {
-            mrd;
-            used_custom_type_names =
-              type_ctx |> TestingTypeCtx.customs_to_list |> List.map ~f:fst
-              |> StringSet.of_list;
-            used_custom_type_constructor_names =
-              type_ctx |> TestingTypeCtx.customs_to_list
-              |> List.concat_map ~f:(Core.Fn.compose (List.map ~f:fst) snd)
-              |> StringSet.of_list;
-            max_constructors;
-          }
-        >>= fun new_ct -> self (n - 1, TestingTypeCtx.add_custom type_ctx new_ct))
-    (custom_type_count, TestingTypeCtx.empty)
-
-let testing_type_ctx_arb ~(max_custom_types : int) ~(max_constructors : int)
-    ~(mrd : int) : TestingTypeCtx.t QCheck.arbitrary =
-  let print_custom_type_constructor : custom_type_constructor QCheck.Print.t =
-    QCheck.Print.(pair string vtype_to_source_code)
-  in
-  let print_custom_type : custom_type QCheck.Print.t =
-    QCheck.Print.(pair Fn.id (list print_custom_type_constructor))
-  in
-  QCheck.make
-    ~print:
-      QCheck.Print.(
-        Fn.compose (list print_custom_type) TestingTypeCtx.customs_to_list)
-    (testing_type_ctx_gen ~max_custom_types ~max_constructors ~mrd)
-
 let default_testing_type_ctx_gen =
-  testing_type_ctx_gen ~max_custom_types:default_max_custom_type_count
-    ~max_constructors:default_max_custom_type_constructor_count
-    ~mrd:default_max_gen_rec_depth
+  TestingTypeCtx.QCheck_testing.gen
+    {
+      max_custom_types = default_max_custom_type_count;
+      max_constructors = default_max_custom_type_constructor_count;
+      mrd = default_max_gen_rec_depth;
+    }
 
 let default_testing_type_ctx_arb =
-  testing_type_ctx_arb ~max_custom_types:default_max_custom_type_count
-    ~max_constructors:default_max_custom_type_constructor_count
-    ~mrd:default_max_gen_rec_depth
+  TestingTypeCtx.QCheck_testing.arbitrary
+    {
+      max_custom_types = default_max_custom_type_count;
+      max_constructors = default_max_custom_type_constructor_count;
+      mrd = default_max_gen_rec_depth;
+    }
 
 module TestingVarCtx : sig
   include Typing.TypingVarContext
@@ -159,8 +198,19 @@ module TestingVarCtx : sig
   val varnames_of_type : vtype -> t -> string list
   val to_list : t -> (string * vtype) list
   val from_list : (string * vtype) list -> t
+
+  module QCheck_testing : sig
+    include
+      QCheck_testing_sig
+        with type t = t
+         and type gen_options = TestingTypeCtx.t
+         and type print_options = unit
+         and type shrink_options = unit
+         and type arb_options = TestingTypeCtx.t
+  end
 end = struct
-  type t = (string * vtype) list
+  type t = (Varname.varname * vtype) list
+  type this_t = t
 
   let empty = []
   let add ctx x t = List.Assoc.add ctx x t ~equal:String.equal
@@ -180,30 +230,45 @@ end = struct
 
   let to_list = Fn.id
   let from_list = List.fold ~init:empty ~f:(fun acc (x, t) -> add acc x t)
-end
 
-let testing_var_ctx_arb ~(type_ctx : TestingTypeCtx.t) :
-    TestingVarCtx.t QCheck.arbitrary =
-  let gen =
-    let open QCheck.Gen in
-    list
-      (pair
-         (Varname.QCheck_testing.gen ())
-         (Vtype.QCheck_testing.gen
-            {
-              mrd = default_max_gen_rec_depth;
-              custom_types =
-                TestingTypeCtx.customs_to_list type_ctx
-                |> List.map ~f:fst |> StringSet.of_list;
-            }))
-    >|= TestingVarCtx.from_list
-  in
-  QCheck.make
-    ~print:
-      (Core.Fn.compose
-         QCheck.Print.(list (pair string vtype_to_source_code))
-         TestingVarCtx.to_list)
-    gen
+  module QCheck_testing = struct
+    type t = this_t
+    type gen_options = TestingTypeCtx.t
+    type print_options = unit
+    type shrink_options = unit
+    type arb_options = TestingTypeCtx.t
+
+    let gen (type_ctx : TestingTypeCtx.t) : t QCheck.Gen.t =
+      let open QCheck.Gen in
+      list
+        (pair
+           (Varname.QCheck_testing.gen ())
+           (Vtype.QCheck_testing.gen
+              {
+                mrd = default_max_gen_rec_depth;
+                custom_types =
+                  TestingTypeCtx.customs_to_list type_ctx
+                  |> List.map ~f:fst |> StringSet.of_list;
+              }))
+      >|= List.fold ~init:empty ~f:(fun acc (x, t) -> add acc x t)
+
+    let print () : t QCheck.Print.t =
+      Core.Fn.compose
+        QCheck.Print.(list (pair string vtype_to_source_code))
+        to_list
+
+    let shrink () : t QCheck.Shrink.t =
+      QCheck.Shrink.(
+        list
+          ~shrink:
+            (pair
+               (Varname.QCheck_testing.shrink ())
+               (Vtype.QCheck_testing.shrink ())))
+
+    let arbitrary (type_ctx : TestingTypeCtx.t) =
+      QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen type_ctx)
+  end
+end
 
 module TestingTypeChecker = TypeChecker (TestingTypeCtx) (TestingVarCtx)
 

@@ -1,5 +1,6 @@
 open Core
 open Pq_lang
+open Utils
 open Vtype
 open Custom_types
 open Typing
@@ -35,21 +36,23 @@ module TestingTypeCtx : sig
 
   (** Get the type context as a sexp *)
   val sexp_of_t : t -> Sexp.t
+
+  module QCheck_testing : sig
+    type gen_options = {
+      max_custom_types : int;
+      max_constructors : int;
+      mrd : int;
+    }
+
+    include
+      QCheck_testing_sig
+        with type t = t
+         and type gen_options := gen_options
+         and type print_options = unit
+         and type shrink_options = unit
+         and type arb_options := gen_options
+  end
 end
-
-(** Generator for testing type context module context instances *)
-val testing_type_ctx_gen :
-  max_custom_types:int ->
-  max_constructors:int ->
-  mrd:int ->
-  TestingTypeCtx.t QCheck.Gen.t
-
-(** Arbitrary generator for testing type context module context instances *)
-val testing_type_ctx_arb :
-  max_custom_types:int ->
-  max_constructors:int ->
-  mrd:int ->
-  TestingTypeCtx.t QCheck.arbitrary
 
 (** Generator for testing type context wwith default settings *)
 val default_testing_type_ctx_gen : TestingTypeCtx.t QCheck.Gen.t
@@ -69,11 +72,17 @@ module TestingVarCtx : sig
 
   (** Creates a context from a list *)
   val from_list : (string * vtype) list -> t
-end
 
-(** Arbitrary generator for testing variable context module context instances *)
-val testing_var_ctx_arb :
-  type_ctx:TestingTypeCtx.t -> TestingVarCtx.t QCheck.arbitrary
+  module QCheck_testing : sig
+    include
+      QCheck_testing_sig
+        with type t = t
+         and type gen_options = TestingTypeCtx.t
+         and type print_options = unit
+         and type shrink_options = unit
+         and type arb_options = TestingTypeCtx.t
+  end
+end
 
 module TestingTypeChecker : sig
   include module type of TypeChecker (TestingTypeCtx) (TestingVarCtx)
