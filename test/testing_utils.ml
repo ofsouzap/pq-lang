@@ -146,7 +146,8 @@ end = struct
               {
                 mrd = opts.mrd;
                 used_custom_type_names =
-                  type_ctx |> customs_to_list |> List.map ~f:fst
+                  type_ctx |> customs_to_list
+                  |> List.map ~f:(fun (ct_name, _) -> ct_name)
                   |> StringSet.of_list;
                 used_custom_type_constructor_names =
                   type_ctx |> customs_to_list
