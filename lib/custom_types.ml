@@ -66,9 +66,7 @@ end = struct
   let print () : t QCheck.Print.t = custom_type_constructor_to_source_code
 
   let shrink () : t QCheck.Shrink.t =
-   fun (c_name, c_type) ->
-    let open QCheck.Iter in
-    Vtype.QCheck_testing.shrink () c_type >|= fun c_type' -> (c_name, c_type')
+    QCheck.Shrink.(pair nil (Vtype.QCheck_testing.shrink ()))
 
   let arbitrary (opts : arb_options) : t QCheck.arbitrary =
     QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen opts)
@@ -139,7 +137,10 @@ end = struct
       gen_constructors
 
   let print () : t QCheck.Print.t = custom_type_to_source_code
-  let shrink () = QCheck.Shrink.nil
+
+  let shrink () =
+    QCheck.Shrink.(
+      pair nil (list ~shrink:(QCheck_testing_constructors.shrink ())))
 
   let arbitrary (opts : arb_options) =
     QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen opts)

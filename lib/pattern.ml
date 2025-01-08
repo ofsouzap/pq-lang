@@ -105,7 +105,28 @@ end = struct
     QCheck.Print.(
       pair pattern_to_source_code (list (pair string vtype_to_source_code)))
 
-  let shrink () : this_t QCheck.Shrink.t = QCheck.Shrink.nil
+  let rec shrink () : this_t QCheck.Shrink.t =
+    let open QCheck.Iter in
+    fun (p, (defined_vars : (varname * vtype) list)) ->
+      match p with
+      | PatName (xname, t) ->
+          QCheck.Shrink.(
+            pair string (Vtype.QCheck_testing.shrink ()) (xname, t))
+          >|= fun (xname', t') ->
+          ( PatName (xname', t'),
+            List.map
+              ~f:(fun (xi_name, xi_t) ->
+                if equal_string xname xi_name then (xname', t')
+                else (xi_name, xi_t))
+              defined_vars )
+      | PatPair (p1, p2) ->
+          shrink () (p1, defined_vars) >>= fun (p1', defined_vars') ->
+          shrink () (p2, defined_vars') >|= fun (p2', defined_vars'') ->
+          (PatPair (p1', p2'), defined_vars'')
+      | PatConstructor (cname, p) ->
+          QCheck.Shrink.(pair nil (shrink ())) (cname, (p, defined_vars))
+          >|= fun (cname', (p', defined_vars')) ->
+          (PatConstructor (cname', p'), defined_vars')
 
   let arbitrary (opts : arb_options) : this_t QCheck.arbitrary =
     QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen opts)
