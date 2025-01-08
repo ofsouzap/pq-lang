@@ -187,9 +187,15 @@ let create_test_type_ctx_gen_valid (name : string) : test =
   let open QCheck in
   QCheck_runner.to_ounit2_test
     (Test.make ~name ~count:1000
-       (testing_type_ctx_arb ~max_custom_types:default_max_custom_type_count
-          ~max_constructors:default_max_custom_type_constructor_count
-          ~mrd:default_max_gen_rec_depth) (fun type_ctx ->
+       (TestingTypeCtx.QCheck_testing.arbitrary
+          {
+            max_custom_types = default_max_custom_type_count;
+            max_constructors = default_max_custom_type_constructor_count;
+            mrd = default_max_gen_rec_depth;
+          }
+       |> (* Don't allow shrinking as we are considering the generated type contexts *)
+       QCheck.set_shrink QCheck.Shrink.nil)
+       (fun type_ctx ->
          match TestingTypeChecker.check_type_ctx type_ctx with
          | Ok _ -> true
          | Error err ->
