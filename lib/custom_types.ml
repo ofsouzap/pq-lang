@@ -111,6 +111,10 @@ end = struct
 
   let gen (opts : gen_options) : t QCheck.Gen.t =
     let open QCheck.Gen in
+    let used_constructors_with_acc ~(acc : custom_type_constructor list) =
+      Set.union opts.used_custom_type_constructor_names
+        (acc |> List.map ~f:(fun (c_name, _) -> c_name) |> StringSet.of_list)
+    in
     let gen_constructors =
       (* Iteratively build up list of constructors, making sure to not have multiply-defined constructors in the same custom type *)
       (* TODO - include the possibility of recursive data types *)
@@ -123,8 +127,7 @@ end = struct
               {
                 used_custom_type_names = opts.used_custom_type_names;
                 used_custom_type_constructor_names =
-                  List.map acc ~f:(fun (c_name, _) -> c_name)
-                  |> StringSet.of_list;
+                  used_constructors_with_acc ~acc;
                 mrd = opts.mrd;
               }
             >>= fun c -> self (n - 1, c :: acc))

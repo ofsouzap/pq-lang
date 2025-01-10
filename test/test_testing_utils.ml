@@ -218,7 +218,7 @@ let var_ctx_list_arb ~(type_ctx : TestingTypeCtx.t) =
 (* TODO - test that TestingTypeChecker types things the same as the SimpleTypeChecker *)
 
 let suite =
-  "Utilities Tests"
+  "Testing Utilities Tests"
   >::: [
          "Value type generator"
          >::: [ create_test_vtype_gen_constructors_exist "Custom types exist" ];
