@@ -2,8 +2,10 @@
   Abstract syntax tree for the language.
 *)
 
+open Core
 open Utils
 open Vtype
+open Custom_types
 open Pattern
 
 (**
@@ -80,3 +82,51 @@ exception AstConverionFixError
   If the input has a malformed usage of the Fix node, this will raise a `AstConversionFixError` exception.
 *)
 val ast_to_source_code : ?use_newlines:bool -> 'a expr -> string
+
+module QCheck_testing : functor
+  (Tag : sig
+     type t
+   end)
+  -> sig
+  (** The printing method for an AST representation of a program *)
+  type ast_print_method =
+    | NoPrint  (** Don't print the AST *)
+    | PrintSexp of (Tag.t -> Sexp.t)
+        (** Print the sexp of the AST, using the provided sexp_of_ function for the values *)
+    | PrintExprSource
+        (** Print the source code representation of the AST, ignoring the tagging values *)
+
+  (** Take an AST printing method and return a function that implements the printing method.
+    Returns None if no printing is specified. *)
+  val get_ast_printer_opt : ast_print_method -> (Tag.t expr -> string) option
+
+  (** Take an AST printing method and return a function that implements the printing method.
+    Returns a function always returning the empty string if no printing is specified. *)
+  val get_ast_printer : ast_print_method -> Tag.t expr -> string
+
+  (** A default AST printing method *)
+  val default_ast_print_method : ast_print_method
+
+  type gen_options = {
+    t : vtype option;
+    custom_types : custom_type list;
+    v_gen : Tag.t QCheck.Gen.t;
+    mrd : int;
+  }
+
+  type shrink_options = { preserve_type : bool }
+
+  type arb_options = {
+    gen : gen_options;
+    print : ast_print_method;
+    shrink : shrink_options;
+  }
+
+  include
+    QCheck_testing_sig
+      with type t = Tag.t expr
+       and type gen_options := gen_options
+       and type print_options = ast_print_method
+       and type shrink_options := shrink_options
+       and type arb_options := arb_options
+end

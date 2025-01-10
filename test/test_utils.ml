@@ -2,7 +2,14 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
-open Testing_utils
+
+module Int_nonempty_list_qcheck_testing = Nonempty_list.QCheck_testing (struct
+  type t = int
+
+  let gen = QCheck.Gen.int
+  let print = QCheck.Print.int
+  let shrink = QCheck.Shrink.int
+end)
 
 let nonempty_list_test_head =
   let open QCheck in
@@ -33,7 +40,7 @@ let nonempty_list_test_cons =
   let open QCheck in
   QCheck_runner.to_ounit2_test
     (Test.make ~name:"Cons" ~count:1000
-       (pair int (nonempty_list_arb int))
+       (pair int (Int_nonempty_list_qcheck_testing.arbitrary ()))
        (fun (h, ts) ->
          let xs = Nonempty_list.cons h ts in
          (equal_list equal_int) (Nonempty_list.to_list xs)
@@ -43,7 +50,9 @@ let nonempty_list_test_map =
   let open QCheck in
   QCheck_runner.to_ounit2_test
     (Test.make ~name:"Map" ~count:1000
-       (pair (fun1 QCheck.Observable.int int) (nonempty_list_arb int))
+       (pair
+          (fun1 QCheck.Observable.int int)
+          (Int_nonempty_list_qcheck_testing.arbitrary ()))
        (fun (f_, xs) ->
          let fn_then_list =
            xs
@@ -61,7 +70,7 @@ let nonempty_list_test_fold =
     (Test.make ~name:"Fold" ~count:1000
        (triple int
           (fun2 QCheck.Observable.int QCheck.Observable.int int)
-          (nonempty_list_arb int))
+          (Int_nonempty_list_qcheck_testing.arbitrary ()))
        (fun (init, f_, xs) ->
          let out = xs |> Nonempty_list.fold ~init ~f:(QCheck.Fn.apply f_) in
          let exp =
@@ -76,8 +85,8 @@ let nonempty_list_test_fold_result =
     (Test.make ~name:"Fold result" ~count:1000
        (triple int
           (fun2 QCheck.Observable.int QCheck.Observable.int
-             (result_arb QCheck.int QCheck.int))
-          (nonempty_list_arb int))
+             (QCheck_utils.result_arb QCheck.int QCheck.int))
+          (Int_nonempty_list_qcheck_testing.arbitrary ()))
        (fun (init, f_, xs) ->
          let out =
            xs |> Nonempty_list.fold_result ~init ~f:(QCheck.Fn.apply f_)
@@ -94,8 +103,8 @@ let nonempty_list_test_fold_result_consume_init =
     (Test.make ~name:"Fold result consume init" ~count:1000
        (triple int
           (fun2 QCheck.Observable.int QCheck.Observable.int
-             (result_arb QCheck.int QCheck.int))
-          (nonempty_list_arb int))
+             (QCheck_utils.result_arb QCheck.int QCheck.int))
+          (Int_nonempty_list_qcheck_testing.arbitrary ()))
        (fun (init, f_, xs) ->
          let out =
            xs

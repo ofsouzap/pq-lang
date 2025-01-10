@@ -10,6 +10,21 @@ open Testing_utils
 
 (* TODO - tests for type context checking *)
 
+module Vtype_ast_qcheck_testing = Ast.QCheck_testing (struct
+  type t = vtype
+end)
+
+let varname_gen = Varname.QCheck_testing.gen ()
+
+let vtype_gen type_ctx =
+  Vtype.QCheck_testing.gen
+    {
+      custom_types =
+        TestingTypeCtx.customs_to_list type_ctx
+        |> List.map ~f:fst |> StringSet.of_list;
+      mrd = default_max_gen_rec_depth;
+    }
+
 let test_cases_expr_typing : test list =
   let open Result in
   let create_test
@@ -319,7 +334,7 @@ let test_cases_expr_typing_full_check : test list =
           >|= fst
         in
         assert_equal ~cmp:(equal_expr equal_vtype)
-          ~printer:(get_ast_printer (PrintSexp sexp_of_vtype))
+          ~printer:(Vtype_ast_qcheck_testing.print (PrintSexp sexp_of_vtype))
           exp typed_out
     | Error _ -> assert_failure "Failed to type"
   in
@@ -433,8 +448,8 @@ module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
     let ctx_gen : (TestingTypeCtx.t * VarCtx.t) QCheck.Gen.t =
       let open QCheck.Gen in
       default_testing_type_ctx_gen >>= fun type_ctx ->
-      list (pair string (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth))
-      >|= fun ctx_list -> (type_ctx, var_ctx_from_list ctx_list)
+      list (pair string (vtype_gen type_ctx)) >|= fun ctx_list ->
+      (type_ctx, var_ctx_from_list ctx_list)
     in
     let ctx_two_vtypes_gen :
         ((TestingTypeCtx.t * VarCtx.t) * (vtype * vtype)) QCheck.Gen.t =
@@ -442,9 +457,7 @@ module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
       ctx_gen >>= fun (type_ctx, var_ctx) ->
       pair
         (pair (return type_ctx) (return var_ctx))
-        (pair
-           (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-           (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth))
+        (pair (vtype_gen type_ctx) (vtype_gen type_ctx))
     in
     let ctx_two_vtypes_arb = QCheck.make ctx_two_vtypes_gen in
     List.map ~f:QCheck_runner.to_ounit2_test
@@ -496,7 +509,13 @@ let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in
   let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : vtype) : unit expr Gen.t =
-    ast_expr_arb ~type_ctx ~t NoPrint Gen.unit |> QCheck.gen
+    Unit_ast_qcheck_testing.gen
+      {
+        t = Some t;
+        custom_types = TestingTypeCtx.customs_to_list type_ctx;
+        v_gen = QCheck.Gen.unit;
+        mrd = default_max_gen_rec_depth;
+      }
   in
   let create_test
       ( (name : string),
@@ -613,7 +632,7 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "If",
         None,
         fun type_ctx ->
-          vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth >>= fun t ->
+          vtype_gen type_ctx >>= fun t ->
           triple
             (expr_gen ~type_ctx VTypeBool)
             (expr_gen ~type_ctx t) (expr_gen ~type_ctx t)
@@ -621,9 +640,8 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Let",
         None,
         fun type_ctx ->
-          vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth >>= fun t ->
-          pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-          >>= fun (xname, xtype) ->
+          vtype_gen type_ctx >>= fun t ->
+          pair varname_gen (vtype_gen type_ctx) >>= fun (xname, xtype) ->
           pair (expr_gen ~type_ctx xtype) (expr_gen ~type_ctx t)
           >|= fun (e1, e2) -> (t, Let ((), xname, e1, e2))
         (* Note, the tests here (and for the Fun and Fix cases) don't work with changing variable contexts. But this should be fine *)
@@ -631,27 +649,21 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Fun",
         None,
         fun type_ctx ->
-          vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth >>= fun t2 ->
-          pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-          >>= fun (xname, t1) ->
+          vtype_gen type_ctx >>= fun t2 ->
+          pair varname_gen (vtype_gen type_ctx) >>= fun (xname, t1) ->
           expr_gen ~type_ctx t2 >|= fun e ->
           (VTypeFun (t1, t2), Ast.Fun ((), (xname, t1), e)) );
       ( "App",
         None,
         fun type_ctx ->
-          pair
-            (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-            (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-          >>= fun (t1, t2) ->
+          pair (vtype_gen type_ctx) (vtype_gen type_ctx) >>= fun (t1, t2) ->
           pair (expr_gen ~type_ctx (VTypeFun (t1, t2))) (expr_gen ~type_ctx t1)
           >|= fun (e1, e2) -> (t2, App ((), e1, e2)) );
       ( "Fix",
         None,
         fun type_ctx ->
-          pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-          >>= fun (fname, t1) ->
-          pair varname_gen (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-          >>= fun (xname, t2) ->
+          pair varname_gen (vtype_gen type_ctx) >>= fun (fname, t1) ->
+          pair varname_gen (vtype_gen type_ctx) >>= fun (xname, t2) ->
           expr_gen ~type_ctx t2 >|= fun e ->
           (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );
       ( "Constructor - list Nil",
@@ -711,8 +723,9 @@ let test_cases_typing_maintains_structure : test =
   let open QCheck in
   QCheck_ounit.to_ounit2_test
     (Test.make ~name:"Typing maintains structure" ~count:100
-       (ast_expr_arb_default_type_ctx_params PrintExprSource Gen.unit)
-       (fun (type_ctx, e) ->
+       unit_program_arbitrary_with_default_options (fun prog ->
+         let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
+         let e = prog.e in
          match TestingTypeChecker.check_type_ctx type_ctx with
          | Error err ->
              Test.fail_reportf "Failed to check type ctx, with error: %s"

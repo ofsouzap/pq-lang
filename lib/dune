@@ -1,7 +1,7 @@
 (library
  (public_name pq_lang.lib)
  (name pq_lang)
- (libraries core)
+ (libraries core qcheck)
  (modules
   utils
   vtype

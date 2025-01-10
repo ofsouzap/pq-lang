@@ -9,16 +9,16 @@ let test_cases_equality : test list =
   let create_positive_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (get_ast_printer (PrintSexp sexp_of_unit) x)
-        (get_ast_printer (PrintSexp sexp_of_unit) y)
+        (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) x)
+        (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) y)
     in
     name >:: fun _ -> assert_bool "not equal" (equal_plain_expr x y)
   in
   let create_negative_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (get_ast_printer (PrintSexp sexp_of_unit) x)
-        (get_ast_printer (PrintSexp sexp_of_unit) y)
+        (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) x)
+        (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) y)
     in
     name >:: fun _ -> assert_bool "equal" (not (equal_plain_expr x y))
   in
@@ -128,15 +128,16 @@ let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
   Test.make ~count:1000 ~name:"AST to source code"
-    plain_ast_expr_arb_any_default_type_ctx_params (fun (_, e) ->
+    unit_program_arbitrary_with_default_options (fun prog ->
+      let e = prog.e in
       match run_frontend_string (ast_to_source_code e) with
       | Ok prog ->
           if equal_plain_expr e prog.e then true
           else
             Test.fail_reportf
               "Got different AST. Expected:\n\n%s\n\nActual:\n\n%s"
-              (get_ast_printer (PrintSexp sexp_of_unit) e)
-              (get_ast_printer (PrintSexp sexp_of_unit) prog.e)
+              (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) e)
+              (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) prog.e)
       | Error err ->
           Test.fail_reportf "Got frontend error: %s"
             (err |> sexp_of_frontend_error |> Sexp.to_string))
@@ -145,36 +146,185 @@ let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
     (type_eq : 'a -> 'a -> bool) =
   let open QCheck in
   Test.make ~count:100
-    (pair type_arb plain_ast_expr_arb_any_default_type_ctx_params)
-    (fun (x, (_, e_raw)) ->
+    (pair type_arb unit_program_arbitrary_with_default_options)
+    (fun (x, prog) ->
+      let e_raw = prog.e in
       let e = fmap ~f:(const x) e_raw in
       type_eq (expr_node_val e) x)
 
-let create_test_cases_expr_node_map_val (t1_arb : 'a QCheck.arbitrary)
-    (t1_obs : 'a QCheck.Observable.t) (t1_sexp : 'a -> Sexp.t)
-    (t1_eq : 'b -> 'b -> bool) =
-  let open QCheck in
-  Test.make ~count:100
-    (pair (fun1 t1_obs t1_arb)
-       (ast_expr_arb_default_type_ctx_params (PrintSexp t1_sexp)
-          (QCheck.get_gen t1_arb)))
-    (fun (f_, (_, e)) ->
-      let f = QCheck.Fn.apply f_ in
-      let e' = expr_node_map_val ~f e in
-      t1_eq (expr_node_val e') (e |> expr_node_val |> f))
+module SingleTagged_tests =
+functor
+  (Tag : sig
+     type t
 
-let create_test_cases_expr_fmap_root (t1_arb : 'a QCheck.arbitrary)
-    (t1_obs : 'a QCheck.Observable.t) (t1_sexp : 'a -> Sexp.t)
-    (t2_arb : 'b QCheck.arbitrary) (t2_eq : 'b -> 'b -> bool) =
-  let open QCheck in
-  Test.make ~count:100
-    (triple t1_arb (fun1 t1_obs t2_arb)
-       (ast_expr_arb_default_type_ctx_params (PrintSexp t1_sexp)
-          (QCheck.gen t1_arb)))
-    (fun (x, f_, (_, e)) ->
-      let f = QCheck.Fn.apply f_ in
-      let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
-      t2_eq (expr_node_val e') (f x))
+     val arb : t QCheck.arbitrary
+     val obs : t QCheck.Observable.t
+     val sexp : t -> Sexp.t
+     val eq : t -> t -> bool
+   end)
+  ->
+  struct
+    module Program_qcheck_testing = Program.QCheck_testing (Tag)
+
+    let create_test_cases_expr_node_map_val =
+      let open QCheck in
+      Test.make ~count:100
+        (pair (fun1 Tag.obs Tag.arb)
+           (Program_qcheck_testing.arbitrary
+              {
+                gen =
+                  {
+                    mrd = default_max_gen_rec_depth;
+                    max_custom_types = default_max_custom_type_count;
+                    max_custom_type_constructors =
+                      default_max_custom_type_constructor_count;
+                    ast_type = None;
+                    v_gen = QCheck.get_gen Tag.arb;
+                  };
+                print = PrintSexp Tag.sexp;
+                shrink = { preserve_type = false };
+              }))
+        (fun (f_, prog) ->
+          let e = prog.e in
+          let f = QCheck.Fn.apply f_ in
+          let e' = expr_node_map_val ~f e in
+          Tag.eq (expr_node_val e') (e |> expr_node_val |> f))
+  end
+
+module DoubleTagged_tests =
+functor
+  (Tag1 : sig
+     type t
+
+     val arb : t QCheck.arbitrary
+     val obs : t QCheck.Observable.t
+     val sexp : t -> Sexp.t
+   end)
+  (Tag2 : sig
+     type t
+
+     val arb : t QCheck.arbitrary
+     val eq : t -> t -> bool
+   end)
+  ->
+  struct
+    module Tag1_program_qcheck_testing = Program.QCheck_testing (Tag1)
+
+    let create_test_cases_expr_fmap_root =
+      let open QCheck in
+      Test.make ~count:100
+        (triple Tag1.arb (fun1 Tag1.obs Tag2.arb)
+           (Tag1_program_qcheck_testing.arbitrary
+              {
+                gen =
+                  {
+                    mrd = default_max_gen_rec_depth;
+                    max_custom_types = default_max_custom_type_count;
+                    max_custom_type_constructors =
+                      default_max_custom_type_constructor_count;
+                    ast_type = None;
+                    v_gen = QCheck.get_gen Tag1.arb;
+                  };
+                print = PrintSexp Tag1.sexp;
+                shrink = { preserve_type = false };
+              }))
+        (fun (x, f_, prog) ->
+          let e = prog.e in
+          let f = QCheck.Fn.apply f_ in
+          let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
+          Tag2.eq (expr_node_val e') (f x))
+  end
+
+module Unit_singletagged_tests = SingleTagged_tests (struct
+  type t = unit
+
+  let arb = QCheck.unit
+  let obs = QCheck.Observable.unit
+  let sexp = sexp_of_unit
+  let eq = equal_unit
+end)
+
+module Int_singletagged_tests = SingleTagged_tests (struct
+  type t = int
+
+  let arb = QCheck.int
+  let obs = QCheck.Observable.int
+  let sexp = sexp_of_int
+  let eq = equal_int
+end)
+
+module String_singletagged_tests = SingleTagged_tests (struct
+  type t = string
+
+  let arb = QCheck.string
+  let obs = QCheck.Observable.string
+  let sexp = sexp_of_string
+  let eq = equal_string
+end)
+
+module UnitInt_doubletagged_tests =
+  DoubleTagged_tests
+    (struct
+      type t = unit
+
+      let arb = QCheck.unit
+      let obs = QCheck.Observable.unit
+      let sexp = sexp_of_unit
+    end)
+    (struct
+      type t = int
+
+      let arb = QCheck.int
+      let eq = equal_int
+    end)
+
+module IntString_doubletagged_tests =
+  DoubleTagged_tests
+    (struct
+      type t = int
+
+      let arb = QCheck.int
+      let obs = QCheck.Observable.int
+      let sexp = sexp_of_int
+    end)
+    (struct
+      type t = string
+
+      let arb = QCheck.string
+      let eq = equal_string
+    end)
+
+module BoolInt_doubletagged_tests =
+  DoubleTagged_tests
+    (struct
+      type t = bool
+
+      let arb = QCheck.bool
+      let obs = QCheck.Observable.bool
+      let sexp = sexp_of_bool
+    end)
+    (struct
+      type t = int
+
+      let arb = QCheck.int
+      let eq = equal_int
+    end)
+
+module StringInt_doubletagged_tests =
+  DoubleTagged_tests
+    (struct
+      type t = string
+
+      let arb = QCheck.string
+      let obs = QCheck.Observable.string
+      let sexp = sexp_of_string
+    end)
+    (struct
+      type t = int
+
+      let arb = QCheck.int
+      let eq = equal_int
+    end)
 
 let suite =
   "AST Tests"
@@ -209,14 +359,14 @@ let suite =
                   name >::: [ QCheck_runner.to_ounit2_test test ])
                 [
                   ( "unit",
-                    create_test_cases_expr_node_map_val QCheck.unit
-                      QCheck.Observable.unit sexp_of_unit equal_unit );
+                    Unit_singletagged_tests.create_test_cases_expr_node_map_val
+                  );
                   ( "int",
-                    create_test_cases_expr_node_map_val QCheck.int
-                      QCheck.Observable.int sexp_of_int equal_int );
+                    Int_singletagged_tests.create_test_cases_expr_node_map_val
+                  );
                   ( "string",
-                    create_test_cases_expr_node_map_val QCheck.string
-                      QCheck.Observable.string sexp_of_string equal_string );
+                    String_singletagged_tests
+                    .create_test_cases_expr_node_map_val );
                 ];
          "AST fmap root"
          >::: List.map
@@ -224,20 +374,16 @@ let suite =
                   name >::: [ QCheck_runner.to_ounit2_test test ])
                 [
                   ( "unit -> int",
-                    create_test_cases_expr_fmap_root QCheck.unit
-                      QCheck.Observable.unit sexp_of_unit QCheck.int equal_int
+                    UnitInt_doubletagged_tests.create_test_cases_expr_fmap_root
                   );
                   ( "int -> string",
-                    create_test_cases_expr_fmap_root QCheck.int
-                      QCheck.Observable.int sexp_of_int QCheck.string
-                      equal_string );
+                    IntString_doubletagged_tests
+                    .create_test_cases_expr_fmap_root );
                   ( "bool -> int",
-                    create_test_cases_expr_fmap_root QCheck.bool
-                      QCheck.Observable.bool sexp_of_bool QCheck.int equal_int
+                    BoolInt_doubletagged_tests.create_test_cases_expr_fmap_root
                   );
                   ( "string -> int",
-                    create_test_cases_expr_fmap_root QCheck.string
-                      QCheck.Observable.string sexp_of_string QCheck.int
-                      equal_int );
+                    StringInt_doubletagged_tests
+                    .create_test_cases_expr_fmap_root );
                 ];
        ]

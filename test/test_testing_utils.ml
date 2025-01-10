@@ -2,11 +2,29 @@ open Core
 open OUnit2
 open QCheck
 open Pq_lang
+open Utils
 open Vtype
-open Custom_types
 open Ast
 open Typing
 open Testing_utils
+
+let vtype_gen (type_ctx : TestingTypeCtx.t) =
+  Vtype.QCheck_testing.gen
+    {
+      custom_types =
+        TestingTypeCtx.customs_to_list type_ctx
+        |> List.map ~f:fst |> StringSet.of_list;
+      mrd = default_max_gen_rec_depth;
+    }
+
+let vtype_arb (type_ctx : TestingTypeCtx.t) =
+  Vtype.QCheck_testing.arbitrary
+    {
+      custom_types =
+        TestingTypeCtx.customs_to_list type_ctx
+        |> List.map ~f:fst |> StringSet.of_list;
+      mrd = default_max_gen_rec_depth;
+    }
 
 let create_test_expr_shrink_can_preserve_type (name : string) : test =
   let open QCheck in
@@ -14,10 +32,12 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
     (Test.make ~name ~count:100
        (let open QCheck.Gen in
         let gen : (TestingTypeCtx.t * 'a expr * 'a expr) option Gen.t =
-          get_gen
-            (ast_expr_arb_default_type_ctx_params PrintExprSource Gen.unit)
-          >>= fun (type_ctx, e) ->
-          let shrinks : 'a expr Iter.t = expr_shrink ~preserve_type:true e in
+          get_gen unit_program_arbitrary_with_default_options >>= fun prog ->
+          let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
+          let e = prog.e in
+          let shrinks : 'a expr Iter.t =
+            Unit_ast_qcheck_testing.shrink { preserve_type = true } e
+          in
           let shrinks_list_opt : 'a expr list =
             let xs = ref [] in
             shrinks (fun x -> xs := x :: !xs);
@@ -39,7 +59,9 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                   (ast_to_source_code ~use_newlines:true e_shrunk))
           ~shrink:
             QCheck.Shrink.(
-              option (triple nil nil (expr_shrink ~preserve_type:true)))
+              option
+                (triple nil nil
+                   (Unit_ast_qcheck_testing.shrink { preserve_type = true })))
           gen)
        (function
          | None -> true
@@ -94,8 +116,14 @@ let create_typed_expr_gen_test (name : string)
        (let open QCheck.Gen in
         let gen : (TestingTypeCtx.t * (vtype * unit Ast.expr)) QCheck.Gen.t =
           types_gen >>= fun (type_ctx, t) ->
-          QCheck.gen (ast_expr_arb ~type_ctx ~t NoPrint Gen.unit) >|= fun e ->
-          (type_ctx, (t, e))
+          Unit_ast_qcheck_testing.gen
+            {
+              t = Some t;
+              custom_types = TestingTypeCtx.customs_to_list type_ctx;
+              v_gen = QCheck.Gen.unit;
+              mrd = default_max_gen_rec_depth;
+            }
+          >|= fun e -> (type_ctx, (t, e))
         in
         QCheck.make
           ~print:(fun (type_ctx, (t, e)) ->
@@ -105,7 +133,9 @@ let create_typed_expr_gen_test (name : string)
               (ast_to_source_code ~use_newlines:true e))
           ~shrink:
             QCheck.Shrink.(
-              pair nil (pair nil (expr_shrink ~preserve_type:true)))
+              pair nil
+                (pair nil
+                   (Unit_ast_qcheck_testing.shrink { preserve_type = true })))
           gen)
        (fun (type_ctx, (t, e)) ->
          match TestingTypeChecker.check_type_ctx type_ctx with
@@ -138,16 +168,11 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
     (Test.make ~name ~count:1000
        (QCheck.make
           ~print:
-            (Core.Fn.compose Sexp.to_string
-               (let sexp_of_type_ctx (type_ctx : TestingTypeCtx.t) : Sexp.t =
-                  TestingTypeCtx.customs_to_list type_ctx
-                  |> sexp_of_list sexp_of_custom_type
-                in
-                sexp_of_pair sexp_of_type_ctx sexp_of_vtype))
+            QCheck.Print.(
+              pair (TestingTypeCtx.QCheck_testing.print ()) vtype_to_source_code)
           QCheck.Gen.(
             default_testing_type_ctx_gen >>= fun type_ctx ->
-            vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth >|= fun t ->
-            (type_ctx, t)))
+            vtype_gen type_ctx >|= fun t -> (type_ctx, t)))
        (fun (type_ctx, t) ->
          match t with
          | VTypeCustom ct_name -> TestingTypeCtx.custom_exists type_ctx ct_name
@@ -157,9 +182,15 @@ let create_test_type_ctx_gen_valid (name : string) : test =
   let open QCheck in
   QCheck_runner.to_ounit2_test
     (Test.make ~name ~count:1000
-       (testing_type_ctx_arb ~max_custom_types:default_max_custom_type_count
-          ~max_constructors:default_max_custom_type_constructor_count
-          ~mrd:default_max_gen_rec_depth) (fun type_ctx ->
+       (TestingTypeCtx.QCheck_testing.arbitrary
+          {
+            max_custom_types = default_max_custom_type_count;
+            max_constructors = default_max_custom_type_constructor_count;
+            mrd = default_max_gen_rec_depth;
+          }
+       |> (* Don't allow shrinking as we are considering the generated type contexts *)
+       QCheck.set_shrink QCheck.Shrink.nil)
+       (fun type_ctx ->
          match TestingTypeChecker.check_type_ctx type_ctx with
          | Ok _ -> true
          | Error err ->
@@ -177,12 +208,12 @@ let create_list_impl_var_ctx (xs : (string * vtype) list) :
 
 let var_ctx_list_arb ~(type_ctx : TestingTypeCtx.t) =
   let open QCheck in
-  list (pair string (vtype_arb ~type_ctx ~mrd:default_max_gen_rec_depth))
+  list (pair string (vtype_arb type_ctx))
 
 (* TODO - test that TestingTypeChecker types things the same as the SimpleTypeChecker *)
 
 let suite =
-  "Utilities Tests"
+  "Testing Utilities Tests"
   >::: [
          "Value type generator"
          >::: [ create_test_vtype_gen_constructors_exist "Custom types exist" ];
@@ -196,16 +227,12 @@ let suite =
                 create_typed_expr_gen_test "'a -> 'b"
                   Gen.(
                     default_testing_type_ctx_gen >>= fun type_ctx ->
-                    pair
-                      (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-                      (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
+                    pair (vtype_gen type_ctx) (vtype_gen type_ctx)
                     >|= fun (t1, t2) -> (type_ctx, VTypeFun (t1, t2)));
                 create_typed_expr_gen_test "'a * 'b"
                   Gen.(
                     default_testing_type_ctx_gen >>= fun type_ctx ->
-                    pair
-                      (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
-                      (vtype_gen ~type_ctx ~mrd:default_max_gen_rec_depth)
+                    pair (vtype_gen type_ctx) (vtype_gen type_ctx)
                     >|= fun (t1, t2) -> (type_ctx, VTypePair (t1, t2)));
               ];
        ]
