@@ -97,4 +97,23 @@ in
 end
 |},
              Ok (Int 10) );
+           ( "Program very recursive custom data type",
+             {|
+type my_type =
+  | A of my_type
+  | B of (my_type * int)
+  | C of (int * my_type)
+  | D of unit
+
+let x1 =
+  A (A (B (D (), 5)))
+in
+  let x2 =
+    C (3, A (A (D ())))
+  in
+    ()
+  end
+end
+|},
+             Ok Unit );
          ]
