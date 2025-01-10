@@ -5,6 +5,8 @@ module StringSet : Set.S with type Elt.t = String.t
 val lexer_keywords : string list
 
 module QCheck_utils : sig
+  exception Filter_ran_out_of_attempts
+
   (** Filter a generator so that it keeps trying until the generated value satisfies the specified predicate.
     NOTE - this has a risk of causing infinite or near-infinite looping in testing *)
   val filter_gen :

@@ -23,6 +23,8 @@ let lexer_keywords : string list =
   ]
 
 module type QCheck_utils_sig = sig
+  exception Filter_ran_out_of_attempts
+
   val filter_gen :
     ?max_attempts:int -> 'a QCheck.Gen.t -> f:('a -> bool) -> 'a QCheck.Gen.t
 
@@ -39,6 +41,8 @@ module type QCheck_utils_sig = sig
 end
 
 module QCheck_utils : QCheck_utils_sig = struct
+  exception Filter_ran_out_of_attempts
+
   let filter_gen ?(max_attempts : int option) (x_gen : 'a QCheck.Gen.t)
       ~(f : 'a -> bool) : 'a QCheck.Gen.t =
     let open QCheck.Gen in
@@ -48,7 +52,7 @@ module QCheck_utils : QCheck_utils_sig = struct
           (* Termination check *)
           match n_opt with
           | None -> ()
-          | Some n -> if n < 0 then failwith "Filter ran out of attempts"
+          | Some n -> if n < 0 then raise Filter_ran_out_of_attempts
         in
         x_gen >>= fun x ->
         if f x then return x else self (Option.map n_opt ~f:(fun n -> n - 1)))
