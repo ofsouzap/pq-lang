@@ -75,7 +75,7 @@ end = struct
     let open QCheck.Gen in
     int_range 0 max_custom_types >>= fun (n : int) ->
     fix
-      (fun self ((acc : gen_custom_types_list_acc), (n : int)) ->
+      (fun self ((n : int), (acc : gen_custom_types_list_acc)) ->
         if n <= 0 then return acc.custom_types
         else
           Custom_types.QCheck_testing.gen
@@ -87,20 +87,20 @@ end = struct
             }
           >>= fun ((ct_name, cs) as ct) ->
           self
-            ( {
+            ( n - 1,
+              {
                 custom_types = ct :: acc.custom_types;
                 custom_type_names = Set.add acc.custom_type_names ct_name;
                 constructor_names =
                   List.fold cs ~init:acc.constructor_names
                     ~f:(fun acc (c_name, _) -> Set.add acc c_name);
-              },
-              n - 1 ))
-      ( {
+              } ))
+      ( n,
+        {
           custom_types = [];
           custom_type_names = StringSet.empty;
           constructor_names = StringSet.empty;
-        },
-        n )
+        } )
 
   let gen (opts : gen_options) : t QCheck.Gen.t =
     let open QCheck.Gen in

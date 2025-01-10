@@ -43,15 +43,11 @@ end = struct
 
   let custom_type_constructor_name_gen : string QCheck.Gen.t =
     let open QCheck.Gen in
-    fix
-      (fun self _ ->
-        int_range 0 5 >>= fun n ->
-        ( pair (char_range 'A' 'Z') (list_repeat n (char_range 'a' 'z'))
+    filter_gen ~max_attempts:10000
+      ~f:(List.mem lexer_keywords ~equal:String.equal)
+      ( int_range 0 5 >>= fun n ->
+        pair (char_range 'A' 'Z') (list_repeat n (char_range 'a' 'z'))
         >|= fun (h, ts) -> String.of_char h ^ String.of_char_list ts )
-        >>= fun s ->
-        if List.mem lexer_keywords s ~equal:String.equal then self ()
-        else return s)
-      ()
 
   let gen (opts : gen_options) : custom_type_constructor QCheck.Gen.t =
     (* Filtered so that the constructors don't exist already in the type context *)

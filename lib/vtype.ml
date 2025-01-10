@@ -46,13 +46,12 @@ end = struct
         let custom_type_exists = not (Set.is_empty opts.custom_types) in
         let base_cases =
           [ return VTypeUnit; return VTypeInt; return VTypeBool ]
-          @ Option.(
-              to_list
-                (if custom_type_exists then
-                   Some
-                     ( opts.custom_types |> Set.to_list |> oneofl >|= fun ct ->
-                       VTypeCustom ct )
-                 else None))
+          @ Option.to_list
+              (if custom_type_exists then
+                 Some
+                   ( opts.custom_types |> Set.to_list |> oneofl
+                   >|= fun ct_name -> VTypeCustom ct_name )
+               else None)
         in
         let rec_cases =
           [

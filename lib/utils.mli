@@ -5,20 +5,23 @@ module StringSet : Set.S with type Elt.t = String.t
 val lexer_keywords : string list
 
 module QCheck_utils : sig
-  (* A generator to take two values and keep generating until they are not equal *)
+  (** Filter a generator so that it keeps trying until the generated value satisfies the specified predicate.
+    NOTE - this has a risk of causing infinite or near-infinite looping in testing *)
+  val filter_gen :
+    ?max_attempts:int -> 'a QCheck.Gen.t -> f:('a -> bool) -> 'a QCheck.Gen.t
+
+  (** A generator to take two values and keep generating until they are not equal *)
   val gen_unique_pair :
-    equal:('a -> 'a -> bool) -> 'a QCheck.Gen.t -> ('a * 'a) QCheck.Gen.t
+    ?max_attempts:int ->
+    equal:('a -> 'a -> bool) ->
+    'a QCheck.Gen.t ->
+    ('a * 'a) QCheck.Gen.t
 
   (** Arbitrary generator for the result type *)
   val result_arb :
     'a QCheck.arbitrary ->
     'b QCheck.arbitrary ->
     ('a, 'b) Result.t QCheck.arbitrary
-
-  (** Filter a generator so that it keeps trying until the generated value satisfies the specified predicate.
-    NOTE - this has a risk of causing infinite or near-infinite looping in testing *)
-  val filter_gen :
-    ?max_attempts:int -> 'a QCheck.Gen.t -> f:('a -> bool) -> 'a QCheck.Gen.t
 end
 
 (** Module signature for the QCheck-related utilities for a program-related type.

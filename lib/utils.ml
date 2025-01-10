@@ -23,34 +23,22 @@ let lexer_keywords : string list =
   ]
 
 module type QCheck_utils_sig = sig
+  val filter_gen :
+    ?max_attempts:int -> 'a QCheck.Gen.t -> f:('a -> bool) -> 'a QCheck.Gen.t
+
   val gen_unique_pair :
-    equal:('a -> 'a -> bool) -> 'a QCheck.Gen.t -> ('a * 'a) QCheck.Gen.t
+    ?max_attempts:int ->
+    equal:('a -> 'a -> bool) ->
+    'a QCheck.Gen.t ->
+    ('a * 'a) QCheck.Gen.t
 
   val result_arb :
     'a QCheck.arbitrary ->
     'b QCheck.arbitrary ->
     ('a, 'b) Result.t QCheck.arbitrary
-
-  val filter_gen :
-    ?max_attempts:int -> 'a QCheck.Gen.t -> f:('a -> bool) -> 'a QCheck.Gen.t
 end
 
 module QCheck_utils : QCheck_utils_sig = struct
-  let gen_unique_pair ~(equal : 'a -> 'a -> bool) (g : 'a QCheck.Gen.t) :
-      ('a * 'a) QCheck.Gen.t =
-    let open QCheck.Gen in
-    fix
-      (fun self _ ->
-        g >>= fun x ->
-        g >>= fun y -> if equal x y then self () else return (x, y))
-      ()
-
-  let result_arb (x_arb : 'a QCheck.arbitrary) (y_arb : 'b QCheck.arbitrary) :
-      ('a, 'b) Result.t QCheck.arbitrary =
-    QCheck.map
-      (fun (b, x, y) -> if b then Ok x else Error y)
-      (QCheck.triple QCheck.bool x_arb y_arb)
-
   let filter_gen ?(max_attempts : int option) (x_gen : 'a QCheck.Gen.t)
       ~(f : 'a -> bool) : 'a QCheck.Gen.t =
     let open QCheck.Gen in
@@ -65,6 +53,20 @@ module QCheck_utils : QCheck_utils_sig = struct
         x_gen >>= fun x ->
         if f x then return x else self (Option.map n_opt ~f:(fun n -> n - 1)))
       max_attempts
+
+  let gen_unique_pair ?(max_attempts : int option) ~(equal : 'a -> 'a -> bool)
+      (g : 'a QCheck.Gen.t) : ('a * 'a) QCheck.Gen.t =
+    let open QCheck.Gen in
+    filter_gen
+      ~max_attempts:(Option.value ~default:10000 max_attempts)
+      ~f:(fun (x, y) -> not (equal x y))
+      (pair g g)
+
+  let result_arb (x_arb : 'a QCheck.arbitrary) (y_arb : 'b QCheck.arbitrary) :
+      ('a, 'b) Result.t QCheck.arbitrary =
+    QCheck.map
+      (fun (b, x, y) -> if b then Ok x else Error y)
+      (QCheck.triple QCheck.bool x_arb y_arb)
 end
 
 module type QCheck_testing_sig = sig
