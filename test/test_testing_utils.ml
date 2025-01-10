@@ -4,7 +4,6 @@ open QCheck
 open Pq_lang
 open Utils
 open Vtype
-open Custom_types
 open Ast
 open Typing
 open Testing_utils
@@ -169,12 +168,8 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
     (Test.make ~name ~count:1000
        (QCheck.make
           ~print:
-            (Core.Fn.compose Sexp.to_string
-               (let sexp_of_type_ctx (type_ctx : TestingTypeCtx.t) : Sexp.t =
-                  TestingTypeCtx.customs_to_list type_ctx
-                  |> sexp_of_list sexp_of_custom_type
-                in
-                sexp_of_pair sexp_of_type_ctx sexp_of_vtype))
+            QCheck.Print.(
+              pair (TestingTypeCtx.QCheck_testing.print ()) vtype_to_source_code)
           QCheck.Gen.(
             default_testing_type_ctx_gen >>= fun type_ctx ->
             vtype_gen type_ctx >|= fun t -> (type_ctx, t)))
