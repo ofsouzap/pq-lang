@@ -101,3 +101,34 @@ module type Nonempty_list_sig = sig
 end
 
 module Nonempty_list : Nonempty_list_sig
+
+module type SourceCodeBuilderSig = sig
+  (** Type describing a state of the builder *)
+  type state
+
+  (** Utility operator for chaining functions. Useful for chaining state operators *)
+  val ( |.> ) : ('a -> 'b) -> ('b -> 'c) -> 'a -> 'c
+
+  (** Create the initial state from the given initial parameters *)
+  val init : use_newlines:bool -> state
+
+  (** Write text to the builder *)
+  val write : string -> state -> state
+
+  (** If the current line has contents,
+  create a new empty one with the current indent level,
+  otherwise just set the line's indent level to the current indent level *)
+  val endline : state -> state
+
+  (** Wrap a state operator in a block to make a block of code *)
+  val block : (state -> state) -> state -> state
+
+  (** Build the state into the source code output *)
+  val build : state -> string
+
+  (** Shortcut for creating a source code builder from a conversion function that returns state operators for given inputs *)
+  val from_converter :
+    converter:('a -> state -> state) -> use_newlines:bool -> 'a -> string
+end
+
+module SourceCodeBuilder : SourceCodeBuilderSig

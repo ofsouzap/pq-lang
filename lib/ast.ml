@@ -138,51 +138,10 @@ let rec expr_to_plain_expr (e : 'a expr) : plain_expr =
 
 exception AstConverionFixError
 
-module AstToSourceCodeConverter : sig
-  val ast_to_source_code : use_newlines:bool -> 'a expr -> string
-end = struct
-  type builder = (int * string) list
-  type param = { builder : builder; use_newlines : bool; indent_level : int }
-
-  let ( |.> ) (f1 : 'a -> 'b) (f2 : 'b -> 'c) : 'a -> 'c = Fn.compose f2 f1
-
-  let create_param ~(use_newlines : bool) : param =
-    { builder = []; use_newlines; indent_level = 0 }
-
-  let write (s : string) (p : param) : param =
-    {
-      p with
-      builder =
-        (match p.builder with
-        | [] -> [ (0, s) ]
-        | (h_indent, h_str) :: t -> (h_indent, h_str ^ s) :: t);
-    }
-
-  (** If the current line has contents,
-  create a new empty one with the current indent level,
-  otherwise just set the line's indent level to the current indent level *)
-  let endline (p : param) : param =
-    match p.builder with
-    | [] -> (* No lines exist *) p
-    | (_, "") :: ts ->
-        (* Current line is empty *)
-        { p with builder = (p.indent_level, "") :: ts }
-    | _ :: _ ->
-        (* Current line is non-empty *)
-        { p with builder = (p.indent_level, "") :: p.builder }
-
-  (** Write a "block" of source code. This will have an increased indent size for the block and start and end with newlines *)
-  let block (f : param -> param) : param -> param =
-    let indent_up (p : param) : param =
-      { p with indent_level = p.indent_level + 1 }
-    in
-    let indent_down (p : param) : param =
-      { p with indent_level = max 0 (p.indent_level - 1) }
-    in
-    indent_up |.> endline |.> f |.> indent_down |.> endline
-
-  let rec convert ?(bracketed : bool option) (orig_e : 'a expr) (p : param) :
-      param =
+let ast_to_source_code ?(use_newlines : bool option) : 'a expr -> string =
+  let rec convert ?(bracketed : bool option) (orig_e : 'a expr)
+      (p : SourceCodeBuilder.state) : SourceCodeBuilder.state =
+    let open SourceCodeBuilder in
     let bracketed = Option.value bracketed ~default:true in
     p
     |> (if bracketed then write "(" else Fn.id)
@@ -212,7 +171,7 @@ end = struct
            |.> write "end"
        | Var (_, vname) -> write vname
        | Let (_, xname, e1, e2) -> (
-           let default_repr : param -> param =
+           let default_repr : state -> state =
              write "let " |.> write xname |.> write " = "
              |.> block (convert e1)
              |.> write "in"
@@ -246,16 +205,16 @@ end = struct
        | App (_, e1, e2) -> convert e1 |.> write " " |.> convert e2
        | Fix _ -> raise AstConverionFixError
        | Match (_, e, cs) ->
-           let convert_case ((p : pattern), (c_e : 'a expr)) : param -> param =
+           let convert_case ((p : pattern), (c_e : 'a expr)) : state -> state =
              write "| ("
              |.> write (pattern_to_source_code p)
              |.> write ") ->"
              |.> block (convert c_e)
            in
-           let blocked_converted_cases : (param -> param) Nonempty_list.t =
+           let blocked_converted_cases : (state -> state) Nonempty_list.t =
              Nonempty_list.map ~f:(convert_case |.> block) cs
            in
-           let cases_converter : param -> param =
+           let cases_converter : state -> state =
              Nonempty_list.fold ~init:Fn.id ~f:( |.> ) blocked_converted_cases
            in
            write "match"
@@ -263,22 +222,8 @@ end = struct
            |.> write "with" |.> block cases_converter |.> write "end"
        | Constructor (_, cname, e) -> write cname |.> convert e)
     |> if bracketed then write ")" else Fn.id
-
-  let build (p : param) : string =
-    let build_fun : (int * string) list -> string =
-      if p.use_newlines then
-        List.map ~f:(fun (indent, str) -> String.make (indent * 2) ' ' ^ str)
-        |.> String.concat ~sep:"\n"
-      else List.map ~f:snd |.> String.concat ~sep:" "
-    in
-    p.builder |> List.rev |> build_fun
-
-  let ast_to_source_code ~(use_newlines : bool) (orig_e : 'a expr) : string =
-    convert ~bracketed:false orig_e (create_param ~use_newlines) |> build
-end
-
-let ast_to_source_code ?(use_newlines : bool option) : 'a expr -> string =
-  AstToSourceCodeConverter.ast_to_source_code
+  in
+  SourceCodeBuilder.from_converter ~converter:(convert ~bracketed:false)
     ~use_newlines:(Option.value ~default:true use_newlines)
 
 module QCheck_testing (Tag : sig
