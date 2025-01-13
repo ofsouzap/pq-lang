@@ -377,6 +377,8 @@ functor
               Ok (Fix ((ftype, v), fvals, xvals, e'))
             else Error (TypeMismatch (ftype1, xtype))
         | Match (v, e, cs) ->
+            (* TODO - if matching on a value of a type related to a quotient type (ie directly a quotient type or e.g. a pair including a quotient type)
+               then the pattern can only have a depth of one (ie. can't deconstruct more than once), so that the quotient type-checking isn't overly complicated *)
             type_expr ctx e >>= fun e' ->
             let t_in = e_type e' in
             (* Type the cases and check them against each other, as well as determining the type of the output *)
