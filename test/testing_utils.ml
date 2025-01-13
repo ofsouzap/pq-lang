@@ -28,6 +28,7 @@ let sexp_of_token = function
   | MATCH -> Sexp.Atom "MATCH"
   | WITH -> Sexp.Atom "WITH"
   | TYPE -> Sexp.Atom "TYPE"
+  | QTYPE -> Sexp.Atom "QTYPE"
   | OF -> Sexp.Atom "OF"
   | PLUS -> Sexp.Atom "PLUS"
   | MINUS -> Sexp.Atom "MINUS"
@@ -44,9 +45,11 @@ let sexp_of_token = function
   | LT -> Sexp.Atom "LT"
   | LTEQ -> Sexp.Atom "LTEQ"
   | ARROW -> Sexp.Atom "ARROW"
+  | BIG_ARROW -> Sexp.Atom "BIG_ARROW"
   | COLON -> Sexp.Atom "COLON"
   | COMMA -> Sexp.Atom "COMMA"
   | PIPE -> Sexp.Atom "PIPE"
+  | QUOTIENT -> Sexp.Atom "QUOTIENT"
   | UNIT_VAL -> Sexp.Atom "UNIT_VAL"
   | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
   | LNAME n -> Sexp.List [ Sexp.Atom "LNAME"; Sexp.Atom n ]

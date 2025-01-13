@@ -19,6 +19,7 @@ let lexer_keywords : string list =
     "match";
     "with";
     "type";
+    "qtype";
     "of";
   ]
 
