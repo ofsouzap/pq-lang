@@ -205,3 +205,68 @@ module Nonempty_list : Nonempty_list_sig = struct
       QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen ())
   end
 end
+
+module type SourceCodeBuilderSig = sig
+  type state
+
+  val ( |.> ) : ('a -> 'b) -> ('b -> 'c) -> 'a -> 'c
+  val init : use_newlines:bool -> state
+  val write : string -> state -> state
+  val endline : state -> state
+  val block : (state -> state) -> state -> state
+  val build : state -> string
+
+  val from_converter :
+    converter:('a -> state -> state) -> use_newlines:bool -> 'a -> string
+end
+
+module SourceCodeBuilder : SourceCodeBuilderSig = struct
+  type builder = (int * string) list
+  type state = { builder : builder; use_newlines : bool; indent_level : int }
+
+  let ( |.> ) (f1 : 'a -> 'b) (f2 : 'b -> 'c) : 'a -> 'c = Fn.compose f2 f1
+
+  let init ~(use_newlines : bool) : state =
+    { builder = []; use_newlines; indent_level = 0 }
+
+  let write (s : string) (p : state) : state =
+    {
+      p with
+      builder =
+        (match p.builder with
+        | [] -> [ (0, s) ]
+        | (h_indent, h_str) :: t -> (h_indent, h_str ^ s) :: t);
+    }
+
+  let endline (p : state) : state =
+    match p.builder with
+    | [] -> (* No lines exist *) p
+    | (_, "") :: ts ->
+        (* Current line is empty *)
+        { p with builder = (p.indent_level, "") :: ts }
+    | _ :: _ ->
+        (* Current line is non-empty *)
+        { p with builder = (p.indent_level, "") :: p.builder }
+
+  let block (f : state -> state) : state -> state =
+    let indent_up (p : state) : state =
+      { p with indent_level = p.indent_level + 1 }
+    in
+    let indent_down (p : state) : state =
+      { p with indent_level = max 0 (p.indent_level - 1) }
+    in
+    indent_up |.> endline |.> f |.> indent_down |.> endline
+
+  let build (p : state) : string =
+    let build_fun : (int * string) list -> string =
+      if p.use_newlines then
+        List.map ~f:(fun (indent, str) -> String.make (indent * 2) ' ' ^ str)
+        |.> String.concat ~sep:"\n"
+      else List.map ~f:snd |.> String.concat ~sep:" "
+    in
+    p.builder |> List.rev |> build_fun
+
+  let from_converter ~(converter : 'a -> state -> state) ~(use_newlines : bool)
+      (x : 'a) : string =
+    init ~use_newlines |> (x |> converter) |> build
+end
