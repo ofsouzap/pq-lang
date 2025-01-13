@@ -40,7 +40,12 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) =
   let tpe =
     match
       Typing.type_expr
-        ~type_ctx:(SetTypingTypeContext.create ~custom_types:prog.custom_types)
+        ~type_ctx:
+          (SetTypingTypeContext.create
+             ~custom_types:
+               (List.filter_map
+                  ~f:(function CustomType ct -> Some ct | _ -> None)
+                  prog.type_defns))
         prog.e
     with
     | Ok x -> x

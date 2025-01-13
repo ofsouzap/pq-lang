@@ -11,7 +11,11 @@ let () =
   | Ok prog -> (
       let open Typing in
       let type_ctx =
-        SetTypingTypeContext.create ~custom_types:prog.custom_types
+        SetTypingTypeContext.create
+          ~custom_types:
+            (List.filter_map
+               ~f:(function CustomType ct -> Some ct | _ -> None)
+               prog.type_defns)
       in
       match type_expr ~type_ctx prog.e with
       | Ok tpe ->

@@ -3,19 +3,31 @@ open Utils
 open Vtype
 open Custom_types
 open Ast
+open Quotient_types
 
-type 'a program = { custom_types : custom_type list; e : 'a expr }
+type type_defn = CustomType of custom_type | QuotientType of quotient_type
+[@@deriving sexp, equal]
+
+type 'a program = { type_defns : type_defn list; e : 'a expr }
 [@@deriving sexp, equal]
 
 type plain_program = unit program [@@deriving sexp, equal]
 
-let program_to_source_code (prog : 'a program) : string =
-  let custom_types_strs : string list =
-    List.map ~f:custom_type_to_source_code prog.custom_types
+let program_to_source_code ?(use_newlines : bool option) (prog : 'a program) :
+    string =
+  let type_defns_str : string list =
+    List.map
+      ~f:(function
+        | CustomType ct -> custom_type_to_source_code ct
+        | QuotientType qt -> quotient_type_to_source_code ?use_newlines qt)
+      prog.type_defns
   in
-  let e_str : string = ast_to_source_code prog.e in
-  let str_parts : string list = custom_types_strs @ [ e_str ] in
-  String.concat ~sep:"\n" str_parts
+  let e_str : string = ast_to_source_code ?use_newlines prog.e in
+  let str_parts : string list = type_defns_str @ [ e_str ] in
+  String.concat
+    ~sep:
+      (if (equal_option equal_bool) use_newlines (Some true) then "\n" else " ")
+    str_parts
 
 module QCheck_testing (Tag : sig
   type t
@@ -69,14 +81,16 @@ end = struct
     constructor_names : StringSet.t;
   }
 
-  let gen_custom_types_list ~(max_custom_types : int)
+  let gen_type_defns_list ~(max_custom_types : int)
       ~(max_custom_type_constructors : int) ~(mrd : int) :
-      custom_type list QCheck.Gen.t =
+      type_defn list QCheck.Gen.t =
+    (* TODO - allow this to generate quotient types too *)
     let open QCheck.Gen in
     int_range 0 max_custom_types >>= fun (n : int) ->
     fix
       (fun self ((n : int), (acc : gen_custom_types_list_acc)) ->
-        if n <= 0 then return acc.custom_types
+        if n <= 0 then
+          return (List.map ~f:(fun ct -> CustomType ct) acc.custom_types)
         else
           Custom_types.QCheck_testing.gen
             {
@@ -104,21 +118,29 @@ end = struct
 
   let gen (opts : gen_options) : t QCheck.Gen.t =
     let open QCheck.Gen in
-    gen_custom_types_list ~max_custom_types:opts.max_custom_types
+    gen_type_defns_list ~max_custom_types:opts.max_custom_types
       ~max_custom_type_constructors:opts.max_custom_type_constructors
       ~mrd:opts.mrd
-    >>= fun custom_types ->
+    >>= fun type_defns ->
     Ast_qcheck_testing.gen
-      { t = opts.ast_type; custom_types; v_gen = opts.v_gen; mrd = opts.mrd }
-    >|= fun e -> { custom_types; e }
+      {
+        t = opts.ast_type;
+        custom_types =
+          List.filter_map
+            ~f:(function CustomType ct -> Some ct | QuotientType _ -> None)
+            type_defns;
+        v_gen = opts.v_gen;
+        mrd = opts.mrd;
+      }
+    >|= fun e -> { type_defns; e }
 
   let print (print_method : print_options) : t QCheck.Print.t =
    fun prog ->
-    sprintf "[custom types: %s]\n%s"
+    sprintf "[type definitions: %s]\n%s"
       QCheck.Print.(
         list
-          (fun ct -> ct |> sexp_of_custom_type |> Sexp.to_string)
-          prog.custom_types)
+          (fun qt -> qt |> sexp_of_type_defn |> Sexp.to_string)
+          prog.type_defns)
       (Ast_qcheck_testing.print print_method prog.e)
 
   let shrink (opts : shrink_options) : t QCheck.Shrink.t =

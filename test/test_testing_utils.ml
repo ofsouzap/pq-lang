@@ -33,7 +33,13 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
        (let open QCheck.Gen in
         let gen : (TestingTypeCtx.t * 'a expr * 'a expr) option Gen.t =
           get_gen unit_program_arbitrary_with_default_options >>= fun prog ->
-          let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
+          let type_ctx =
+            Program.(
+              List.filter_map
+                ~f:(function CustomType ct -> Some ct | _ -> None)
+                prog.type_defns)
+            |> TestingTypeCtx.from_list
+          in
           let e = prog.e in
           let shrinks : 'a expr Iter.t =
             Unit_ast_qcheck_testing.shrink { preserve_type = true } e

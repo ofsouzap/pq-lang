@@ -31,9 +31,17 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 
 let add_custom_type_definition_to_program (p : plain_program) (ct : custom_type) : plain_program =
   {
-    custom_types = ct :: p.custom_types;
+    type_defns = (CustomType ct) :: p.type_defns;
     e = p.e
   }
+
+(*
+let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_type) : plain_program =
+  {
+    type_defns = p.type_defns @ [QuotientType qt];
+    e = p.e
+  }
+*)
 %}
 
 // Tokens
@@ -165,6 +173,6 @@ contained_expr:
 ;
 
 prog:
-  | e = expr EOF { { custom_types = []; e = e } }
+  | e = expr EOF { { type_defns = []; e = e } }
   | ct = custom_type_definition p = prog { add_custom_type_definition_to_program p ct }
 ;

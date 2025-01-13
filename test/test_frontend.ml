@@ -839,7 +839,7 @@ let test_cases_custom_type_defn : test_case_full_prog list =
 1
 |},
         [ INTLIT 1 ],
-        Ok { custom_types = []; e = IntLit ((), 1) } );
+        Ok { type_defns = []; e = IntLit ((), 1) } );
       ( (* Simple type definition *)
         {|
         type int_or_bool = Int of int | Bool of bool
@@ -861,8 +861,11 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            custom_types =
-              [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
+            type_defns =
+              [
+                CustomType
+                  ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+              ];
             e = IntLit ((), 1);
           } );
       ( (* Simple type definition (with leading pipe) *)
@@ -887,8 +890,11 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            custom_types =
-              [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
+            type_defns =
+              [
+                CustomType
+                  ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+              ];
             e = IntLit ((), 1);
           } );
       ( (* Incorrectly using upper-name for type name *)
@@ -954,13 +960,14 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            custom_types =
+            type_defns =
               [
-                ( "int_list",
-                  [
-                    ("Nil", VTypeUnit);
-                    ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                  ] );
+                CustomType
+                  ( "int_list",
+                    [
+                      ("Nil", VTypeUnit);
+                      ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                    ] );
               ];
             e = IntLit ((), 1);
           } );
@@ -1070,7 +1077,7 @@ let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
     test list =
   let f =
     Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
-        (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
+        (name, inp, tokens, Result.(ast >>| fun e -> { type_defns = []; e })))
   in
   [
     "Unit Value" >::: List.map ~f test_cases_unit_value;

@@ -2,16 +2,21 @@ open Utils
 open Vtype
 open Custom_types
 open Ast
+open Quotient_types
+
+(** A type definition in a program. Either a custom type definition or a quotient type definition *)
+type type_defn = CustomType of custom_type | QuotientType of quotient_type
+[@@deriving sexp, equal]
 
 (** A program, consisting of any number of custom type definitions and an expression to evaluate *)
-type 'a program = { custom_types : custom_type list; e : 'a expr }
+type 'a program = { type_defns : type_defn list; e : 'a expr }
 [@@deriving sexp, equal]
 
 (** A program with no tagging *)
 type plain_program = unit program [@@deriving sexp, equal]
 
-(** Convert a program into source code.  *)
-val program_to_source_code : 'a program -> string
+(** Convert a program into source code *)
+val program_to_source_code : ?use_newlines:bool -> 'a program -> string
 
 module QCheck_testing : functor
   (Tag : sig

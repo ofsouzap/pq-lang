@@ -70,6 +70,8 @@ module type TypingTypeContext = sig
   type t
 
   val empty : t
+
+  (* TODO - provide quotient types in type contexts *)
   val create : custom_types:custom_type list -> t
   val find_custom : t -> string -> custom_type option
   val custom_exists : t -> string -> bool

@@ -724,7 +724,13 @@ let test_cases_typing_maintains_structure : test =
   QCheck_ounit.to_ounit2_test
     (Test.make ~name:"Typing maintains structure" ~count:100
        unit_program_arbitrary_with_default_options (fun prog ->
-         let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
+         let type_ctx =
+           Program.(
+             List.filter_map
+               ~f:(function CustomType ct -> Some ct | _ -> None)
+               prog.type_defns)
+           |> TestingTypeCtx.from_list
+         in
          let e = prog.e in
          match TestingTypeChecker.check_type_ctx type_ctx with
          | Error err ->
