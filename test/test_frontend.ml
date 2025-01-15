@@ -826,7 +826,7 @@ let test_cases_match : test_case_no_variant_types list =
                        ( "Cons",
                          PatPair
                            ( PatName ("h", VTypeInt),
-                             PatName ("ts", VTypeVariant "int_list") ) ),
+                             PatName ("ts", VTypeCustom "int_list") ) ),
                      IntLit ((), 1) );
                  ] )) );
     ]
@@ -967,7 +967,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
                   ( "int_list",
                     [
                       ("Nil", VTypeUnit);
-                      ("Cons", VTypePair (VTypeInt, VTypeVariant "int_list"));
+                      ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
                     ] );
               ];
             e = IntLit ((), 1);
@@ -1111,8 +1111,7 @@ qtype mobile
                 ( "tree",
                   [
                     ("Leaf", VTypeInt);
-                    ( "Node",
-                      VTypePair (VTypeVariant "tree", VTypeVariant "tree") );
+                    ("Node", VTypePair (VTypeCustom "tree", VTypeCustom "tree"));
                   ] );
               QuotientType
                 {
@@ -1123,15 +1122,14 @@ qtype mobile
                       {
                         bindings =
                           [
-                            ("l", VTypeVariant "tree");
-                            ("r", VTypeVariant "tree");
+                            ("l", VTypeCustom "tree"); ("r", VTypeCustom "tree");
                           ];
                         body =
                           ( PatConstructor
                               ( "Node",
                                 PatPair
-                                  ( PatName ("l", VTypeVariant "tree"),
-                                    PatName ("r", VTypeVariant "tree") ) ),
+                                  ( PatName ("l", VTypeCustom "tree"),
+                                    PatName ("r", VTypeCustom "tree") ) ),
                             Constructor
                               ( (),
                                 "Node",
@@ -1195,7 +1193,7 @@ let test_cases_variant_type_referencing : test_case_no_variant_types list =
           LNAME "x";
           END;
         ],
-        Ok (Fun ((), ("x", VTypeVariant "int_or_bool"), Var ((), "x"))) );
+        Ok (Fun ((), ("x", VTypeCustom "int_or_bool"), Var ((), "x"))) );
       ( "fun (x : Int_or_bool) -> x end",
         [
           FUN;

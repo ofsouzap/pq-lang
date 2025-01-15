@@ -96,7 +96,7 @@ end = struct
       | VTypeBool -> gen_bool
       | VTypeFun (t1, t2) -> gen_fun (t1, t2)
       | VTypePair (t1, t2) -> gen_pair (t1, t2)
-      | VTypeVariant ct_name ->
+      | VTypeCustom ct_name ->
           gen_variant (opts.get_variant_type_constructors ct_name)
     in
     gen opts.t []

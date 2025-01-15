@@ -518,7 +518,7 @@ end = struct
     and gen_variant ((ct_name, cs) : variant_type)
         (param : int * (string * vtype) list) : Tag.t expr Gen.t =
       (* Generate an expression that types as the provided variant type *)
-      let t = VTypeVariant ct_name in
+      let t = VTypeCustom ct_name in
       fix
         (fun self (d, ctx) ->
           v_gen >>= fun v ->
@@ -541,7 +541,7 @@ end = struct
       | VTypeBool -> gen_bool (d, ctx)
       | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
       | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
-      | VTypeVariant ct_name ->
+      | VTypeCustom ct_name ->
           (Option.value_exn
              ~message:
                (sprintf

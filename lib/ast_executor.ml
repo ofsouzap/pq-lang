@@ -38,7 +38,7 @@ let rec value_type = function
   | Bool _ -> VTypeBool
   | Closure closure -> VTypeFun (snd closure.param, closure.out_type)
   | Pair (v1, v2) -> VTypePair (value_type v1, value_type v2)
-  | VariantTypeValue ((ct_name, _), _, _) -> VTypeVariant ct_name
+  | VariantTypeValue ((ct_name, _), _, _) -> VTypeCustom ct_name
 
 type typing_error = {
   expected_type : string option;

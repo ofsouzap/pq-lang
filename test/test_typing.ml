@@ -250,7 +250,7 @@ let test_cases_expr_typing : test list =
                    ( "int_list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeVariant "int_list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
                      ] );
                ]),
         Match
@@ -266,8 +266,8 @@ let test_cases_expr_typing : test list =
                   IntLit ((), 0) );
                 ( PatConstructor
                     ( "Cons",
-                      PatName
-                        ("x", VTypePair (VTypeInt, VTypeVariant "int_list")) ),
+                      PatName ("x", VTypePair (VTypeInt, VTypeCustom "int_list"))
+                    ),
                   IntLit ((), 1) );
               ] ),
         Ok VTypeInt );
@@ -286,8 +286,8 @@ let test_cases_expr_typing : test list =
                   IntLit ((), 0) );
                 ( PatConstructor
                     ( "Cons",
-                      PatName
-                        ("x", VTypePair (VTypeInt, VTypeVariant "int_list")) ),
+                      PatName ("x", VTypePair (VTypeInt, VTypeCustom "int_list"))
+                    ),
                   IntLit ((), 1) );
               ] ),
         Error (UndefinedVariantTypeConstructor "Nil") );
@@ -307,7 +307,7 @@ let test_cases_expr_typing : test list =
                    ( "list",
                      [
                        ("Leaf", VTypeInt);
-                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
                      ] );
                ]),
         Constructor ((), "Leaf", UnitLit ()),
@@ -320,11 +320,11 @@ let test_cases_expr_typing : test list =
                    ( "list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
                      ] );
                ]),
         Constructor ((), "Nil", UnitLit ()),
-        Ok (VTypeVariant "list") );
+        Ok (VTypeCustom "list") );
     ]
 
 let test_cases_expr_typing_full_check : test list =
@@ -696,13 +696,13 @@ let test_cases_arb_compound_expr_typing : test list =
                    ( "list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
                      ] );
                  VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeVariant "list"))
+            (return (VTypeCustom "list"))
             ( expr_gen ~type_ctx VTypeUnit >|= fun e1 ->
               Constructor ((), "Nil", e1) ) );
       ( "Constructor - list Cons",
@@ -714,14 +714,14 @@ let test_cases_arb_compound_expr_typing : test list =
                    ( "list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
                      ] );
                  VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeVariant "list"))
-            ( expr_gen ~type_ctx (VTypePair (VTypeInt, VTypeVariant "list"))
+            (return (VTypeCustom "list"))
+            ( expr_gen ~type_ctx (VTypePair (VTypeInt, VTypeCustom "list"))
             >|= fun e1 -> Constructor ((), "Cons", e1) ) );
       ( "Constructor - int_box",
         Some
@@ -732,13 +732,13 @@ let test_cases_arb_compound_expr_typing : test list =
                    ( "list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
                      ] );
                  VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeVariant "int_box"))
+            (return (VTypeCustom "int_box"))
             ( expr_gen ~type_ctx VTypeInt >|= fun e1 ->
               Constructor ((), "IntBox", e1) ) );
     ]

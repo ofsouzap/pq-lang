@@ -387,7 +387,7 @@ let test_cases_match : basic_test_case list =
                    ( "int_list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeVariant "int_list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
                      ] );
                ]),
         Match
@@ -408,7 +408,7 @@ let test_cases_match : basic_test_case list =
                    ( "int_list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeVariant "int_list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
                      ] );
                ]),
         Match
@@ -426,7 +426,7 @@ let test_cases_match : basic_test_case list =
                     ( "Cons",
                       PatPair
                         ( PatName ("x", VTypeInt),
-                          PatName ("y", VTypeVariant "int_list") ) ),
+                          PatName ("y", VTypeCustom "int_list") ) ),
                   Var ((), "x") );
               ] ),
         Ok (Int 7) );
@@ -449,9 +449,8 @@ let test_cases_constructor : basic_test_case list =
   in
   let ct_list : variant_type =
     ( "list",
-      [
-        ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
-      ] )
+      [ ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeCustom "list")) ]
+    )
   in
   let ct_int_box : variant_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
   List.map ~f:mapf

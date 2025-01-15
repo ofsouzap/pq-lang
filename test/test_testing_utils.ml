@@ -186,7 +186,7 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
             vtype_gen type_ctx >|= fun t -> (type_ctx, t)))
        (fun (type_ctx, t) ->
          match t with
-         | VTypeVariant ct_name ->
+         | VTypeCustom ct_name ->
              TestingTypeCtx.type_defn_exists type_ctx ct_name
          | _ -> true))
 

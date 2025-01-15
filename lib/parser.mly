@@ -104,7 +104,7 @@ vtype:
   | BOOL { VTypeBool }
   | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
   | t1 = vtype STAR t2 = vtype { VTypePair (t1, t2) }
-  | tname = LNAME { VTypeVariant tname }
+  | tname = LNAME { VTypeCustom tname }
 ;
 
 pattern:

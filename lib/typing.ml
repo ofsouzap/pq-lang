@@ -214,7 +214,7 @@ functor
       | VTypeInt | VTypeBool | VTypeUnit -> Ok ()
       | VTypePair (t1, t2) | VTypeFun (t1, t2) ->
           check_vtype ctx t1 >>= fun () -> check_vtype ctx t2
-      | VTypeVariant ct_name ->
+      | VTypeCustom ct_name ->
           if TypeCtx.find_type_defn_by_name ctx ct_name |> Option.is_some then
             Ok ()
           else UndefinedTypeName ct_name |> Error
@@ -240,7 +240,7 @@ functor
           | Some ((ct_name, _), (_, c_t)) ->
               type_pattern ctx p >>= fun (p_t, var_ctx_from_p) ->
               if equal_vtype c_t p_t then
-                Ok (VTypeVariant ct_name, var_ctx_from_p)
+                Ok (VTypeCustom ct_name, var_ctx_from_p)
               else Error (PatternTypeMismatch (p, c_t, p_t)))
 
     let type_expr :
@@ -436,7 +436,7 @@ functor
             | None -> Error (UndefinedVariantTypeConstructor c_name)
             | Some ((ct_name, _), (_, c_t)) ->
                 if equal_vtype c_t t1 then
-                  Ok (Constructor ((VTypeVariant ct_name, v), c_name, e1'))
+                  Ok (Constructor ((VTypeCustom ct_name, v), c_name, e1'))
                 else Error (TypeMismatch (c_t, t1)))
       in
       fun ((type_ctx, _) as ctx) orig_e ->

@@ -7,7 +7,7 @@ type vtype =
   | VTypeBool
   | VTypePair of vtype * vtype
   | VTypeFun of vtype * vtype
-  | VTypeVariant of string
+  | VTypeCustom of string
 [@@deriving sexp, equal]
 
 let rec vtype_to_source_code = function
@@ -20,7 +20,7 @@ let rec vtype_to_source_code = function
   | VTypeFun (t1, t2) ->
       Printf.sprintf "(%s) -> (%s)" (vtype_to_source_code t1)
         (vtype_to_source_code t2)
-  | VTypeVariant tname -> tname
+  | VTypeCustom tname -> tname
 
 module QCheck_testing : sig
   type gen_options = { variant_types : StringSet.t; mrd : int }
@@ -50,7 +50,7 @@ end = struct
               (if variant_type_exists then
                  Some
                    ( opts.variant_types |> Set.to_list |> oneofl
-                   >|= fun ct_name -> VTypeVariant ct_name )
+                   >|= fun ct_name -> VTypeCustom ct_name )
                else None)
         in
         let rec_cases =
@@ -67,7 +67,7 @@ end = struct
   let rec shrink () =
     let open QCheck.Iter in
     function
-    | VTypeUnit | VTypeInt | VTypeBool | VTypeVariant _ -> empty
+    | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> empty
     | VTypePair (t1, t2) ->
         return t1 <+> return t2
         <+> (shrink () t1 >|= fun t1' -> VTypePair (t1', t2))
