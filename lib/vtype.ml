@@ -23,7 +23,7 @@ let rec vtype_to_source_code = function
   | VTypeCustom tname -> tname
 
 module QCheck_testing : sig
-  type gen_options = { custom_types : StringSet.t; mrd : int }
+  type gen_options = { variant_types : StringSet.t; mrd : int }
 
   include
     Utils.QCheck_testing_sig
@@ -34,7 +34,7 @@ module QCheck_testing : sig
        and type arb_options := gen_options
 end = struct
   type t = vtype
-  type gen_options = { custom_types : StringSet.t; mrd : int }
+  type gen_options = { variant_types : StringSet.t; mrd : int }
   type print_options = unit
   type shrink_options = unit
   type arb_options = gen_options
@@ -43,14 +43,14 @@ end = struct
     let open QCheck.Gen in
     fix (fun self opts ->
         let self' = self { opts with mrd = opts.mrd - 1 } in
-        let custom_type_exists = not (Set.is_empty opts.custom_types) in
+        let variant_type_exists = not (Set.is_empty opts.variant_types) in
         let base_cases =
           [ return VTypeUnit; return VTypeInt; return VTypeBool ]
           @ Option.to_list
-              (if custom_type_exists then
+              (if variant_type_exists then
                  Some
-                   ( opts.custom_types |> Set.to_list |> oneofl
-                   >|= fun ct_name -> VTypeCustom ct_name )
+                   ( opts.variant_types |> Set.to_list |> oneofl
+                   >|= fun vt_name -> VTypeCustom vt_name )
                else None)
         in
         let rec_cases =

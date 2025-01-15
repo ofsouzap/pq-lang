@@ -1,8 +1,8 @@
-open Custom_types
+open Variant_types
 open Vtype
 open Pattern
 open Quotient_types
-open Program
+open Custom_types
 
 (** Typing errors *)
 type typing_error =
@@ -18,7 +18,7 @@ type typing_error =
       (** An application of the equality operation had a type mismatch as the operands had the specified types instead of compatible ones *)
   | ExpectedFunctionOf of vtype
       (** A value is used as a function but isn't a function. The expected input type of the function is the value *)
-  | UndefinedCustomTypeConstructor of string
+  | UndefinedVariantTypeConstructor of string
       (** The specified type constructor was used but hasn't been defined *)
   | PatternMultipleVariableDefinitions of string
       (** In a pattern, there are multiple definitions of some variable name *)
@@ -26,8 +26,8 @@ type typing_error =
       (** The specified type name has been defined multiple times *)
   | UndefinedTypeName of string
       (** The specified type name has been referenced but not defined *)
-  | MultipleCustomTypeConstructorDefinitions of string
-      (** The specified custom type constructor name has been defined multiple times *)
+  | MultipleVariantTypeConstructorDefinitions of string
+      (** The specified variant type constructor name has been defined multiple times *)
 [@@deriving sexp, equal]
 
 val equal_typing_error_variant : typing_error -> typing_error -> bool
@@ -41,20 +41,20 @@ module type TypingTypeContext = sig
   val empty : t
 
   (** Creates a typing context using the provided values *)
-  val create : type_defns:type_defn list -> (t, typing_error) Result.t
+  val create : custom_types:custom_type list -> (t, typing_error) Result.t
 
   (** Looks up a type definition, by name, in the context *)
-  val find_type_defn_by_name : t -> string -> type_defn option
+  val find_type_defn_by_name : t -> string -> custom_type option
 
   (** Check whether a type definition exists in the context, by name *)
   val type_defn_exists : t -> string -> bool
 
-  (** Find a custom type in the type context with a custom of the specified name. If multiple exist, only one is returned *)
-  val find_custom_type_with_constructor :
-    t -> string -> (custom_type * custom_type_constructor) option
+  (** Find a variant type in the type context with a variant of the specified name. If multiple exist, only one is returned *)
+  val find_variant_type_with_constructor :
+    t -> string -> (variant_type * variant_type_constructor) option
 
-  (** Get a list of the custom types defined in the context *)
-  val type_defns_to_list : t -> type_defn list
+  (** Get a list of the variant types defined in the context *)
+  val type_defns_to_list : t -> custom_type list
 end
 
 (** Typing context of types using a simple set-based approach *)

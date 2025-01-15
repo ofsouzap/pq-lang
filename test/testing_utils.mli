@@ -2,16 +2,16 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Quotient_types
-open Program
+open Custom_types
 open Typing
 
-(** A default maximum number of defined custom types *)
-val default_max_custom_type_count : int
+(** A default maximum number of defined variant types *)
+val default_max_variant_type_count : int
 
-(** A default maximum number of constructors for a custom type *)
-val default_max_custom_type_constructor_count : int
+(** A default maximum number of constructors for a variant type *)
+val default_max_variant_type_constructor_count : int
 
 (** A default maximum number of defined quotient types *)
 val default_max_quotient_type_count : int
@@ -34,24 +34,24 @@ val override_equal_exec_res :
 module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
-  (** Add a custom type to the type context *)
-  val add_custom : t -> custom_type -> t
+  (** Add a variant type to the type context *)
+  val add_variant : t -> variant_type -> t
 
   (** Add a quotient type to the type context *)
   val add_quotient : t -> quotient_type -> t
 
   (** Creates a type from a list *)
-  val from_list : type_defn list -> t
+  val from_list : custom_type list -> t
 
-  (** If there are any defined custom types, get a generator for a random one of them *)
-  val custom_gen_opt : t -> custom_type QCheck.Gen.t option
+  (** If there are any defined variant types, get a generator for a random one of them *)
+  val variant_gen_opt : t -> variant_type QCheck.Gen.t option
 
   (** Get the type context as a sexp *)
   val sexp_of_t : t -> Sexp.t
 
   module QCheck_testing : sig
     type gen_options = {
-      max_custom_types : int;
+      max_variant_types : int;
       max_constructors : int;
       max_quotient_types : int;
       mrd : int;

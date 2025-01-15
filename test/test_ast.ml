@@ -175,9 +175,9 @@ functor
                 gen =
                   {
                     mrd = default_max_gen_rec_depth;
-                    max_custom_types = default_max_custom_type_count;
-                    max_custom_type_constructors =
-                      default_max_custom_type_constructor_count;
+                    max_variant_types = default_max_variant_type_count;
+                    max_variant_type_constructors =
+                      default_max_variant_type_constructor_count;
                     ast_type = None;
                     v_gen = QCheck.get_gen Tag.arb;
                   };
@@ -219,9 +219,9 @@ functor
                 gen =
                   {
                     mrd = default_max_gen_rec_depth;
-                    max_custom_types = default_max_custom_type_count;
-                    max_custom_type_constructors =
-                      default_max_custom_type_constructor_count;
+                    max_variant_types = default_max_variant_type_count;
+                    max_variant_type_constructors =
+                      default_max_variant_type_constructor_count;
                     ast_type = None;
                     v_gen = QCheck.get_gen Tag1.arb;
                   };

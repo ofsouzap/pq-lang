@@ -10,7 +10,7 @@ open Parser
 open Frontend
 open Testing_utils
 
-type test_case_no_custom_types =
+type test_case_no_variant_types =
   string * string * token list * (plain_expr, frontend_error) Result.t
 
 type test_case_full_prog =
@@ -18,7 +18,7 @@ type test_case_full_prog =
 
 type test_case_precedence = string * string * Ast.plain_expr
 
-let test_cases_unit_value : test_case_no_custom_types list =
+let test_cases_unit_value : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -28,7 +28,7 @@ let test_cases_unit_value : test_case_no_custom_types list =
         Ok (Add ((), UnitLit (), IntLit ((), 5))) );
     ]
 
-let test_cases_arithmetic : test_case_no_custom_types list =
+let test_cases_arithmetic : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -101,7 +101,7 @@ let test_cases_arithmetic : test_case_no_custom_types list =
       ("+**+", [ PLUS; STAR; STAR; PLUS ], Error ParsingError);
     ]
 
-let test_cases_booleans : test_case_no_custom_types list =
+let test_cases_booleans : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -126,7 +126,7 @@ let test_cases_booleans : test_case_no_custom_types list =
                BoolLit ((), true) )) );
     ]
 
-let test_cases_pairs : test_case_no_custom_types list =
+let test_cases_pairs : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -156,7 +156,7 @@ let test_cases_pairs : test_case_no_custom_types list =
       );
     ]
 
-let test_cases_integer_comparisons : test_case_no_custom_types list =
+let test_cases_integer_comparisons : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -178,7 +178,7 @@ let test_cases_integer_comparisons : test_case_no_custom_types list =
       ("== <=", [ EQUATE; LTEQ ], Error ParsingError);
     ]
 
-let test_cases_if_then_else : test_case_no_custom_types list =
+let test_cases_if_then_else : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -256,7 +256,7 @@ let test_cases_if_then_else : test_case_no_custom_types list =
                IntLit ((), 3) )) );
     ]
 
-let test_cases_variables : test_case_no_custom_types list =
+let test_cases_variables : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -309,7 +309,7 @@ let test_cases_variables : test_case_no_custom_types list =
                App ((), Var ((), "f"), IntLit ((), 1)) )) );
     ]
 
-let test_cases_functions : test_case_no_custom_types list =
+let test_cases_functions : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -458,7 +458,7 @@ let test_cases_functions : test_case_no_custom_types list =
       );
     ]
 
-let test_cases_recursion : test_case_no_custom_types list =
+let test_cases_recursion : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -578,7 +578,7 @@ let test_cases_recursion : test_case_no_custom_types list =
                App ((), Var ((), "f"), IntLit ((), 5)) )) );
     ]
 
-let test_cases_match : test_case_no_custom_types list =
+let test_cases_match : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -776,7 +776,7 @@ let test_cases_match : test_case_no_custom_types list =
                        ),
                      If ((), Var ((), "y"), Var ((), "z1"), Var ((), "z2")) );
                  ] )) );
-      ( (* Matching custom data type constructor *)
+      ( (* Matching variant data type constructor *)
         "match x with (Nil (z : int)) -> 0 | (Cons ((h : int), (ts : \
          int_list))) -> 1 end",
         [
@@ -831,7 +831,7 @@ let test_cases_match : test_case_no_custom_types list =
                  ] )) );
     ]
 
-let test_cases_custom_type_defn : test_case_full_prog list =
+let test_cases_variant_type_defn : test_case_full_prog list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -840,7 +840,7 @@ let test_cases_custom_type_defn : test_case_full_prog list =
 1
 |},
         [ INTLIT 1 ],
-        Ok { type_defns = []; e = IntLit ((), 1) } );
+        Ok { custom_types = []; e = IntLit ((), 1) } );
       ( (* Simple type definition *)
         {|
         type int_or_bool = Int of int | Bool of bool
@@ -862,9 +862,9 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            type_defns =
+            custom_types =
               [
-                CustomType
+                VariantType
                   ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
               ];
             e = IntLit ((), 1);
@@ -891,9 +891,9 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            type_defns =
+            custom_types =
               [
-                CustomType
+                VariantType
                   ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
               ];
             e = IntLit ((), 1);
@@ -961,9 +961,9 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            type_defns =
+            custom_types =
               [
-                CustomType
+                VariantType
                   ( "int_list",
                     [
                       ("Nil", VTypeUnit);
@@ -1018,9 +1018,9 @@ qtype int_boxed
       ],
       Ok
         {
-          type_defns =
+          custom_types =
             [
-              CustomType ("int_box", [ ("Int", VTypeInt) ]);
+              VariantType ("int_box", [ ("Int", VTypeInt) ]);
               QuotientType
                 {
                   name = "int_boxed";
@@ -1105,9 +1105,9 @@ qtype mobile
       ],
       Ok
         {
-          type_defns =
+          custom_types =
             [
-              CustomType
+              VariantType
                 ( "tree",
                   [
                     ("Leaf", VTypeInt);
@@ -1177,7 +1177,7 @@ qtype Int_boxed
       Error ParsingError );
   ]
 
-let test_cases_custom_type_referencing : test_case_no_custom_types list =
+let test_cases_variant_type_referencing : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -1209,7 +1209,7 @@ let test_cases_custom_type_referencing : test_case_no_custom_types list =
         Error ParsingError );
     ]
 
-let test_cases_custom_type_construction : test_case_no_custom_types list =
+let test_cases_variant_type_construction : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
@@ -1277,11 +1277,11 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
   | Error ParsingError -> assert_failure "ParsingError"
 
-let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
+let tests_no_variant_types (test_create_func : test_case_full_prog -> test) :
     test list =
   let f =
     Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
-        (name, inp, tokens, Result.(ast >>| fun e -> { type_defns = []; e })))
+        (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
   in
   [
     "Unit Value" >::: List.map ~f test_cases_unit_value;
@@ -1294,17 +1294,17 @@ let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
     "Functions" >::: List.map ~f test_cases_functions;
     "Recursion" >::: List.map ~f test_cases_recursion;
     "Match" >::: List.map ~f test_cases_match;
-    "Custom type referencing"
-    >::: List.map ~f test_cases_custom_type_referencing;
-    "Custom type construction"
-    >::: List.map ~f test_cases_custom_type_construction;
+    "Variant type referencing"
+    >::: List.map ~f test_cases_variant_type_referencing;
+    "Variant type construction"
+    >::: List.map ~f test_cases_variant_type_construction;
   ]
 
 let tests_full_prog (test_create_func : test_case_full_prog -> test) : test list
     =
   let f = test_create_func in
   [
-    "Custom type definition" >::: List.map ~f test_cases_custom_type_defn;
+    "Variant type definition" >::: List.map ~f test_cases_variant_type_defn;
     "Quotient type definition" >::: List.map ~f test_cases_quotient_type_defn;
   ]
 
@@ -1312,10 +1312,10 @@ let suite =
   "Frontend Tests"
   >::: [
          "Lexer"
-         >::: tests_no_custom_types create_lexer_test
+         >::: tests_no_variant_types create_lexer_test
               @ tests_full_prog create_lexer_test;
          "Frontend"
-         >::: tests_no_custom_types create_frontend_test
+         >::: tests_no_variant_types create_frontend_test
               @ tests_full_prog create_frontend_test
               @ [
                   "Precedence"

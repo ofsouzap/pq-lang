@@ -1,7 +1,7 @@
 open Core
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Varname
 open Pattern
 
@@ -21,7 +21,7 @@ and value =
   | Bool of bool
   | Closure of closure_props
   | Pair of value * value
-  | CustomTypeValue of custom_type * string * value
+  | VariantTypeValue of variant_type * string * value
 [@@deriving sexp, equal]
 
 and store = value VarnameMap.t [@@deriving sexp, equal]
@@ -38,7 +38,7 @@ let rec value_type = function
   | Bool _ -> VTypeBool
   | Closure closure -> VTypeFun (snd closure.param, closure.out_type)
   | Pair (v1, v2) -> VTypePair (value_type v1, value_type v2)
-  | CustomTypeValue ((ct_name, _), _, _) -> VTypeCustom ct_name
+  | VariantTypeValue ((vt_name, _), _, _) -> VTypeCustom vt_name
 
 type typing_error = {
   expected_type : string option;
@@ -80,7 +80,7 @@ type exec_err =
   | FixApplicationError
   | MaxRecursionDepthExceeded
   | IncompleteMatchError
-  | UnknownCustomTypeConstructor of string
+  | UnknownVariantTypeConstructor of string
 [@@deriving sexp, equal]
 
 type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
@@ -95,8 +95,8 @@ let show_exec_res = function
       | FixApplicationError -> "[Fix APPLICATION ERROR]"
       | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]"
       | IncompleteMatchError -> "[INCOMPLETE MATCH]"
-      | UnknownCustomTypeConstructor x ->
-          "[UNKNOWN CUSTOM TYPE CONSTRUCTOR: " ^ x ^ "]")
+      | UnknownVariantTypeConstructor x ->
+          "[UNKNOWN VARIANT TYPE CONSTRUCTOR: " ^ x ^ "]")
 
 let rec match_pattern (p : pattern) (v : value) : (varname * value) list option
     =
@@ -108,7 +108,7 @@ let rec match_pattern (p : pattern) (v : value) : (varname * value) list option
       match_pattern p1 v1 >>= fun m1 ->
       match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)
   | PatPair _, _ -> None
-  | PatConstructor (p_c_name, p1), CustomTypeValue (_, v_c_name, v') ->
+  | PatConstructor (p_c_name, p1), VariantTypeValue (_, v_c_name, v') ->
       if equal_string p_c_name v_c_name then match_pattern p1 v' else None
   | PatConstructor _, _ -> None
 
@@ -287,9 +287,9 @@ struct
               c_e)
     | Constructor (_, c_name, e1) ->
         eval ~type_ctx store e1 >>= fun v1 ->
-        TypeCtx.find_custom_type_with_constructor type_ctx c_name
-        |> Result.of_option ~error:(UnknownCustomTypeConstructor c_name)
-        >>= fun (ct, _) -> Ok (CustomTypeValue (ct, c_name, v1))
+        TypeCtx.find_variant_type_with_constructor type_ctx c_name
+        |> Result.of_option ~error:(UnknownVariantTypeConstructor c_name)
+        >>= fun (vt, _) -> Ok (VariantTypeValue (vt, c_name, v1))
 
   let execute_program (tpe : 'a TypeChecker.typed_program_expression) =
     let type_ctx = TypeChecker.typed_program_expression_get_type_ctx tpe in

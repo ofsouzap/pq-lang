@@ -10,7 +10,7 @@ let () =
       | ParsingError -> eprintf "Parsing error\n")
   | Ok prog -> (
       let open Typing in
-      match SetTypingTypeContext.create ~type_defns:prog.type_defns with
+      match SetTypingTypeContext.create ~custom_types:prog.custom_types with
       | Error err -> eprintf "Typing error: %s\n" (print_typing_error err)
       | Ok type_ctx -> (
           match type_expr ~type_ctx prog.e with
