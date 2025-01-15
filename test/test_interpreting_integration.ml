@@ -39,7 +39,8 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) =
   let lexbuf = Lexing.from_string inp in
   let prog = Parser.prog Lexer.token lexbuf in
   let main_result : (unit, Typing.typing_error) Result.t =
-    SetTypingTypeContext.create ~type_defns:prog.type_defns >>= fun type_ctx ->
+    SetTypingTypeContext.create ~custom_types:prog.custom_types
+    >>= fun type_ctx ->
     Typing.type_expr ~type_ctx prog.e >>= fun tpe ->
     let result : Ast_executor.exec_res =
       Ast_executor.SimpleExecutor.execute_program tpe

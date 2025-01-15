@@ -840,7 +840,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
 1
 |},
         [ INTLIT 1 ],
-        Ok { type_defns = []; e = IntLit ((), 1) } );
+        Ok { custom_types = []; e = IntLit ((), 1) } );
       ( (* Simple type definition *)
         {|
         type int_or_bool = Int of int | Bool of bool
@@ -862,7 +862,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            type_defns =
+            custom_types =
               [
                 VariantType
                   ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
@@ -891,7 +891,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            type_defns =
+            custom_types =
               [
                 VariantType
                   ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
@@ -961,7 +961,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            type_defns =
+            custom_types =
               [
                 VariantType
                   ( "int_list",
@@ -1018,7 +1018,7 @@ qtype int_boxed
       ],
       Ok
         {
-          type_defns =
+          custom_types =
             [
               VariantType ("int_box", [ ("Int", VTypeInt) ]);
               QuotientType
@@ -1105,7 +1105,7 @@ qtype mobile
       ],
       Ok
         {
-          type_defns =
+          custom_types =
             [
               VariantType
                 ( "tree",
@@ -1281,7 +1281,7 @@ let tests_no_variant_types (test_create_func : test_case_full_prog -> test) :
     test list =
   let f =
     Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
-        (name, inp, tokens, Result.(ast >>| fun e -> { type_defns = []; e })))
+        (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
   in
   [
     "Unit Value" >::: List.map ~f test_cases_unit_value;

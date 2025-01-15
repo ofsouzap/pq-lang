@@ -1,18 +1,10 @@
 open Utils
 open Vtype
-open Variant_types
 open Ast
-open Quotient_types
+open Custom_types
 
-(** A type definition in a program. Either a variant type definition or a quotient type definition *)
-type type_defn = VariantType of variant_type | QuotientType of quotient_type
-[@@deriving sexp, equal]
-
-(** Get the name of a defined type *)
-val type_defn_name : type_defn -> string
-
-(** A program, consisting of any number of variant type definitions and an expression to evaluate *)
-type 'a program = { type_defns : type_defn list; e : 'a expr }
+(** A program, consisting of any number of custom type definitions and an expression to evaluate *)
+type 'a program = { custom_types : custom_type list; e : 'a expr }
 [@@deriving sexp, equal]
 
 (** A program with no tagging *)

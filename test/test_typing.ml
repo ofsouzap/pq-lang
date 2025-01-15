@@ -5,7 +5,7 @@ open Utils
 open Vtype
 open Pattern
 open Ast
-open Program
+open Custom_types
 open Typing
 open Testing_utils
 
@@ -243,7 +243,7 @@ let test_cases_expr_typing : test list =
       ( (* Valid for constructor pattern *)
         Some
           (SetTypingTypeContext.create
-             ~type_defns:
+             ~custom_types:
                [
                  VariantType ("empty", []);
                  VariantType
@@ -272,7 +272,7 @@ let test_cases_expr_typing : test list =
               ] ),
         Ok VTypeInt );
       ( (* Non-existant variant type *)
-        Some (SetTypingTypeContext.create ~type_defns:[]),
+        Some (SetTypingTypeContext.create ~custom_types:[]),
         Match
           ( (),
             Constructor
@@ -296,12 +296,12 @@ let test_cases_expr_typing : test list =
         Error (UndefinedVariantTypeConstructor "Nil") );
       ( Some
           (SetTypingTypeContext.create
-             ~type_defns:[ VariantType ("empty", []) ]),
+             ~custom_types:[ VariantType ("empty", []) ]),
         Constructor ((), "Nil", UnitLit ()),
         Error (UndefinedVariantTypeConstructor "Nil") );
       ( Some
           (SetTypingTypeContext.create
-             ~type_defns:
+             ~custom_types:
                [
                  VariantType
                    ( "list",
@@ -314,7 +314,7 @@ let test_cases_expr_typing : test list =
         Error (TypeMismatch (VTypeInt, VTypeUnit)) );
       ( Some
           (SetTypingTypeContext.create
-             ~type_defns:
+             ~custom_types:
                [
                  VariantType
                    ( "list",
@@ -690,7 +690,7 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Constructor - list Nil",
         Some
           (TestingTypeCtx.create
-             ~type_defns:
+             ~custom_types:
                [
                  VariantType
                    ( "list",
@@ -708,7 +708,7 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Constructor - list Cons",
         Some
           (TestingTypeCtx.create
-             ~type_defns:
+             ~custom_types:
                [
                  VariantType
                    ( "list",
@@ -726,7 +726,7 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Constructor - int_box",
         Some
           (TestingTypeCtx.create
-             ~type_defns:
+             ~custom_types:
                [
                  VariantType
                    ( "list",
@@ -748,7 +748,7 @@ let test_cases_typing_maintains_structure : test =
   QCheck_ounit.to_ounit2_test
     (Test.make ~name:"Typing maintains structure" ~count:100
        unit_program_arbitrary_with_default_options (fun prog ->
-         let type_ctx = prog.type_defns |> TestingTypeCtx.from_list in
+         let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
          let e = prog.e in
          match TestingTypeChecker.check_type_ctx type_ctx with
          | Error err ->

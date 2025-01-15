@@ -4,7 +4,7 @@ open Utils
 open Vtype
 open Variant_types
 open Quotient_types
-open Program
+open Custom_types
 open Typing
 
 (** A default maximum number of defined variant types *)
@@ -41,7 +41,7 @@ module TestingTypeCtx : sig
   val add_quotient : t -> quotient_type -> t
 
   (** Creates a type from a list *)
-  val from_list : type_defn list -> t
+  val from_list : custom_type list -> t
 
   (** If there are any defined variant types, get a generator for a random one of them *)
   val variant_gen_opt : t -> variant_type QCheck.Gen.t option

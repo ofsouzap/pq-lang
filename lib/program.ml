@@ -4,15 +4,9 @@ open Vtype
 open Variant_types
 open Ast
 open Quotient_types
+open Custom_types
 
-type type_defn = VariantType of variant_type | QuotientType of quotient_type
-[@@deriving sexp, equal]
-
-let type_defn_name : type_defn -> string = function
-  | VariantType (vt_name, _) -> vt_name
-  | QuotientType qt -> qt.name
-
-type 'a program = { type_defns : type_defn list; e : 'a expr }
+type 'a program = { custom_types : custom_type list; e : 'a expr }
 [@@deriving sexp, equal]
 
 type plain_program = unit program [@@deriving sexp, equal]
@@ -24,7 +18,7 @@ let program_to_source_code ?(use_newlines : bool option) (prog : 'a program) :
       ~f:(function
         | VariantType vt -> variant_type_to_source_code vt
         | QuotientType qt -> quotient_type_to_source_code ?use_newlines qt)
-      prog.type_defns
+      prog.custom_types
   in
   let e_str : string = ast_to_source_code ?use_newlines prog.e in
   let str_parts : string list = type_defns_str @ [ e_str ] in
@@ -87,7 +81,7 @@ end = struct
 
   let gen_type_defns_list ~(max_variant_types : int)
       ~(max_variant_type_constructors : int) ~(mrd : int) :
-      type_defn list QCheck.Gen.t =
+      custom_type list QCheck.Gen.t =
     (* TODO - allow this to generate quotient types too *)
     let open QCheck.Gen in
     int_range 0 max_variant_types >>= fun (n : int) ->
@@ -125,26 +119,26 @@ end = struct
     gen_type_defns_list ~max_variant_types:opts.max_variant_types
       ~max_variant_type_constructors:opts.max_variant_type_constructors
       ~mrd:opts.mrd
-    >>= fun type_defns ->
+    >>= fun custom_types ->
     Ast_qcheck_testing.gen
       {
         t = opts.ast_type;
         variant_types =
           List.filter_map
             ~f:(function VariantType vt -> Some vt | QuotientType _ -> None)
-            type_defns;
+            custom_types;
         v_gen = opts.v_gen;
         mrd = opts.mrd;
       }
-    >|= fun e -> { type_defns; e }
+    >|= fun e -> { custom_types; e }
 
   let print (print_method : print_options) : t QCheck.Print.t =
    fun prog ->
     sprintf "[type definitions: %s]\n%s"
       QCheck.Print.(
         list
-          (fun qt -> qt |> sexp_of_type_defn |> Sexp.to_string)
-          prog.type_defns)
+          (fun qt -> qt |> sexp_of_custom_type |> Sexp.to_string)
+          prog.custom_types)
       (Ast_qcheck_testing.print print_method prog.e)
 
   let shrink (opts : shrink_options) : t QCheck.Shrink.t =

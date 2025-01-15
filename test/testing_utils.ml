@@ -6,10 +6,10 @@ open Variant_types
 open Pattern
 open Ast
 open Quotient_types
+open Custom_types
 open Typing
 open Parser
 open Ast_executor
-open Program
 
 let default_max_gen_rec_depth : int = 10
 let default_max_variant_type_count : int = 5
@@ -80,8 +80,8 @@ module TestingTypeCtx : sig
 
   val add_variant : t -> variant_type -> t
   val add_quotient : t -> quotient_type -> t
-  val type_defns_to_list : t -> type_defn list
-  val from_list : type_defn list -> t
+  val type_defns_to_list : t -> custom_type list
+  val from_list : custom_type list -> t
   val variant_gen_opt : t -> variant_type QCheck.Gen.t option
   val sexp_of_t : t -> Sexp.t
 
@@ -104,16 +104,16 @@ module TestingTypeCtx : sig
 end = struct
   open Typing
 
-  type t = type_defn list
+  type t = custom_type list
   type this_t = t
 
   let empty = []
 
-  let create ~(type_defns : type_defn list) : (t, typing_error) Result.t =
-    Ok type_defns
+  let create ~(custom_types : custom_type list) : (t, typing_error) Result.t =
+    Ok custom_types
 
   let find_type_defn_by_name ctx td_name =
-    List.find ctx ~f:(fun x_td -> equal_string (type_defn_name x_td) td_name)
+    List.find ctx ~f:(fun x_td -> equal_string (custom_type_name x_td) td_name)
 
   let type_defn_exists ctx vt_name =
     Option.is_some (find_type_defn_by_name ctx vt_name)
@@ -144,7 +144,7 @@ end = struct
     match choices with [] -> None | _ :: _ -> Some (oneof choices)
 
   let sexp_of_t : t -> Sexp.t =
-    Fn.compose (sexp_of_list sexp_of_type_defn) type_defns_to_list
+    Fn.compose (sexp_of_list sexp_of_custom_type) type_defns_to_list
 
   module QCheck_testing = struct
     type t = this_t
@@ -167,7 +167,7 @@ end = struct
       fix
         (fun self
              ( (rem_variant_types, rem_quotient_types),
-               (type_ctx : type_defn list) ) ->
+               (type_ctx : custom_type list) ) ->
           let variant_type_gen : variant_type QCheck.Gen.t =
             Variant_types.QCheck_testing.gen
               {
@@ -229,7 +229,7 @@ end = struct
           qt.base_type_name
           ((QCheck.Print.list print_quotient_type_eqcons) qt.eqconss)
       in
-      let print_type_defn : type_defn QCheck.Print.t = function
+      let print_type_defn : custom_type QCheck.Print.t = function
         | VariantType vt -> sprintf "VariantType(%s)" (print_variant_type vt)
         | QuotientType qt -> sprintf "QuotientType(%s)" (print_quotient_type qt)
       in

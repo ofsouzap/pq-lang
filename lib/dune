@@ -10,6 +10,7 @@
   pattern
   ast
   quotient_types
+  custom_types
   program
   typing
   parsing_errors

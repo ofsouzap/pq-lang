@@ -380,7 +380,7 @@ let test_cases_match : basic_test_case list =
         Ok (Pair (Bool true, Bool true)) );
       ( Some
           (SetTypingTypeContext.create
-             ~type_defns:
+             ~custom_types:
                [
                  VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
                  VariantType
@@ -401,7 +401,7 @@ let test_cases_match : basic_test_case list =
         Ok (Bool true) );
       ( Some
           (SetTypingTypeContext.create
-             ~type_defns:
+             ~custom_types:
                [
                  VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
                  VariantType
@@ -438,7 +438,7 @@ let test_cases_constructor : basic_test_case list =
     let type_ctx =
       match
         SetTypingTypeContext.create
-          ~type_defns:(List.map ~f:(fun vt -> Program.VariantType vt) x)
+          ~custom_types:(List.map ~f:(fun vt -> Custom_types.VariantType vt) x)
       with
       | Error err ->
           failwith
