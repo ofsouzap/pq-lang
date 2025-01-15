@@ -7,3 +7,5 @@ type custom_type = VariantType of variant_type | QuotientType of quotient_type
 
 (** Get the name of a custom type *)
 val custom_type_name : custom_type -> string
+
+(* TODO - QCheck_testing submodule *)
