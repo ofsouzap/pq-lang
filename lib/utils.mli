@@ -1,5 +1,6 @@
 open Core
 module StringSet : Set.S with type Elt.t = String.t
+module StringMap : Map.S with type Key.t = String.t
 
 (** Keywords for the lexer, to not be used in variable name generation *)
 val lexer_keywords : string list

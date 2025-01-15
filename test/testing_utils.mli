@@ -3,6 +3,8 @@ open Pq_lang
 open Utils
 open Vtype
 open Custom_types
+open Quotient_types
+open Program
 open Typing
 
 (** A default maximum number of defined custom types *)
@@ -11,13 +13,20 @@ val default_max_custom_type_count : int
 (** A default maximum number of constructors for a custom type *)
 val default_max_custom_type_constructor_count : int
 
+(** A default maximum number of defined quotient types *)
+val default_max_quotient_type_count : int
+
 (** A default maximum recursion depth for generation *)
 val default_max_gen_rec_depth : int
 
 (** A printing method for token lists *)
 val token_printer : Parser.token list -> string
 
-(** A variation of the default `exec_res` comparison function, that considers all typing errors equal *)
+(** A variation of the default `exec_err` equality function, that considers all typing errors equal *)
+val override_equal_exec_err :
+  Ast_executor.exec_err -> Ast_executor.exec_err -> bool
+
+(** A variation of the default `exec_res` equality function, that considers all typing errors equal *)
 val override_equal_exec_res :
   Ast_executor.exec_res -> Ast_executor.exec_res -> bool
 
@@ -28,8 +37,11 @@ module TestingTypeCtx : sig
   (** Add a custom type to the type context *)
   val add_custom : t -> custom_type -> t
 
+  (** Add a quotient type to the type context *)
+  val add_quotient : t -> quotient_type -> t
+
   (** Creates a type from a list *)
-  val from_list : custom_type list -> t
+  val from_list : type_defn list -> t
 
   (** If there are any defined custom types, get a generator for a random one of them *)
   val custom_gen_opt : t -> custom_type QCheck.Gen.t option
@@ -41,6 +53,7 @@ module TestingTypeCtx : sig
     type gen_options = {
       max_custom_types : int;
       max_constructors : int;
+      max_quotient_types : int;
       mrd : int;
     }
 

@@ -5,6 +5,7 @@ open Utils
 open Vtype
 open Pattern
 open Ast
+open Program
 open Typing
 open Testing_utils
 
@@ -20,23 +21,30 @@ let vtype_gen type_ctx =
   Vtype.QCheck_testing.gen
     {
       custom_types =
-        TestingTypeCtx.customs_to_list type_ctx
-        |> List.map ~f:fst |> StringSet.of_list;
+        TestingTypeCtx.type_defns_to_list type_ctx
+        |> List.filter_map ~f:(function
+             | CustomType (ct_name, _) -> Some ct_name
+             | QuotientType _ -> None)
+        |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
     }
 
 let test_cases_expr_typing : test list =
   let open Result in
   let create_test
-      ( (type_ctx : SetTypingTypeContext.t option),
+      ( (type_ctx :
+          (SetTypingTypeContext.t, Typing.typing_error) Result.t option),
         (e : plain_expr),
         (t : (vtype, typing_error) Result.t) ) : test =
     ast_to_source_code e >:: fun _ ->
-    let out =
-      Typing.type_expr
-        ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
-        e
+    let type_ctx =
+      Option.value ~default:(Ok SetTypingTypeContext.empty) type_ctx |> function
+      | Ok type_ctx -> type_ctx
+      | Error err ->
+          failwith
+            (sprintf "Error creating type context: %s" (print_typing_error err))
     in
+    let out = Typing.type_expr ~type_ctx e in
     match (out, t) with
     | Ok tpe, Ok exp_t ->
         let out_t =
@@ -235,14 +243,15 @@ let test_cases_expr_typing : test list =
       ( (* Valid for constructor pattern *)
         Some
           (SetTypingTypeContext.create
-             ~custom_types:
+             ~type_defns:
                [
-                 ("empty", []);
-                 ( "int_list",
-                   [
-                     ("Nil", VTypeUnit);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                   ] );
+                 CustomType ("empty", []);
+                 CustomType
+                   ( "int_list",
+                     [
+                       ("Nil", VTypeUnit);
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                     ] );
                ]),
         Match
           ( (),
@@ -263,7 +272,7 @@ let test_cases_expr_typing : test list =
               ] ),
         Ok VTypeInt );
       ( (* Non-existant custom type *)
-        Some (SetTypingTypeContext.create ~custom_types:[]),
+        Some (SetTypingTypeContext.create ~type_defns:[]),
         Match
           ( (),
             Constructor
@@ -285,30 +294,33 @@ let test_cases_expr_typing : test list =
       ( None,
         Constructor ((), "Nil", UnitLit ()),
         Error (UndefinedCustomTypeConstructor "Nil") );
-      ( Some (SetTypingTypeContext.create ~custom_types:[ ("empty", []) ]),
+      ( Some
+          (SetTypingTypeContext.create ~type_defns:[ CustomType ("empty", []) ]),
         Constructor ((), "Nil", UnitLit ()),
         Error (UndefinedCustomTypeConstructor "Nil") );
       ( Some
           (SetTypingTypeContext.create
-             ~custom_types:
+             ~type_defns:
                [
-                 ( "list",
-                   [
-                     ("Leaf", VTypeInt);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
-                   ] );
+                 CustomType
+                   ( "list",
+                     [
+                       ("Leaf", VTypeInt);
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                     ] );
                ]),
         Constructor ((), "Leaf", UnitLit ()),
         Error (TypeMismatch (VTypeInt, VTypeUnit)) );
       ( Some
           (SetTypingTypeContext.create
-             ~custom_types:
+             ~type_defns:
                [
-                 ( "list",
-                   [
-                     ("Nil", VTypeUnit);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
-                   ] );
+                 CustomType
+                   ( "list",
+                     [
+                       ("Nil", VTypeUnit);
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                     ] );
                ]),
         Constructor ((), "Nil", UnitLit ()),
         Ok (VTypeCustom "list") );
@@ -512,17 +524,25 @@ let test_cases_arb_compound_expr_typing : test list =
     Unit_ast_qcheck_testing.gen
       {
         t = Some t;
-        custom_types = TestingTypeCtx.customs_to_list type_ctx;
+        custom_types =
+          TestingTypeCtx.type_defns_to_list type_ctx
+          |> List.filter_map ~f:(function
+               | CustomType ct -> Some ct
+               | QuotientType _ -> None);
         v_gen = QCheck.Gen.unit;
         mrd = default_max_gen_rec_depth;
       }
   in
   let create_test
       ( (name : string),
-        (type_ctx : TestingTypeCtx.t option),
+        (type_ctx : (TestingTypeCtx.t, Typing.typing_error) Result.t option),
         (e_gen : TestingTypeCtx.t -> (vtype * plain_expr) Gen.t) ) : test =
     let type_ctx : TestingTypeCtx.t =
-      Option.value ~default:TestingTypeCtx.empty type_ctx
+      Option.value ~default:(Ok TestingTypeCtx.empty) type_ctx |> function
+      | Ok type_ctx -> type_ctx
+      | Error err ->
+          failwith
+            (sprintf "Error creating type context: %s" (print_typing_error err))
     in
     let e_arb =
       QCheck.make
@@ -669,14 +689,15 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Constructor - list Nil",
         Some
           (TestingTypeCtx.create
-             ~custom_types:
+             ~type_defns:
                [
-                 ( "list",
-                   [
-                     ("Nil", VTypeUnit);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
-                   ] );
-                 ("int_box", [ ("IntBox", VTypeInt) ]);
+                 CustomType
+                   ( "list",
+                     [
+                       ("Nil", VTypeUnit);
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                     ] );
+                 CustomType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
@@ -686,14 +707,15 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Constructor - list Cons",
         Some
           (TestingTypeCtx.create
-             ~custom_types:
+             ~type_defns:
                [
-                 ( "list",
-                   [
-                     ("Nil", VTypeUnit);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
-                   ] );
-                 ("int_box", [ ("IntBox", VTypeInt) ]);
+                 CustomType
+                   ( "list",
+                     [
+                       ("Nil", VTypeUnit);
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                     ] );
+                 CustomType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
@@ -703,14 +725,15 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Constructor - int_box",
         Some
           (TestingTypeCtx.create
-             ~custom_types:
+             ~type_defns:
                [
-                 ( "list",
-                   [
-                     ("Nil", VTypeUnit);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
-                   ] );
-                 ("int_box", [ ("IntBox", VTypeInt) ]);
+                 CustomType
+                   ( "list",
+                     [
+                       ("Nil", VTypeUnit);
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                     ] );
+                 CustomType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
@@ -724,13 +747,7 @@ let test_cases_typing_maintains_structure : test =
   QCheck_ounit.to_ounit2_test
     (Test.make ~name:"Typing maintains structure" ~count:100
        unit_program_arbitrary_with_default_options (fun prog ->
-         let type_ctx =
-           Program.(
-             List.filter_map
-               ~f:(function CustomType ct -> Some ct | _ -> None)
-               prog.type_defns)
-           |> TestingTypeCtx.from_list
-         in
+         let type_ctx = prog.type_defns |> TestingTypeCtx.from_list in
          let e = prog.e in
          match TestingTypeChecker.check_type_ctx type_ctx with
          | Error err ->

@@ -21,8 +21,8 @@ val quotient_type_eqcons_to_source_code :
 (** A quotient type: a custom type with a list of quotients *)
 type quotient_type = {
   name : string;  (** The name of the quotient type *)
-  custom_type_name : string;
-      (** The name of the custom type that the quotient type is based on *)
+  base_type_name : string;
+      (** The name of the custom/quotient type that the quotient type is based on *)
   eqconss : quotient_type_eqcons list;
       (** The list of equality constructors for the quotient type *)
 }

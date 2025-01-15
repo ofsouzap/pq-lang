@@ -1024,7 +1024,7 @@ qtype int_boxed
               QuotientType
                 {
                   name = "int_boxed";
-                  custom_type_name = "int_box";
+                  base_type_name = "int_box";
                   eqconss =
                     [
                       {
@@ -1116,7 +1116,7 @@ qtype mobile
               QuotientType
                 {
                   name = "mobile";
-                  custom_type_name = "tree";
+                  base_type_name = "tree";
                   eqconss =
                     [
                       {

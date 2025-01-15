@@ -8,6 +8,9 @@ open Quotient_types
 type type_defn = CustomType of custom_type | QuotientType of quotient_type
 [@@deriving sexp, equal]
 
+(** Get the name of a defined type *)
+val type_defn_name : type_defn -> string
+
 (** A program, consisting of any number of custom type definitions and an expression to evaluate *)
 type 'a program = { type_defns : type_defn list; e : 'a expr }
 [@@deriving sexp, equal]

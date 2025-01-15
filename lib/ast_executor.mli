@@ -52,6 +52,7 @@ type typing_error = {
   variable_name : varname option;
   custom_message : string option;
 }
+[@@deriving sexp, equal]
 
 (** Details for a typing error that are the default empty values *)
 val empty_typing_error : typing_error
@@ -70,12 +71,10 @@ type exec_err =
       (** No cases could be found that match the provided value in a match statement *)
   | UnknownCustomTypeConstructor of string
       (** No custom type could be found with a constructor of the specified name *)
+[@@deriving sexp, equal]
 
 (** The result of executing an AST *)
-type exec_res = (value, exec_err) Result.t
-
-(** Check if two execution results are equal *)
-val equal_exec_res : exec_res -> exec_res -> bool
+type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
 
 (** String representation of an execution result *)
 val show_exec_res : exec_res -> string

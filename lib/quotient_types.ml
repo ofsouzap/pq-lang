@@ -25,7 +25,7 @@ let quotient_type_eqcons_to_source_code ?(use_newlines : bool option)
 
 type quotient_type = {
   name : string;  (** The name of the quotient type *)
-  custom_type_name : string;
+  base_type_name : string;
       (** The name of the custom type that the quotient type is based on *)
   eqconss : quotient_type_eqcons list;
       (** The list of equality constructors for the quotient type *)
@@ -36,7 +36,7 @@ let quotient_type_to_source_code ?(use_newlines : bool option)
     (qt : quotient_type) : string =
   let open SourceCodeBuilder in
   let converter (qt : quotient_type) : state -> state =
-    write (sprintf "qtype %s = %s" qt.name qt.custom_type_name)
+    write (sprintf "qtype %s = %s" qt.name qt.base_type_name)
     |.> block
           (let blocked_converted_eqconss : (state -> state) list =
              List.map

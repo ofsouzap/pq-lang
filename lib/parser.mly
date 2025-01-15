@@ -210,7 +210,7 @@ quotient_type_definition_eqconss:
 ;
 
 quotient_type_definition:
-  | QTYPE name = LNAME ASSIGN ct_name = LNAME eqconss = quotient_type_definition_eqconss { { name; custom_type_name = ct_name; eqconss=eqconss } }
+  | QTYPE name = LNAME ASSIGN ct_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name = ct_name; eqconss=eqconss } }
 ;
 
 prog:

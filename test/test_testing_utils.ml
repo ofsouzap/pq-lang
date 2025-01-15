@@ -5,6 +5,7 @@ open Pq_lang
 open Utils
 open Vtype
 open Ast
+open Program
 open Typing
 open Testing_utils
 
@@ -12,8 +13,11 @@ let vtype_gen (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.gen
     {
       custom_types =
-        TestingTypeCtx.customs_to_list type_ctx
-        |> List.map ~f:fst |> StringSet.of_list;
+        TestingTypeCtx.type_defns_to_list type_ctx
+        |> List.filter_map ~f:(function
+             | CustomType (ct_name, _) -> Some ct_name
+             | QuotientType _ -> None)
+        |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
     }
 
@@ -21,8 +25,11 @@ let vtype_arb (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.arbitrary
     {
       custom_types =
-        TestingTypeCtx.customs_to_list type_ctx
-        |> List.map ~f:fst |> StringSet.of_list;
+        TestingTypeCtx.type_defns_to_list type_ctx
+        |> List.filter_map ~f:(function
+             | CustomType (ct_name, _) -> Some ct_name
+             | QuotientType _ -> None)
+        |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
     }
 
@@ -33,13 +40,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
        (let open QCheck.Gen in
         let gen : (TestingTypeCtx.t * 'a expr * 'a expr) option Gen.t =
           get_gen unit_program_arbitrary_with_default_options >>= fun prog ->
-          let type_ctx =
-            Program.(
-              List.filter_map
-                ~f:(function CustomType ct -> Some ct | _ -> None)
-                prog.type_defns)
-            |> TestingTypeCtx.from_list
-          in
+          let type_ctx = prog.type_defns |> TestingTypeCtx.from_list in
           let e = prog.e in
           let shrinks : 'a expr Iter.t =
             Unit_ast_qcheck_testing.shrink { preserve_type = true } e
@@ -125,7 +126,11 @@ let create_typed_expr_gen_test (name : string)
           Unit_ast_qcheck_testing.gen
             {
               t = Some t;
-              custom_types = TestingTypeCtx.customs_to_list type_ctx;
+              custom_types =
+                TestingTypeCtx.type_defns_to_list type_ctx
+                |> List.filter_map ~f:(function
+                     | CustomType ct -> Some ct
+                     | QuotientType _ -> None);
               v_gen = QCheck.Gen.unit;
               mrd = default_max_gen_rec_depth;
             }
@@ -181,7 +186,8 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
             vtype_gen type_ctx >|= fun t -> (type_ctx, t)))
        (fun (type_ctx, t) ->
          match t with
-         | VTypeCustom ct_name -> TestingTypeCtx.custom_exists type_ctx ct_name
+         | VTypeCustom ct_name ->
+             TestingTypeCtx.type_defn_exists type_ctx ct_name
          | _ -> true))
 
 let create_test_type_ctx_gen_valid (name : string) : test =
@@ -192,6 +198,7 @@ let create_test_type_ctx_gen_valid (name : string) : test =
           {
             max_custom_types = default_max_custom_type_count;
             max_constructors = default_max_custom_type_constructor_count;
+            max_quotient_types = default_max_quotient_type_count;
             mrd = default_max_gen_rec_depth;
           }
        |> (* Don't allow shrinking as we are considering the generated type contexts *)

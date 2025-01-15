@@ -46,6 +46,7 @@ type typing_error = {
   variable_name : varname option;
   custom_message : string option;
 }
+[@@deriving sexp, equal]
 
 let empty_typing_error =
   {
@@ -72,11 +73,6 @@ let show_typing_error (terr : typing_error) : string =
     |> Option.value_map ~f:(fun vname -> [ vname ]) ~default:[])
   |> String.concat ~sep:", "
 
-let typing_error_compare (a : typing_error) (b : typing_error) : bool =
-  equal_option equal_string a.expected_type b.expected_type
-  && equal_option equal_string a.actual_type b.actual_type
-  && equal_option equal_string a.variable_name b.variable_name
-
 type exec_err =
   | TypingError of typing_error
   | UndefinedVarError of varname
@@ -85,30 +81,9 @@ type exec_err =
   | MaxRecursionDepthExceeded
   | IncompleteMatchError
   | UnknownCustomTypeConstructor of string
+[@@deriving sexp, equal]
 
-type exec_res = (value, exec_err) Result.t
-
-let equal_exec_res a b =
-  match (a, b) with
-  | Ok v1, Ok v2 -> equal_value v1 v2
-  | Error e1, Error e2 -> (
-      match (e1, e2) with
-      | TypingError terr1, TypingError terr2 -> typing_error_compare terr1 terr2
-      | TypingError _, _ -> false
-      | UndefinedVarError x, UndefinedVarError y -> equal_varname x y
-      | UndefinedVarError _, _ -> false
-      | MisplacedFixError, MisplacedFixError -> true
-      | MisplacedFixError, _ -> false
-      | FixApplicationError, FixApplicationError -> true
-      | FixApplicationError, _ -> false
-      | MaxRecursionDepthExceeded, MaxRecursionDepthExceeded -> true
-      | MaxRecursionDepthExceeded, _ -> false
-      | IncompleteMatchError, IncompleteMatchError -> true
-      | IncompleteMatchError, _ -> false
-      | UnknownCustomTypeConstructor x, UnknownCustomTypeConstructor y ->
-          String.equal x y
-      | UnknownCustomTypeConstructor _, _ -> false)
-  | _ -> false
+type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
 
 let show_exec_res = function
   | Ok v -> sexp_of_value v |> Sexp.to_string
@@ -312,7 +287,7 @@ struct
               c_e)
     | Constructor (_, c_name, e1) ->
         eval ~type_ctx store e1 >>= fun v1 ->
-        TypeCtx.find_custom_with_constructor type_ctx c_name
+        TypeCtx.find_custom_type_with_constructor type_ctx c_name
         |> Result.of_option ~error:(UnknownCustomTypeConstructor c_name)
         >>= fun (ct, _) -> Ok (CustomTypeValue (ct, c_name, v1))
 

@@ -8,6 +8,10 @@ open Quotient_types
 type type_defn = CustomType of custom_type | QuotientType of quotient_type
 [@@deriving sexp, equal]
 
+let type_defn_name : type_defn -> string = function
+  | CustomType (ct_name, _) -> ct_name
+  | QuotientType qt -> qt.name
+
 type 'a program = { type_defns : type_defn list; e : 'a expr }
 [@@deriving sexp, equal]
 
