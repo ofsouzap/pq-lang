@@ -20,8 +20,8 @@ let rec pattern_to_source_code = function
 
 module QCheck_testing : sig
   type gen_options = {
-    get_custom_type_constructors :
-      string -> Custom_types.custom_type_constructor list;
+    get_variant_type_constructors :
+      string -> Variant_types.variant_type_constructor list;
     t : vtype;
   }
 
@@ -37,8 +37,8 @@ end = struct
   type t = this_t
 
   type gen_options = {
-    get_custom_type_constructors :
-      string -> Custom_types.custom_type_constructor list;
+    get_variant_type_constructors :
+      string -> Variant_types.variant_type_constructor list;
     t : vtype;
   }
 
@@ -48,7 +48,7 @@ end = struct
 
   let gen (opts : gen_options) : this_t QCheck.Gen.t =
     let open QCheck.Gen in
-    let open Custom_types in
+    let open Variant_types in
     let rec gen_new_varname (vars : (string * vtype) list) : string QCheck.Gen.t
         =
       (* Generate a new variable name that is not already in the context *)
@@ -82,9 +82,9 @@ end = struct
           ( gen t1 vars >>= fun (p1, vars1) ->
             gen t2 vars1 >|= fun (p2, vars2) -> (PatPair (p1, p2), vars2) );
         ]
-    and gen_custom (cs : custom_type_constructor list)
+    and gen_variant (cs : variant_type_constructor list)
         (vars : (string * vtype) list) :
-        (* Generate a pattern that types as the specified custom type *)
+        (* Generate a pattern that types as the specified variant type *)
         this_t QCheck.Gen.t =
       oneof (List.map ~f:return cs) >>= fun (c_name, c_t) ->
       gen c_t vars >>= fun (p, ctx') -> return (PatConstructor (c_name, p), ctx')
@@ -96,8 +96,8 @@ end = struct
       | VTypeBool -> gen_bool
       | VTypeFun (t1, t2) -> gen_fun (t1, t2)
       | VTypePair (t1, t2) -> gen_pair (t1, t2)
-      | VTypeCustom ct_name ->
-          gen_custom (opts.get_custom_type_constructors ct_name)
+      | VTypeVariant ct_name ->
+          gen_variant (opts.get_variant_type_constructors ct_name)
     in
     gen opts.t []
 

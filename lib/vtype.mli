@@ -7,14 +7,14 @@ type vtype =
   | VTypeBool
   | VTypePair of vtype * vtype
   | VTypeFun of vtype * vtype
-  | VTypeCustom of string
+  | VTypeVariant of string
 [@@deriving sexp, equal]
 
 (** Convert a vtype to a string representation compatible with the source code *)
 val vtype_to_source_code : vtype -> string
 
 module QCheck_testing : sig
-  type gen_options = { custom_types : StringSet.t; mrd : int }
+  type gen_options = { variant_types : StringSet.t; mrd : int }
 
   include
     Utils.QCheck_testing_sig

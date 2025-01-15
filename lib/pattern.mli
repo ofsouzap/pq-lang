@@ -14,8 +14,8 @@ val pattern_to_source_code : pattern -> string
 
 module QCheck_testing : sig
   type gen_options = {
-    get_custom_type_constructors :
-      string -> Custom_types.custom_type_constructor list;
+    get_variant_type_constructors :
+      string -> Variant_types.variant_type_constructor list;
     t : vtype;
   }
 

@@ -3,7 +3,7 @@ open OUnit2
 open Pq_lang
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Pattern
 open Typing
 open Ast_executor
@@ -382,12 +382,12 @@ let test_cases_match : basic_test_case list =
           (SetTypingTypeContext.create
              ~type_defns:
                [
-                 CustomType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-                 CustomType
+                 VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+                 VariantType
                    ( "int_list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeVariant "int_list"));
                      ] );
                ]),
         Match
@@ -403,12 +403,12 @@ let test_cases_match : basic_test_case list =
           (SetTypingTypeContext.create
              ~type_defns:
                [
-                 CustomType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-                 CustomType
+                 VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+                 VariantType
                    ( "int_list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeVariant "int_list"));
                      ] );
                ]),
         Match
@@ -426,7 +426,7 @@ let test_cases_match : basic_test_case list =
                     ( "Cons",
                       PatPair
                         ( PatName ("x", VTypeInt),
-                          PatName ("y", VTypeCustom "int_list") ) ),
+                          PatName ("y", VTypeVariant "int_list") ) ),
                   Var ((), "x") );
               ] ),
         Ok (Int 7) );
@@ -434,11 +434,11 @@ let test_cases_match : basic_test_case list =
 
 let test_cases_constructor : basic_test_case list =
   let open Ast in
-  let mapf ((x : custom_type list), (y : plain_expr), (z : exec_res)) =
+  let mapf ((x : variant_type list), (y : plain_expr), (z : exec_res)) =
     let type_ctx =
       match
         SetTypingTypeContext.create
-          ~type_defns:(List.map ~f:(fun ct -> Program.CustomType ct) x)
+          ~type_defns:(List.map ~f:(fun ct -> Program.VariantType ct) x)
       with
       | Error err ->
           failwith
@@ -447,30 +447,31 @@ let test_cases_constructor : basic_test_case list =
     in
     (ast_to_source_code y, type_expr ~type_ctx y, z)
   in
-  let ct_list : custom_type =
+  let ct_list : variant_type =
     ( "list",
-      [ ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeCustom "list")) ]
-    )
+      [
+        ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
+      ] )
   in
-  let ct_int_box : custom_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
+  let ct_int_box : variant_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
   List.map ~f:mapf
     [
       ( [ ct_list ],
         Constructor ((), "Nil", UnitLit ()),
-        Ok (CustomTypeValue (ct_list, "Nil", Unit)) );
+        Ok (VariantTypeValue (ct_list, "Nil", Unit)) );
       ( [ ct_list ],
         Constructor
           ( (),
             "Cons",
             Pair ((), IntLit ((), 1), Constructor ((), "Nil", UnitLit ())) ),
         Ok
-          (CustomTypeValue
+          (VariantTypeValue
              ( ct_list,
                "Cons",
-               Pair (Int 1, CustomTypeValue (ct_list, "Nil", Unit)) )) );
+               Pair (Int 1, VariantTypeValue (ct_list, "Nil", Unit)) )) );
       ( [ ct_int_box ],
         Constructor ((), "IntBox", Add ((), IntLit ((), 2), IntLit ((), 5))),
-        Ok (CustomTypeValue (ct_int_box, "IntBox", Int 7)) );
+        Ok (VariantTypeValue (ct_int_box, "IntBox", Int 7)) );
       ( [ ct_int_box ],
         Let
           ( (),
@@ -478,7 +479,7 @@ let test_cases_constructor : basic_test_case list =
             IntLit ((), 2),
             Constructor ((), "IntBox", Add ((), Var ((), "x"), IntLit ((), 5)))
           ),
-        Ok (CustomTypeValue (ct_int_box, "IntBox", Int 7)) );
+        Ok (VariantTypeValue (ct_int_box, "IntBox", Int 7)) );
     ]
 
 let create_test

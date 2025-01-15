@@ -1,7 +1,7 @@
 open Core
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Pattern
 
 type 'a expr =
@@ -240,7 +240,7 @@ end) : sig
 
   type gen_options = {
     t : vtype option;
-    custom_types : custom_type list;
+    variant_types : variant_type list;
     v_gen : Tag.t QCheck.Gen.t;
     mrd : int;
   }
@@ -281,7 +281,7 @@ end = struct
 
   type gen_options = {
     t : vtype option;
-    custom_types : custom_type list;
+    variant_types : variant_type list;
     v_gen : Tag.t QCheck.Gen.t;
     mrd : int;
   }
@@ -299,15 +299,15 @@ end = struct
     let _create_fun_node (v, x, e) = Fun (v, x, e) in
     let open QCheck in
     let open QCheck.Gen in
-    let custom_types = initial_opts.custom_types in
-    let custom_types_set =
-      initial_opts.custom_types |> List.map ~f:fst |> StringSet.of_list
+    let variant_types = initial_opts.variant_types in
+    let variant_types_set =
+      initial_opts.variant_types |> List.map ~f:fst |> StringSet.of_list
     in
     let v_gen = initial_opts.v_gen in
 
     let varname_gen = Varname.QCheck_testing.gen () in
     let vtype_gen ~(mrd : int) =
-      Vtype.QCheck_testing.gen { custom_types = custom_types_set; mrd }
+      Vtype.QCheck_testing.gen { variant_types = variant_types_set; mrd }
     in
     let rec gen_e_var_of_type
         ( (_ : int * (string * vtype) list -> Tag.t expr Gen.t),
@@ -374,12 +374,12 @@ end = struct
         Pattern.QCheck_testing.gen
           {
             t = e1_t;
-            get_custom_type_constructors =
+            get_variant_type_constructors =
               (fun (ct_name : string) ->
                 List.find_map_exn
                   ~f:(fun (x_ct_name, cs) ->
                     if equal_string ct_name x_ct_name then Some cs else None)
-                  custom_types);
+                  variant_types);
           }
       in
       let case_and_pat_gen =
@@ -515,10 +515,10 @@ end = struct
           let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
-    and gen_custom ((ct_name, cs) : custom_type)
+    and gen_variant ((ct_name, cs) : variant_type)
         (param : int * (string * vtype) list) : Tag.t expr Gen.t =
-      (* Generate an expression that types as the provided custom type *)
-      let t = VTypeCustom ct_name in
+      (* Generate an expression that types as the provided variant type *)
+      let t = VTypeVariant ct_name in
       fix
         (fun self (d, ctx) ->
           v_gen >>= fun v ->
@@ -541,20 +541,20 @@ end = struct
       | VTypeBool -> gen_bool (d, ctx)
       | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
       | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
-      | VTypeCustom ct_name ->
+      | VTypeVariant ct_name ->
           (Option.value_exn
              ~message:
                (sprintf
-                  "The custom type specified (%s) doesn't exist in the context"
+                  "The variant type specified (%s) doesn't exist in the context"
                   ct_name)
              (List.find
                 ~f:(fun (x_ct_name, _) -> equal_string x_ct_name ct_name)
-                custom_types)
-          |> gen_custom)
+                variant_types)
+          |> gen_variant)
             (d, ctx)
     and gen_any_of_type ((d : int), (ctx : (string * vtype) list)) :
         (vtype * Tag.t expr) Gen.t =
-      Vtype.QCheck_testing.gen { custom_types = custom_types_set; mrd = d }
+      Vtype.QCheck_testing.gen { variant_types = variant_types_set; mrd = d }
       >>= fun t ->
       gen (d, ctx) t >|= fun e -> (t, e)
     in

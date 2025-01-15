@@ -1,6 +1,6 @@
 open Core
 open Utils
-open Custom_types
+open Variant_types
 open Vtype
 open Pattern
 open Ast
@@ -14,11 +14,11 @@ type typing_error =
   | EqConsBodyTypeMismatch of quotient_type_eqcons * vtype * vtype
   | EqualOperatorTypeMistmatch of vtype * vtype
   | ExpectedFunctionOf of vtype
-  | UndefinedCustomTypeConstructor of string
+  | UndefinedVariantTypeConstructor of string
   | PatternMultipleVariableDefinitions of string
   | DuplicateTypeNameDefinition of string
   | UndefinedTypeName of string
-  | MultipleCustomTypeConstructorDefinitions of string
+  | MultipleVariantTypeConstructorDefinitions of string
 [@@deriving sexp, equal]
 
 let equal_typing_error_variant x y =
@@ -29,12 +29,12 @@ let equal_typing_error_variant x y =
   | EqConsBodyTypeMismatch _, EqConsBodyTypeMismatch _
   | EqualOperatorTypeMistmatch _, EqualOperatorTypeMistmatch _
   | ExpectedFunctionOf _, ExpectedFunctionOf _
-  | UndefinedCustomTypeConstructor _, UndefinedCustomTypeConstructor _
+  | UndefinedVariantTypeConstructor _, UndefinedVariantTypeConstructor _
   | PatternMultipleVariableDefinitions _, PatternMultipleVariableDefinitions _
   | DuplicateTypeNameDefinition _, DuplicateTypeNameDefinition _
   | UndefinedTypeName _, UndefinedTypeName _
-  | ( MultipleCustomTypeConstructorDefinitions _,
-      MultipleCustomTypeConstructorDefinitions _ ) ->
+  | ( MultipleVariantTypeConstructorDefinitions _,
+      MultipleVariantTypeConstructorDefinitions _ ) ->
       true
   | UndefinedVariable _, _
   | TypeMismatch _, _
@@ -42,11 +42,11 @@ let equal_typing_error_variant x y =
   | EqConsBodyTypeMismatch _, _
   | EqualOperatorTypeMistmatch _, _
   | ExpectedFunctionOf _, _
-  | UndefinedCustomTypeConstructor _, _
+  | UndefinedVariantTypeConstructor _, _
   | PatternMultipleVariableDefinitions _, _
   | DuplicateTypeNameDefinition _, _
   | UndefinedTypeName _, _
-  | MultipleCustomTypeConstructorDefinitions _, _ ->
+  | MultipleVariantTypeConstructorDefinitions _, _ ->
       false
 
 let print_typing_error = function
@@ -69,16 +69,17 @@ let print_typing_error = function
         (vtype_to_source_code t1) (vtype_to_source_code t2)
   | ExpectedFunctionOf t ->
       "Expected a function taking input of " ^ vtype_to_source_code t
-  | UndefinedCustomTypeConstructor c_name ->
-      sprintf "Undefined custom type constructor: %s" c_name
+  | UndefinedVariantTypeConstructor c_name ->
+      sprintf "Undefined variant type constructor: %s" c_name
   | PatternMultipleVariableDefinitions xname ->
       sprintf "Variable named \"%s\" has been defined twice in a pattern" xname
   | DuplicateTypeNameDefinition ct_name ->
-      sprintf "Custom type named \"%s\" has been defined multiple times" ct_name
-  | UndefinedTypeName ct_name -> sprintf "Undefined custom type: %s" ct_name
-  | MultipleCustomTypeConstructorDefinitions c_name ->
+      sprintf "Variant type named \"%s\" has been defined multiple times"
+        ct_name
+  | UndefinedTypeName ct_name -> sprintf "Undefined variant type: %s" ct_name
+  | MultipleVariantTypeConstructorDefinitions c_name ->
       sprintf
-        "Custom type constructor named \"%s\" has been defined multiple times"
+        "Variant type constructor named \"%s\" has been defined multiple times"
         c_name
 
 module type TypingTypeContext = sig
@@ -89,8 +90,8 @@ module type TypingTypeContext = sig
   val find_type_defn_by_name : t -> string -> type_defn option
   val type_defn_exists : t -> string -> bool
 
-  val find_custom_type_with_constructor :
-    t -> string -> (custom_type * custom_type_constructor) option
+  val find_variant_type_with_constructor :
+    t -> string -> (variant_type * variant_type_constructor) option
 
   val type_defns_to_list : t -> type_defn list
 end
@@ -104,7 +105,7 @@ module SetTypingTypeContext : TypingTypeContext = struct
     let type_defns_map_or_err =
       type_defns
       |> StringMap.of_list_with_key ~get_key:(function
-           | CustomType (ct_name, _) -> ct_name
+           | VariantType (ct_name, _) -> ct_name
            | QuotientType qt -> qt.name)
     in
     match type_defns_map_or_err with
@@ -117,12 +118,12 @@ module SetTypingTypeContext : TypingTypeContext = struct
   let type_defn_exists (ctx : t) (ct_name : string) : bool =
     Option.is_some (find_type_defn_by_name ctx ct_name)
 
-  let find_custom_type_with_constructor (ctx : t) (c_name : string) :
-      (custom_type * custom_type_constructor) option =
+  let find_variant_type_with_constructor (ctx : t) (c_name : string) :
+      (variant_type * variant_type_constructor) option =
     Map.fold_until ctx.type_defns ~init:()
       ~f:(fun ~key:_ ~(data : type_defn) () ->
         match data with
-        | CustomType ((_, cs) as ct) -> (
+        | VariantType ((_, cs) as ct) -> (
             let search_res =
               List.find cs ~f:(fun (xc_name, _) -> equal_string c_name xc_name)
             in
@@ -213,7 +214,7 @@ functor
       | VTypeInt | VTypeBool | VTypeUnit -> Ok ()
       | VTypePair (t1, t2) | VTypeFun (t1, t2) ->
           check_vtype ctx t1 >>= fun () -> check_vtype ctx t2
-      | VTypeCustom ct_name ->
+      | VTypeVariant ct_name ->
           if TypeCtx.find_type_defn_by_name ctx ct_name |> Option.is_some then
             Ok ()
           else UndefinedTypeName ct_name |> Error
@@ -234,12 +235,12 @@ functor
           >>= fun (p2_t, var_ctx_final) ->
           Ok (VTypePair (p1_t, p2_t), var_ctx_final)
       | PatConstructor (c_name, p) -> (
-          match TypeCtx.find_custom_type_with_constructor type_ctx c_name with
-          | None -> Error (UndefinedCustomTypeConstructor c_name)
+          match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
+          | None -> Error (UndefinedVariantTypeConstructor c_name)
           | Some ((ct_name, _), (_, c_t)) ->
               type_pattern ctx p >>= fun (p_t, var_ctx_from_p) ->
               if equal_vtype c_t p_t then
-                Ok (VTypeCustom ct_name, var_ctx_from_p)
+                Ok (VTypeVariant ct_name, var_ctx_from_p)
               else Error (PatternTypeMismatch (p, c_t, p_t)))
 
     let type_expr :
@@ -429,11 +430,13 @@ functor
         | Constructor (v, c_name, e1) -> (
             type_expr ctx e1 >>= fun e1' ->
             let t1 = e_type e1' in
-            match TypeCtx.find_custom_type_with_constructor type_ctx c_name with
-            | None -> Error (UndefinedCustomTypeConstructor c_name)
+            match
+              TypeCtx.find_variant_type_with_constructor type_ctx c_name
+            with
+            | None -> Error (UndefinedVariantTypeConstructor c_name)
             | Some ((ct_name, _), (_, c_t)) ->
                 if equal_vtype c_t t1 then
-                  Ok (Constructor ((VTypeCustom ct_name, v), c_name, e1'))
+                  Ok (Constructor ((VTypeVariant ct_name, v), c_name, e1'))
                 else Error (TypeMismatch (c_t, t1)))
       in
       fun ((type_ctx, _) as ctx) orig_e ->
@@ -488,11 +491,11 @@ functor
               { acc with types = Set.add acc.types td_name }
             in
             (match td with
-            | CustomType (_, cs) ->
-                (* For custom types, we also need to check the constructors *)
+            | VariantType (_, cs) ->
+                (* For variant types, we also need to check the constructors *)
                 List.fold_result cs ~init:acc ~f:(fun acc (c_name, _) ->
                     if Set.mem acc.constructors c_name then
-                      Error (MultipleCustomTypeConstructorDefinitions c_name)
+                      Error (MultipleVariantTypeConstructorDefinitions c_name)
                     else
                       Ok
                         {

@@ -1,7 +1,7 @@
 %{
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Pattern
 open Ast
 open Quotient_types
@@ -30,9 +30,9 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
   | Fun (_, x, fbody') -> Let ((), fname, Fix ((), f, x, fbody'), subexpr)
   | _ -> raise CustomError
 
-let add_custom_type_definition_to_program (p : plain_program) (ct : custom_type) : plain_program =
+let add_variant_type_definition_to_program (p : plain_program) (ct : variant_type) : plain_program =
   {
-    type_defns = (CustomType ct) :: p.type_defns;
+    type_defns = (VariantType ct) :: p.type_defns;
     e = p.e
   }
 
@@ -70,10 +70,10 @@ let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_t
 %type <pattern> pattern
 %type <pattern> contained_pattern
 
-%type <custom_type_constructor> custom_type_constructor
-%type <custom_type_constructor list> custom_type_definition_constructors_no_leading_pipe
-%type <custom_type_constructor list> custom_type_definition_constructors
-%type <custom_type> custom_type_definition
+%type <variant_type_constructor> variant_type_constructor
+%type <variant_type_constructor list> variant_type_definition_constructors_no_leading_pipe
+%type <variant_type_constructor list> variant_type_definition_constructors
+%type <variant_type> variant_type_definition
 
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
@@ -104,7 +104,7 @@ vtype:
   | BOOL { VTypeBool }
   | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
   | t1 = vtype STAR t2 = vtype { VTypePair (t1, t2) }
-  | tname = LNAME { VTypeCustom tname }
+  | tname = LNAME { VTypeVariant tname }
 ;
 
 pattern:
@@ -118,22 +118,22 @@ contained_pattern:
   | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
 ;
 
-custom_type_constructor:
+variant_type_constructor:
   | name = UNAME OF t = vtype { (name, t) }
 ;
 
-custom_type_definition_constructors_no_leading_pipe:
-  | c = custom_type_constructor { [c] }
-  | c = custom_type_constructor PIPE cs_tail = custom_type_definition_constructors { c :: cs_tail }
+variant_type_definition_constructors_no_leading_pipe:
+  | c = variant_type_constructor { [c] }
+  | c = variant_type_constructor PIPE cs_tail = variant_type_definition_constructors { c :: cs_tail }
 ;
 
-custom_type_definition_constructors:
-  | PIPE cs = custom_type_definition_constructors_no_leading_pipe { cs }
-  | cs = custom_type_definition_constructors_no_leading_pipe { cs }
+variant_type_definition_constructors:
+  | PIPE cs = variant_type_definition_constructors_no_leading_pipe { cs }
+  | cs = variant_type_definition_constructors_no_leading_pipe { cs }
 ;
 
-custom_type_definition:
-  | TYPE name = LNAME ASSIGN cs = custom_type_definition_constructors { (name, cs) }
+variant_type_definition:
+  | TYPE name = LNAME ASSIGN cs = variant_type_definition_constructors { (name, cs) }
 ;
 
 typed_function_name:
@@ -215,6 +215,6 @@ quotient_type_definition:
 
 prog:
   | e = expr EOF { { type_defns = []; e = e } }
-  | ct = custom_type_definition p = prog { add_custom_type_definition_to_program p ct }
+  | ct = variant_type_definition p = prog { add_variant_type_definition_to_program p ct }
   | qt = quotient_type_definition p = prog { add_quotient_type_definition_to_program p qt }
 ;

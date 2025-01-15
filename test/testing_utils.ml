@@ -2,7 +2,7 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Pattern
 open Ast
 open Quotient_types
@@ -12,8 +12,8 @@ open Ast_executor
 open Program
 
 let default_max_gen_rec_depth : int = 10
-let default_max_custom_type_count : int = 5
-let default_max_custom_type_constructor_count : int = 5
+let default_max_variant_type_count : int = 5
+let default_max_variant_type_constructor_count : int = 5
 let default_max_quotient_type_count : int = 5
 
 let sexp_of_token = function
@@ -78,16 +78,16 @@ let override_equal_exec_res (a : exec_res) (b : exec_res) : bool =
 module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
-  val add_custom : t -> custom_type -> t
+  val add_variant : t -> variant_type -> t
   val add_quotient : t -> quotient_type -> t
   val type_defns_to_list : t -> type_defn list
   val from_list : type_defn list -> t
-  val custom_gen_opt : t -> custom_type QCheck.Gen.t option
+  val variant_gen_opt : t -> variant_type QCheck.Gen.t option
   val sexp_of_t : t -> Sexp.t
 
   module QCheck_testing : sig
     type gen_options = {
-      max_custom_types : int;
+      max_variant_types : int;
       max_constructors : int;
       max_quotient_types : int;
       mrd : int;
@@ -118,27 +118,27 @@ end = struct
   let type_defn_exists ctx ct_name =
     Option.is_some (find_type_defn_by_name ctx ct_name)
 
-  let find_custom_type_with_constructor (ctx : t) (c_name : string) :
-      (custom_type * custom_type_constructor) option =
+  let find_variant_type_with_constructor (ctx : t) (c_name : string) :
+      (variant_type * variant_type_constructor) option =
     let open Option in
     List.find_map ctx ~f:(function
-      | CustomType ((_, cs) as ct) ->
+      | VariantType ((_, cs) as ct) ->
           List.find_map cs ~f:(fun ((x_c_name, _) as c) ->
               if equal_string c_name x_c_name then Some c else None)
           >>| fun c -> (ct, c)
       | QuotientType _ -> None)
 
-  let add_custom (ctx : t) (ct : custom_type) : t = CustomType ct :: ctx
+  let add_variant (ctx : t) (ct : variant_type) : t = VariantType ct :: ctx
   let add_quotient (ctx : t) (qt : quotient_type) : t = QuotientType qt :: ctx
   let type_defns_to_list = Fn.id
   let from_list cts = cts
 
-  let custom_gen_opt (ctx : t) : custom_type QCheck.Gen.t option =
+  let variant_gen_opt (ctx : t) : variant_type QCheck.Gen.t option =
     let open QCheck.Gen in
     let choices =
       List.filter_map
         ~f:(function
-          | CustomType ct -> Some (return ct) | QuotientType _ -> None)
+          | VariantType ct -> Some (return ct) | QuotientType _ -> None)
         ctx
     in
     match choices with [] -> None | _ :: _ -> Some (oneof choices)
@@ -150,7 +150,7 @@ end = struct
     type t = this_t
 
     type gen_options = {
-      max_custom_types : int;
+      max_variant_types : int;
       max_constructors : int;
       max_quotient_types : int;
       mrd : int;
@@ -162,26 +162,26 @@ end = struct
 
     let gen (opts : gen_options) : t QCheck.Gen.t =
       let open QCheck.Gen in
-      int_range 0 opts.max_custom_types >>= fun custom_type_count ->
+      int_range 0 opts.max_variant_types >>= fun variant_type_count ->
       int_range 0 opts.max_quotient_types >>= fun quotient_type_count ->
       fix
         (fun self
-             ( (rem_custom_types, rem_quotient_types),
+             ( (rem_variant_types, rem_quotient_types),
                (type_ctx : type_defn list) ) ->
-          let custom_type_gen : custom_type QCheck.Gen.t =
-            Custom_types.QCheck_testing.gen
+          let variant_type_gen : variant_type QCheck.Gen.t =
+            Variant_types.QCheck_testing.gen
               {
                 mrd = opts.mrd;
-                used_custom_type_names =
+                used_variant_type_names =
                   type_ctx |> type_defns_to_list
                   |> List.filter_map ~f:(function
-                       | CustomType (ct_name, _) -> Some ct_name
+                       | VariantType (ct_name, _) -> Some ct_name
                        | QuotientType _ -> None)
                   |> StringSet.of_list;
-                used_custom_type_constructor_names =
+                used_variant_type_constructor_names =
                   type_ctx |> type_defns_to_list
                   |> List.filter_map ~f:(function
-                       | CustomType (_, cs) -> Some cs
+                       | VariantType (_, cs) -> Some cs
                        | QuotientType _ -> None)
                   |> List.concat_map ~f:(fun cs ->
                          List.map ~f:(fun (c_name, _) -> c_name) cs)
@@ -191,12 +191,12 @@ end = struct
           in
           let choices : this_t QCheck.Gen.t list =
             Option.to_list
-              (if rem_custom_types >= 0 then
+              (if rem_variant_types >= 0 then
                  Some
-                   ( custom_type_gen >>= fun ct ->
+                   ( variant_type_gen >>= fun ct ->
                      self
-                       ( (rem_custom_types - 1, rem_quotient_types),
-                         CustomType ct :: type_ctx ) )
+                       ( (rem_variant_types - 1, rem_quotient_types),
+                         VariantType ct :: type_ctx ) )
                else None)
             @ Option.to_list
                 (if rem_quotient_types >= 0 then None
@@ -204,15 +204,15 @@ end = struct
                  else None)
           in
           match choices with [] -> return type_ctx | _ :: _ -> oneof choices)
-        ((custom_type_count, quotient_type_count), empty)
+        ((variant_type_count, quotient_type_count), empty)
 
     let print () : t QCheck.Print.t =
-      let print_custom_type_constructor : custom_type_constructor QCheck.Print.t
-          =
+      let print_variant_type_constructor :
+          variant_type_constructor QCheck.Print.t =
         QCheck.Print.(pair string vtype_to_source_code)
       in
-      let print_custom_type : custom_type QCheck.Print.t =
-        QCheck.Print.(pair Fn.id (list print_custom_type_constructor))
+      let print_variant_type : variant_type QCheck.Print.t =
+        QCheck.Print.(pair Fn.id (list print_variant_type_constructor))
       in
       let print_quotient_type_eqcons : quotient_type_eqcons QCheck.Print.t =
         let open QCheck.Print in
@@ -230,7 +230,7 @@ end = struct
           ((QCheck.Print.list print_quotient_type_eqcons) qt.eqconss)
       in
       let print_type_defn : type_defn QCheck.Print.t = function
-        | CustomType ct -> sprintf "CustomType(%s)" (print_custom_type ct)
+        | VariantType ct -> sprintf "VariantType(%s)" (print_variant_type ct)
         | QuotientType qt -> sprintf "QuotientType(%s)" (print_quotient_type qt)
       in
       QCheck.Print.(Fn.compose (list print_type_defn) type_defns_to_list)
@@ -239,9 +239,9 @@ end = struct
       let open QCheck.Iter in
       QCheck.Shrink.(
         list ~shrink:(function
-          | CustomType ct ->
-              Custom_types.QCheck_testing.shrink () ct >|= fun ct ->
-              CustomType ct
+          | VariantType ct ->
+              Variant_types.QCheck_testing.shrink () ct >|= fun ct ->
+              VariantType ct
           | QuotientType qt -> nil qt >|= fun qt -> QuotientType qt))
 
     let arbitrary (opts : arb_options) : t QCheck.arbitrary =
@@ -252,8 +252,8 @@ end
 let default_testing_type_ctx_gen =
   TestingTypeCtx.QCheck_testing.gen
     {
-      max_custom_types = default_max_custom_type_count;
-      max_constructors = default_max_custom_type_constructor_count;
+      max_variant_types = default_max_variant_type_count;
+      max_constructors = default_max_variant_type_constructor_count;
       max_quotient_types = default_max_quotient_type_count;
       mrd = default_max_gen_rec_depth;
     }
@@ -261,8 +261,8 @@ let default_testing_type_ctx_gen =
 let default_testing_type_ctx_arb =
   TestingTypeCtx.QCheck_testing.arbitrary
     {
-      max_custom_types = default_max_custom_type_count;
-      max_constructors = default_max_custom_type_constructor_count;
+      max_variant_types = default_max_variant_type_count;
+      max_constructors = default_max_variant_type_constructor_count;
       max_quotient_types = default_max_quotient_type_count;
       mrd = default_max_gen_rec_depth;
     }
@@ -321,10 +321,10 @@ end = struct
            (Vtype.QCheck_testing.gen
               {
                 mrd = default_max_gen_rec_depth;
-                custom_types =
+                variant_types =
                   TestingTypeCtx.type_defns_to_list type_ctx
                   |> List.filter_map ~f:(function
-                       | CustomType (ct_name, _) -> Some ct_name
+                       | VariantType (ct_name, _) -> Some ct_name
                        | QuotientType _ -> None)
                   |> StringSet.of_list;
               }))
@@ -363,9 +363,9 @@ let unit_program_arbitrary_with_default_options =
       gen =
         {
           mrd = default_max_gen_rec_depth;
-          max_custom_types = default_max_custom_type_count;
-          max_custom_type_constructors =
-            default_max_custom_type_constructor_count;
+          max_variant_types = default_max_variant_type_count;
+          max_variant_type_constructors =
+            default_max_variant_type_constructor_count;
           ast_type = None;
           v_gen = QCheck.Gen.unit;
         };

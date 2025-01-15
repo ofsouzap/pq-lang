@@ -1,17 +1,17 @@
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Ast
 open Quotient_types
 
-(** A type definition in a program. Either a custom type definition or a quotient type definition *)
-type type_defn = CustomType of custom_type | QuotientType of quotient_type
+(** A type definition in a program. Either a variant type definition or a quotient type definition *)
+type type_defn = VariantType of variant_type | QuotientType of quotient_type
 [@@deriving sexp, equal]
 
 (** Get the name of a defined type *)
 val type_defn_name : type_defn -> string
 
-(** A program, consisting of any number of custom type definitions and an expression to evaluate *)
+(** A program, consisting of any number of variant type definitions and an expression to evaluate *)
 type 'a program = { type_defns : type_defn list; e : 'a expr }
 [@@deriving sexp, equal]
 
@@ -28,8 +28,8 @@ module QCheck_testing : functor
   -> sig
   type gen_options = {
     mrd : int;
-    max_custom_types : int;
-    max_custom_type_constructors : int;
+    max_variant_types : int;
+    max_variant_type_constructors : int;
     ast_type : vtype option;
     v_gen : Tag.t QCheck.Gen.t;
   }

@@ -1,15 +1,15 @@
 open Core
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Ast
 open Quotient_types
 
-type type_defn = CustomType of custom_type | QuotientType of quotient_type
+type type_defn = VariantType of variant_type | QuotientType of quotient_type
 [@@deriving sexp, equal]
 
 let type_defn_name : type_defn -> string = function
-  | CustomType (ct_name, _) -> ct_name
+  | VariantType (ct_name, _) -> ct_name
   | QuotientType qt -> qt.name
 
 type 'a program = { type_defns : type_defn list; e : 'a expr }
@@ -22,7 +22,7 @@ let program_to_source_code ?(use_newlines : bool option) (prog : 'a program) :
   let type_defns_str : string list =
     List.map
       ~f:(function
-        | CustomType ct -> custom_type_to_source_code ct
+        | VariantType ct -> variant_type_to_source_code ct
         | QuotientType qt -> quotient_type_to_source_code ?use_newlines qt)
       prog.type_defns
   in
@@ -38,8 +38,8 @@ module QCheck_testing (Tag : sig
 end) : sig
   type gen_options = {
     mrd : int;
-    max_custom_types : int;
-    max_custom_type_constructors : int;
+    max_variant_types : int;
+    max_variant_type_constructors : int;
     ast_type : vtype option;
     v_gen : Tag.t QCheck.Gen.t;
   }
@@ -64,8 +64,8 @@ end = struct
 
   type gen_options = {
     mrd : int;
-    max_custom_types : int;
-    max_custom_type_constructors : int;
+    max_variant_types : int;
+    max_variant_type_constructors : int;
     ast_type : vtype option;
     v_gen : Tag.t QCheck.Gen.t;
   }
@@ -79,59 +79,59 @@ end = struct
     shrink : shrink_options;
   }
 
-  type gen_custom_types_list_acc = {
-    custom_types : custom_type list;
-    custom_type_names : StringSet.t;
+  type gen_variant_types_list_acc = {
+    variant_types : variant_type list;
+    variant_type_names : StringSet.t;
     constructor_names : StringSet.t;
   }
 
-  let gen_type_defns_list ~(max_custom_types : int)
-      ~(max_custom_type_constructors : int) ~(mrd : int) :
+  let gen_type_defns_list ~(max_variant_types : int)
+      ~(max_variant_type_constructors : int) ~(mrd : int) :
       type_defn list QCheck.Gen.t =
     (* TODO - allow this to generate quotient types too *)
     let open QCheck.Gen in
-    int_range 0 max_custom_types >>= fun (n : int) ->
+    int_range 0 max_variant_types >>= fun (n : int) ->
     fix
-      (fun self ((n : int), (acc : gen_custom_types_list_acc)) ->
+      (fun self ((n : int), (acc : gen_variant_types_list_acc)) ->
         if n <= 0 then
-          return (List.map ~f:(fun ct -> CustomType ct) acc.custom_types)
+          return (List.map ~f:(fun ct -> VariantType ct) acc.variant_types)
         else
-          Custom_types.QCheck_testing.gen
+          Variant_types.QCheck_testing.gen
             {
-              used_custom_type_names = acc.custom_type_names;
-              used_custom_type_constructor_names = acc.constructor_names;
-              max_constructors = max_custom_type_constructors;
+              used_variant_type_names = acc.variant_type_names;
+              used_variant_type_constructor_names = acc.constructor_names;
+              max_constructors = max_variant_type_constructors;
               mrd;
             }
           >>= fun ((ct_name, cs) as ct) ->
           self
             ( n - 1,
               {
-                custom_types = ct :: acc.custom_types;
-                custom_type_names = Set.add acc.custom_type_names ct_name;
+                variant_types = ct :: acc.variant_types;
+                variant_type_names = Set.add acc.variant_type_names ct_name;
                 constructor_names =
                   List.fold cs ~init:acc.constructor_names
                     ~f:(fun acc (c_name, _) -> Set.add acc c_name);
               } ))
       ( n,
         {
-          custom_types = [];
-          custom_type_names = StringSet.empty;
+          variant_types = [];
+          variant_type_names = StringSet.empty;
           constructor_names = StringSet.empty;
         } )
 
   let gen (opts : gen_options) : t QCheck.Gen.t =
     let open QCheck.Gen in
-    gen_type_defns_list ~max_custom_types:opts.max_custom_types
-      ~max_custom_type_constructors:opts.max_custom_type_constructors
+    gen_type_defns_list ~max_variant_types:opts.max_variant_types
+      ~max_variant_type_constructors:opts.max_variant_type_constructors
       ~mrd:opts.mrd
     >>= fun type_defns ->
     Ast_qcheck_testing.gen
       {
         t = opts.ast_type;
-        custom_types =
+        variant_types =
           List.filter_map
-            ~f:(function CustomType ct -> Some ct | QuotientType _ -> None)
+            ~f:(function VariantType ct -> Some ct | QuotientType _ -> None)
             type_defns;
         v_gen = opts.v_gen;
         mrd = opts.mrd;

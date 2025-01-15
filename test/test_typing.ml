@@ -20,10 +20,10 @@ let varname_gen = Varname.QCheck_testing.gen ()
 let vtype_gen type_ctx =
   Vtype.QCheck_testing.gen
     {
-      custom_types =
+      variant_types =
         TestingTypeCtx.type_defns_to_list type_ctx
         |> List.filter_map ~f:(function
-             | CustomType (ct_name, _) -> Some ct_name
+             | VariantType (ct_name, _) -> Some ct_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
@@ -245,12 +245,12 @@ let test_cases_expr_typing : test list =
           (SetTypingTypeContext.create
              ~type_defns:
                [
-                 CustomType ("empty", []);
-                 CustomType
+                 VariantType ("empty", []);
+                 VariantType
                    ( "int_list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeVariant "int_list"));
                      ] );
                ]),
         Match
@@ -266,12 +266,12 @@ let test_cases_expr_typing : test list =
                   IntLit ((), 0) );
                 ( PatConstructor
                     ( "Cons",
-                      PatName ("x", VTypePair (VTypeInt, VTypeCustom "int_list"))
-                    ),
+                      PatName
+                        ("x", VTypePair (VTypeInt, VTypeVariant "int_list")) ),
                   IntLit ((), 1) );
               ] ),
         Ok VTypeInt );
-      ( (* Non-existant custom type *)
+      ( (* Non-existant variant type *)
         Some (SetTypingTypeContext.create ~type_defns:[]),
         Match
           ( (),
@@ -286,27 +286,28 @@ let test_cases_expr_typing : test list =
                   IntLit ((), 0) );
                 ( PatConstructor
                     ( "Cons",
-                      PatName ("x", VTypePair (VTypeInt, VTypeCustom "int_list"))
-                    ),
+                      PatName
+                        ("x", VTypePair (VTypeInt, VTypeVariant "int_list")) ),
                   IntLit ((), 1) );
               ] ),
-        Error (UndefinedCustomTypeConstructor "Nil") );
+        Error (UndefinedVariantTypeConstructor "Nil") );
       ( None,
         Constructor ((), "Nil", UnitLit ()),
-        Error (UndefinedCustomTypeConstructor "Nil") );
+        Error (UndefinedVariantTypeConstructor "Nil") );
       ( Some
-          (SetTypingTypeContext.create ~type_defns:[ CustomType ("empty", []) ]),
+          (SetTypingTypeContext.create
+             ~type_defns:[ VariantType ("empty", []) ]),
         Constructor ((), "Nil", UnitLit ()),
-        Error (UndefinedCustomTypeConstructor "Nil") );
+        Error (UndefinedVariantTypeConstructor "Nil") );
       ( Some
           (SetTypingTypeContext.create
              ~type_defns:
                [
-                 CustomType
+                 VariantType
                    ( "list",
                      [
                        ("Leaf", VTypeInt);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
                      ] );
                ]),
         Constructor ((), "Leaf", UnitLit ()),
@@ -315,15 +316,15 @@ let test_cases_expr_typing : test list =
           (SetTypingTypeContext.create
              ~type_defns:
                [
-                 CustomType
+                 VariantType
                    ( "list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
                      ] );
                ]),
         Constructor ((), "Nil", UnitLit ()),
-        Ok (VTypeCustom "list") );
+        Ok (VTypeVariant "list") );
     ]
 
 let test_cases_expr_typing_full_check : test list =
@@ -524,10 +525,10 @@ let test_cases_arb_compound_expr_typing : test list =
     Unit_ast_qcheck_testing.gen
       {
         t = Some t;
-        custom_types =
+        variant_types =
           TestingTypeCtx.type_defns_to_list type_ctx
           |> List.filter_map ~f:(function
-               | CustomType ct -> Some ct
+               | VariantType ct -> Some ct
                | QuotientType _ -> None);
         v_gen = QCheck.Gen.unit;
         mrd = default_max_gen_rec_depth;
@@ -691,17 +692,17 @@ let test_cases_arb_compound_expr_typing : test list =
           (TestingTypeCtx.create
              ~type_defns:
                [
-                 CustomType
+                 VariantType
                    ( "list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
                      ] );
-                 CustomType ("int_box", [ ("IntBox", VTypeInt) ]);
+                 VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeCustom "list"))
+            (return (VTypeVariant "list"))
             ( expr_gen ~type_ctx VTypeUnit >|= fun e1 ->
               Constructor ((), "Nil", e1) ) );
       ( "Constructor - list Cons",
@@ -709,35 +710,35 @@ let test_cases_arb_compound_expr_typing : test list =
           (TestingTypeCtx.create
              ~type_defns:
                [
-                 CustomType
+                 VariantType
                    ( "list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
                      ] );
-                 CustomType ("int_box", [ ("IntBox", VTypeInt) ]);
+                 VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeCustom "list"))
-            ( expr_gen ~type_ctx (VTypePair (VTypeInt, VTypeCustom "list"))
+            (return (VTypeVariant "list"))
+            ( expr_gen ~type_ctx (VTypePair (VTypeInt, VTypeVariant "list"))
             >|= fun e1 -> Constructor ((), "Cons", e1) ) );
       ( "Constructor - int_box",
         Some
           (TestingTypeCtx.create
              ~type_defns:
                [
-                 CustomType
+                 VariantType
                    ( "list",
                      [
                        ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Cons", VTypePair (VTypeInt, VTypeVariant "list"));
                      ] );
-                 CustomType ("int_box", [ ("IntBox", VTypeInt) ]);
+                 VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeCustom "int_box"))
+            (return (VTypeVariant "int_box"))
             ( expr_gen ~type_ctx VTypeInt >|= fun e1 ->
               Constructor ((), "IntBox", e1) ) );
     ]

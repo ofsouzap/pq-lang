@@ -18,11 +18,11 @@ val quotient_type_eqcons_to_source_code :
 
 (* TODO - QCheck_testing submodule for quotient_type_eqcons *)
 
-(** A quotient type: a custom type with a list of quotients *)
+(** A quotient type: a variant type with a list of quotients *)
 type quotient_type = {
   name : string;  (** The name of the quotient type *)
   base_type_name : string;
-      (** The name of the custom/quotient type that the quotient type is based on *)
+      (** The name of the variant/quotient type that the quotient type is based on *)
   eqconss : quotient_type_eqcons list;
       (** The list of equality constructors for the quotient type *)
 }

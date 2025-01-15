@@ -1,7 +1,7 @@
 (** This module provides functionality for directly executing an AST of a program. *)
 
 open Vtype
-open Custom_types
+open Variant_types
 open Varname
 
 (** The data that the executor tags the interpreted AST with *)
@@ -23,8 +23,8 @@ and value =
   | Bool of bool  (** A boolean value *)
   | Closure of closure_props  (** A function closure *)
   | Pair of value * value  (** A pair value *)
-  | CustomTypeValue of custom_type * string * value
-      (** A value of a custom type, with the type itself and the constructor name specified *)
+  | VariantTypeValue of variant_type * string * value
+      (** A value of a variant type, with the type itself and the constructor name specified *)
 [@@deriving sexp, equal]
 
 (** A store, containing the values of variables under the current context *)
@@ -69,8 +69,8 @@ type exec_err =
       (** The maximum recursion depth of the execution has been exceeded so the program was terminated *)
   | IncompleteMatchError
       (** No cases could be found that match the provided value in a match statement *)
-  | UnknownCustomTypeConstructor of string
-      (** No custom type could be found with a constructor of the specified name *)
+  | UnknownVariantTypeConstructor of string
+      (** No variant type could be found with a constructor of the specified name *)
 [@@deriving sexp, equal]
 
 (** The result of executing an AST *)

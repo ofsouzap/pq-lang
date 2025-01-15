@@ -12,10 +12,10 @@ open Testing_utils
 let vtype_gen (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.gen
     {
-      custom_types =
+      variant_types =
         TestingTypeCtx.type_defns_to_list type_ctx
         |> List.filter_map ~f:(function
-             | CustomType (ct_name, _) -> Some ct_name
+             | VariantType (ct_name, _) -> Some ct_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
@@ -24,10 +24,10 @@ let vtype_gen (type_ctx : TestingTypeCtx.t) =
 let vtype_arb (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.arbitrary
     {
-      custom_types =
+      variant_types =
         TestingTypeCtx.type_defns_to_list type_ctx
         |> List.filter_map ~f:(function
-             | CustomType (ct_name, _) -> Some ct_name
+             | VariantType (ct_name, _) -> Some ct_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
@@ -126,10 +126,10 @@ let create_typed_expr_gen_test (name : string)
           Unit_ast_qcheck_testing.gen
             {
               t = Some t;
-              custom_types =
+              variant_types =
                 TestingTypeCtx.type_defns_to_list type_ctx
                 |> List.filter_map ~f:(function
-                     | CustomType ct -> Some ct
+                     | VariantType ct -> Some ct
                      | QuotientType _ -> None);
               v_gen = QCheck.Gen.unit;
               mrd = default_max_gen_rec_depth;
@@ -186,7 +186,7 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
             vtype_gen type_ctx >|= fun t -> (type_ctx, t)))
        (fun (type_ctx, t) ->
          match t with
-         | VTypeCustom ct_name ->
+         | VTypeVariant ct_name ->
              TestingTypeCtx.type_defn_exists type_ctx ct_name
          | _ -> true))
 
@@ -196,8 +196,8 @@ let create_test_type_ctx_gen_valid (name : string) : test =
     (Test.make ~name ~count:1000
        (TestingTypeCtx.QCheck_testing.arbitrary
           {
-            max_custom_types = default_max_custom_type_count;
-            max_constructors = default_max_custom_type_constructor_count;
+            max_variant_types = default_max_variant_type_count;
+            max_constructors = default_max_variant_type_constructor_count;
             max_quotient_types = default_max_quotient_type_count;
             mrd = default_max_gen_rec_depth;
           }
@@ -229,7 +229,7 @@ let suite =
   "Testing Utilities Tests"
   >::: [
          "Value type generator"
-         >::: [ create_test_vtype_gen_constructors_exist "Custom types exist" ];
+         >::: [ create_test_vtype_gen_constructors_exist "Variant types exist" ];
          "Type context generator"
          >::: [ create_test_type_ctx_gen_valid "Type context is valid" ];
          "Typed expression generator"

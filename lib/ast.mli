@@ -5,7 +5,7 @@
 open Core
 open Utils
 open Vtype
-open Custom_types
+open Variant_types
 open Pattern
 
 (**
@@ -46,9 +46,9 @@ type 'a expr =
   (* Pattern matching *)
   | Match of 'a * 'a expr * (pattern * 'a expr) Nonempty_list.t
       (** Match expression *)
-  (* Custom data types *)
+  (* Variant data types *)
   | Constructor of 'a * string * 'a expr
-      (** Constructor for a custom data type *)
+      (** Constructor for a variant data type *)
 [@@deriving sexp, equal]
 
 (** Extract the value attached to a single node of a tagged AST expression *)
@@ -109,7 +109,7 @@ module QCheck_testing : functor
 
   type gen_options = {
     t : vtype option;
-    custom_types : custom_type list;
+    variant_types : variant_type list;
     (* TODO - include quotient types *)
     v_gen : Tag.t QCheck.Gen.t;
     mrd : int;

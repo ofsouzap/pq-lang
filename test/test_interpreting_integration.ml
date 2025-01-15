@@ -100,7 +100,7 @@ in
 end
 |},
              Ok (Int 10) );
-           ( "Program very recursive custom data type",
+           ( "Program very recursive variant data type",
              {|
 type my_type =
   | A of my_type

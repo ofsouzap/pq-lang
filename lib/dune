@@ -5,7 +5,7 @@
  (modules
   utils
   vtype
-  custom_types
+  variant_types
   varname
   pattern
   ast
