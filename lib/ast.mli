@@ -110,6 +110,7 @@ module QCheck_testing : functor
   type gen_options = {
     t : vtype option;
     custom_types : custom_type list;
+    (* TODO - include quotient types *)
     v_gen : Tag.t QCheck.Gen.t;
     mrd : int;
   }

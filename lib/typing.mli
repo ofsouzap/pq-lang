@@ -1,6 +1,8 @@
 open Custom_types
 open Vtype
 open Pattern
+open Quotient_types
+open Program
 
 (** Typing errors *)
 type typing_error =
@@ -10,6 +12,8 @@ type typing_error =
       (** An expression was expected to have the first type but had the second *)
   | PatternTypeMismatch of pattern * vtype * vtype
       (** A pattern was expected to have the first type but had the second *)
+  | EqConsBodyTypeMismatch of quotient_type_eqcons * vtype * vtype
+      (** The body of an equivalence constructor was expected to have the first type but had the second *)
   | EqualOperatorTypeMistmatch of vtype * vtype
       (** An application of the equality operation had a type mismatch as the operands had the specified types instead of compatible ones *)
   | ExpectedFunctionOf of vtype
@@ -18,8 +22,10 @@ type typing_error =
       (** The specified type constructor was used but hasn't been defined *)
   | PatternMultipleVariableDefinitions of string
       (** In a pattern, there are multiple definitions of some variable name *)
-  | MultipleCustomTypeDefinitions of string
-      (** The specified custom type name has been defined multiple times *)
+  | DuplicateTypeNameDefinition of string
+      (** The specified type name has been defined multiple times *)
+  | UndefinedTypeName of string
+      (** The specified type name has been referenced but not defined *)
   | MultipleCustomTypeConstructorDefinitions of string
       (** The specified custom type constructor name has been defined multiple times *)
 [@@deriving sexp, equal]
@@ -35,20 +41,20 @@ module type TypingTypeContext = sig
   val empty : t
 
   (** Creates a typing context using the provided values *)
-  val create : custom_types:custom_type list -> t
+  val create : type_defns:type_defn list -> (t, typing_error) Result.t
 
-  (** Looks up a custom type, by name, in the context *)
-  val find_custom : t -> string -> custom_type option
+  (** Looks up a type definition, by name, in the context *)
+  val find_type_defn_by_name : t -> string -> type_defn option
 
-  (** Check whether a custom type exists in the context, by name *)
-  val custom_exists : t -> string -> bool
+  (** Check whether a type definition exists in the context, by name *)
+  val type_defn_exists : t -> string -> bool
 
   (** Find a custom type in the type context with a custom of the specified name. If multiple exist, only one is returned *)
-  val find_custom_with_constructor :
+  val find_custom_type_with_constructor :
     t -> string -> (custom_type * custom_type_constructor) option
 
   (** Get a list of the custom types defined in the context *)
-  val customs_to_list : t -> custom_type list
+  val type_defns_to_list : t -> type_defn list
 end
 
 (** Typing context of types using a simple set-based approach *)
@@ -91,9 +97,6 @@ module type TypeCheckerSig = functor
   (** A checked version of the empty type context *)
   val checked_empty_type_ctx : checked_type_ctx
 
-  (** Check a type context is valid *)
-  val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
-
   (** The type of a program's expression that has passed type checking *)
   type 'a typed_program_expression
 
@@ -104,6 +107,9 @@ module type TypeCheckerSig = functor
   (** Get the expression from a typed program expression *)
   val typed_program_expression_get_expression :
     'a typed_program_expression -> (vtype * 'a) Ast.expr
+
+  (** Check that a vtype is valid in the given context *)
+  val check_vtype : checked_type_ctx -> vtype -> (unit, typing_error) Result.t
 
   (** Type checks a pattern in the given context, returning either the pattern's type and declared variables, or a pattern typing error *)
   val type_pattern :
@@ -117,6 +123,9 @@ module type TypeCheckerSig = functor
     checked_type_ctx * VarCtx.t ->
     'a Ast.expr ->
     ('a typed_program_expression, typing_error) result
+
+  (** Check a type context is valid *)
+  val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
 end
 
 (** Functor for creating modules providing type-checking functionality *)

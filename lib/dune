@@ -9,6 +9,7 @@
   varname
   pattern
   ast
+  quotient_types
   program
   typing
   parsing_errors

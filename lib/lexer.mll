@@ -24,6 +24,7 @@ rule token = parse
   | "match" { MATCH }
   | "with" { WITH }
   | "type" { TYPE }
+  | "qtype" { QTYPE }
   | "of" { OF }
   (* Operators and symbols *)
   | '+' { PLUS }
@@ -41,9 +42,11 @@ rule token = parse
   | "<" { LT }
   | "<=" { LTEQ }
   | "->" { ARROW }
+  | "=>" { BIG_ARROW }
   | ":" { COLON }
   | "," { COMMA }
   | "|" { PIPE }
+  | "|/" { QUOTIENT }
   | "()" { UNIT_VAL }
   (* Literals and names *)
   | ['0'-'9']+ as n { INTLIT (int_of_string n) }

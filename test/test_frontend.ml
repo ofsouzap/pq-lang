@@ -4,6 +4,7 @@ open Pq_lang
 open Utils
 open Pattern
 open Ast
+open Quotient_types
 open Program
 open Parser
 open Frontend
@@ -839,7 +840,7 @@ let test_cases_custom_type_defn : test_case_full_prog list =
 1
 |},
         [ INTLIT 1 ],
-        Ok { custom_types = []; e = IntLit ((), 1) } );
+        Ok { type_defns = []; e = IntLit ((), 1) } );
       ( (* Simple type definition *)
         {|
         type int_or_bool = Int of int | Bool of bool
@@ -861,8 +862,11 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            custom_types =
-              [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
+            type_defns =
+              [
+                CustomType
+                  ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+              ];
             e = IntLit ((), 1);
           } );
       ( (* Simple type definition (with leading pipe) *)
@@ -887,8 +891,11 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            custom_types =
-              [ ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]) ];
+            type_defns =
+              [
+                CustomType
+                  ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+              ];
             e = IntLit ((), 1);
           } );
       ( (* Incorrectly using upper-name for type name *)
@@ -954,17 +961,221 @@ let test_cases_custom_type_defn : test_case_full_prog list =
         ],
         Ok
           {
-            custom_types =
+            type_defns =
               [
-                ( "int_list",
-                  [
-                    ("Nil", VTypeUnit);
-                    ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                  ] );
+                CustomType
+                  ( "int_list",
+                    [
+                      ("Nil", VTypeUnit);
+                      ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                    ] );
               ];
             e = IntLit ((), 1);
           } );
     ]
+
+let test_cases_quotient_type_defn : test_case_full_prog list =
+  [
+    ( "Single variable binding",
+      {|
+        type int_box = Int of int
+
+qtype int_boxed
+  = int_box
+  |/ (x : int) => Int (x : int) == (x)
+
+1
+|},
+      [
+        TYPE;
+        LNAME "int_box";
+        ASSIGN;
+        UNAME "Int";
+        OF;
+        INT;
+        QTYPE;
+        LNAME "int_boxed";
+        ASSIGN;
+        LNAME "int_box";
+        QUOTIENT;
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        BIG_ARROW;
+        UNAME "Int";
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        EQUATE;
+        LPAREN;
+        LNAME "x";
+        RPAREN;
+        INTLIT 1;
+      ],
+      Ok
+        {
+          type_defns =
+            [
+              CustomType ("int_box", [ ("Int", VTypeInt) ]);
+              QuotientType
+                {
+                  name = "int_boxed";
+                  base_type_name = "int_box";
+                  eqconss =
+                    [
+                      {
+                        bindings = [ ("x", VTypeInt) ];
+                        body =
+                          ( PatConstructor ("Int", PatName ("x", VTypeInt)),
+                            Var ((), "x") );
+                      };
+                    ];
+                };
+            ];
+          e = IntLit ((), 1);
+        } );
+    ( "Multiple variable bindings",
+      {|
+        type tree = Leaf of int | Node of tree * tree
+
+qtype mobile
+  = tree
+  |/ (l : tree) -> (r : tree) => Node ((l : tree), (r : tree)) == (Node (r, l))
+
+1
+|},
+      [
+        TYPE;
+        LNAME "tree";
+        ASSIGN;
+        UNAME "Leaf";
+        OF;
+        INT;
+        PIPE;
+        UNAME "Node";
+        OF;
+        LNAME "tree";
+        STAR;
+        LNAME "tree";
+        QTYPE;
+        LNAME "mobile";
+        ASSIGN;
+        LNAME "tree";
+        QUOTIENT;
+        LPAREN;
+        LNAME "l";
+        COLON;
+        LNAME "tree";
+        RPAREN;
+        ARROW;
+        LPAREN;
+        LNAME "r";
+        COLON;
+        LNAME "tree";
+        RPAREN;
+        BIG_ARROW;
+        UNAME "Node";
+        LPAREN;
+        LPAREN;
+        LNAME "l";
+        COLON;
+        LNAME "tree";
+        RPAREN;
+        COMMA;
+        LPAREN;
+        LNAME "r";
+        COLON;
+        LNAME "tree";
+        RPAREN;
+        RPAREN;
+        EQUATE;
+        LPAREN;
+        UNAME "Node";
+        LPAREN;
+        LNAME "r";
+        COMMA;
+        LNAME "l";
+        RPAREN;
+        RPAREN;
+        INTLIT 1;
+      ],
+      Ok
+        {
+          type_defns =
+            [
+              CustomType
+                ( "tree",
+                  [
+                    ("Leaf", VTypeInt);
+                    ("Node", VTypePair (VTypeCustom "tree", VTypeCustom "tree"));
+                  ] );
+              QuotientType
+                {
+                  name = "mobile";
+                  base_type_name = "tree";
+                  eqconss =
+                    [
+                      {
+                        bindings =
+                          [
+                            ("l", VTypeCustom "tree"); ("r", VTypeCustom "tree");
+                          ];
+                        body =
+                          ( PatConstructor
+                              ( "Node",
+                                PatPair
+                                  ( PatName ("l", VTypeCustom "tree"),
+                                    PatName ("r", VTypeCustom "tree") ) ),
+                            Constructor
+                              ( (),
+                                "Node",
+                                Pair ((), Var ((), "r"), Var ((), "l")) ) );
+                      };
+                    ];
+                };
+            ];
+          e = IntLit ((), 1);
+        } );
+    ( "Incorrectly using upper-name for type name",
+      {|
+        type int_box = Int of int
+
+qtype Int_boxed
+  = int_box
+  |/ (x : int) => Int x == x
+
+1
+|},
+      [
+        TYPE;
+        LNAME "int_box";
+        ASSIGN;
+        UNAME "Int";
+        OF;
+        INT;
+        QTYPE;
+        UNAME "Int_boxed";
+        ASSIGN;
+        LNAME "int_box";
+        QUOTIENT;
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        BIG_ARROW;
+        UNAME "Int";
+        LNAME "x";
+        EQUATE;
+        LNAME "x";
+        INTLIT 1;
+      ],
+      Error ParsingError );
+  ]
 
 let test_cases_custom_type_referencing : test_case_no_custom_types list =
   List.map
@@ -1070,7 +1281,7 @@ let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
     test list =
   let f =
     Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
-        (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
+        (name, inp, tokens, Result.(ast >>| fun e -> { type_defns = []; e })))
   in
   [
     "Unit Value" >::: List.map ~f test_cases_unit_value;
@@ -1092,7 +1303,10 @@ let tests_no_custom_types (test_create_func : test_case_full_prog -> test) :
 let tests_full_prog (test_create_func : test_case_full_prog -> test) : test list
     =
   let f = test_create_func in
-  [ "Custom type definition" >::: List.map ~f test_cases_custom_type_defn ]
+  [
+    "Custom type definition" >::: List.map ~f test_cases_custom_type_defn;
+    "Quotient type definition" >::: List.map ~f test_cases_quotient_type_defn;
+  ]
 
 let suite =
   "Frontend Tests"

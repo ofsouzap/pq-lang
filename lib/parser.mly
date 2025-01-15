@@ -4,6 +4,7 @@ open Vtype
 open Custom_types
 open Pattern
 open Ast
+open Quotient_types
 open Program
 open Parsing_errors
 
@@ -31,14 +32,20 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
 
 let add_custom_type_definition_to_program (p : plain_program) (ct : custom_type) : plain_program =
   {
-    custom_types = ct :: p.custom_types;
+    type_defns = (CustomType ct) :: p.type_defns;
+    e = p.e
+  }
+
+let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_type) : plain_program =
+  {
+    type_defns = (QuotientType qt) :: p.type_defns;
     e = p.e
   }
 %}
 
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE FUN REC UNIT INT BOOL MATCH WITH TYPE OF
-%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQUATE GT GTEQ LT LTEQ ARROW COLON COMMA PIPE UNIT_VAL
+%token END IF THEN ELSE LET IN TRUE FALSE FUN REC UNIT INT BOOL MATCH WITH TYPE QTYPE OF
+%token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQUATE GT GTEQ LT LTEQ ARROW BIG_ARROW COLON COMMA PIPE QUOTIENT UNIT_VAL
 %token <int> INTLIT
 %token <string> LNAME UNAME
 %token EOF
@@ -57,19 +64,35 @@ let add_custom_type_definition_to_program (p : plain_program) (ct : custom_type)
 %nonassoc LPAREN // (
 
 // Non-terminal typing
+
 %type <vtype> vtype
+
+%type <pattern> pattern
+%type <pattern> contained_pattern
+
 %type <custom_type_constructor> custom_type_constructor
 %type <custom_type_constructor list> custom_type_definition_constructors_no_leading_pipe
 %type <custom_type_constructor list> custom_type_definition_constructors
 %type <custom_type> custom_type_definition
+
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
-%type <pattern> pattern
+
 %type <pattern * plain_expr> match_case
 %type <(pattern * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
 %type <(pattern * plain_expr) Nonempty_list.t> match_cases
+
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
+
+%type <(string * vtype) list> quotient_type_eqcons_bindings
+%type <pattern * plain_expr> quotient_type_eqcons_body
+%type <quotient_type_eqcons> quotient_type_eqcons
+%type <quotient_type_eqcons list> quotient_type_definition_eqconss
+%type <quotient_type> quotient_type_definition
+
+// Main program
+
 %start <plain_program> prog
 
 %%
@@ -82,6 +105,17 @@ vtype:
   | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
   | t1 = vtype STAR t2 = vtype { VTypePair (t1, t2) }
   | tname = LNAME { VTypeCustom tname }
+;
+
+pattern:
+  | p = contained_pattern { p }
+  | n = LNAME COLON t = vtype { PatName (n, t) }
+  | cname = UNAME p = contained_pattern { PatConstructor (cname, p) }
+;
+
+contained_pattern:
+  | LPAREN p = pattern RPAREN { p }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
 ;
 
 custom_type_constructor:
@@ -110,15 +144,8 @@ typed_name:
   | n = LNAME COLON t = vtype { (n, t) }
 ;
 
-pattern:
-  | LPAREN p = pattern RPAREN { p }
-  | LPAREN n = LNAME COLON t = vtype RPAREN { PatName (n, t) }
-  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
-  | LPAREN cname = UNAME p = pattern RPAREN { PatConstructor (cname, p) }
-;
-
 match_case:
-  | p = pattern ARROW e = expr { (p, e) }
+  | p = contained_pattern ARROW e = expr { (p, e) }
 ;
 
 match_cases_no_leading_pipe:
@@ -164,7 +191,30 @@ contained_expr:
   | n = LNAME { Var ((), n) }  (* var *)
 ;
 
+quotient_type_eqcons_bindings:
+  | LPAREN RPAREN { [] }  (* None *)
+  | LPAREN x = typed_name RPAREN { [x] }  (* Singleton *)
+  | LPAREN x = typed_name RPAREN ARROW vs_tail = quotient_type_eqcons_bindings { x :: vs_tail }  (* Multiple *)
+
+quotient_type_eqcons_body:
+  | p = pattern EQUATE LPAREN e = expr RPAREN { (p, e) }
+;
+
+quotient_type_eqcons:
+  | bs = quotient_type_eqcons_bindings BIG_ARROW body = quotient_type_eqcons_body { { bindings=bs; body=body } }
+;
+
+quotient_type_definition_eqconss:
+  | QUOTIENT eqcons = quotient_type_eqcons { [eqcons] }
+  | QUOTIENT eqcons = quotient_type_eqcons QUOTIENT eqconss_tail = quotient_type_definition_eqconss { eqcons :: eqconss_tail }
+;
+
+quotient_type_definition:
+  | QTYPE name = LNAME ASSIGN ct_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name = ct_name; eqconss=eqconss } }
+;
+
 prog:
-  | e = expr EOF { { custom_types = []; e = e } }
+  | e = expr EOF { { type_defns = []; e = e } }
   | ct = custom_type_definition p = prog { add_custom_type_definition_to_program p ct }
+  | qt = quotient_type_definition p = prog { add_quotient_type_definition_to_program p qt }
 ;

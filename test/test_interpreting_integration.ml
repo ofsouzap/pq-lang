@@ -35,20 +35,23 @@ end
 
 let create_test ((name : string), (inp : string), (exp : exec_res)) =
   name >:: fun _ ->
+  let open Result in
   let lexbuf = Lexing.from_string inp in
   let prog = Parser.prog Lexer.token lexbuf in
-  let tpe =
-    match
-      Typing.type_expr
-        ~type_ctx:(SetTypingTypeContext.create ~custom_types:prog.custom_types)
-        prog.e
-    with
-    | Ok x -> x
-    | Error _ -> failwith "Failed to type expression"
+  let main_result : (unit, Typing.typing_error) Result.t =
+    SetTypingTypeContext.create ~type_defns:prog.type_defns >>= fun type_ctx ->
+    Typing.type_expr ~type_ctx prog.e >>= fun tpe ->
+    let result : Ast_executor.exec_res =
+      Ast_executor.SimpleExecutor.execute_program tpe
+    in
+    Ok
+      (assert_equal exp result ~cmp:override_equal_exec_res
+         ~printer:Ast_executor.show_exec_res)
   in
-  let result = Ast_executor.SimpleExecutor.execute_program tpe in
-  assert_equal exp result ~cmp:override_equal_exec_res
-    ~printer:Ast_executor.show_exec_res
+  match main_result with
+  | Error err ->
+      failwith (sprintf "Error in typing: %s" (print_typing_error err))
+  | Ok _ -> ()
 
 let suite =
   "Lexer-Parser-AST Executor"

@@ -301,14 +301,18 @@ let test_cases_recursion : basic_test_case list =
 let test_cases_match : basic_test_case list =
   let open Ast in
   let mapf
-      ( (type_ctx : SetTypingTypeContext.t option),
+      ( (type_ctx :
+          (SetTypingTypeContext.t, Typing.typing_error) Result.t option),
         (x : plain_expr),
         (y : exec_res) ) =
-    ( ast_to_source_code x,
-      type_expr
-        ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
-        x,
-      y )
+    let type_ctx =
+      match Option.value ~default:(Ok SetTypingTypeContext.empty) type_ctx with
+      | Error err ->
+          failwith
+            (sprintf "Error creating type context: %s" (print_typing_error err))
+      | Ok type_ctx -> type_ctx
+    in
+    (ast_to_source_code x, type_expr ~type_ctx x, y)
   in
   List.map ~f:mapf
     [
@@ -376,14 +380,15 @@ let test_cases_match : basic_test_case list =
         Ok (Pair (Bool true, Bool true)) );
       ( Some
           (SetTypingTypeContext.create
-             ~custom_types:
+             ~type_defns:
                [
-                 ("bool_box", [ ("BoolBox", VTypeBool) ]);
-                 ( "int_list",
-                   [
-                     ("Nil", VTypeUnit);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                   ] );
+                 CustomType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+                 CustomType
+                   ( "int_list",
+                     [
+                       ("Nil", VTypeUnit);
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                     ] );
                ]),
         Match
           ( (),
@@ -396,14 +401,15 @@ let test_cases_match : basic_test_case list =
         Ok (Bool true) );
       ( Some
           (SetTypingTypeContext.create
-             ~custom_types:
+             ~type_defns:
                [
-                 ("bool_box", [ ("BoolBox", VTypeBool) ]);
-                 ( "int_list",
-                   [
-                     ("Nil", VTypeUnit);
-                     ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                   ] );
+                 CustomType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+                 CustomType
+                   ( "int_list",
+                     [
+                       ("Nil", VTypeUnit);
+                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                     ] );
                ]),
         Match
           ( (),
@@ -429,9 +435,17 @@ let test_cases_match : basic_test_case list =
 let test_cases_constructor : basic_test_case list =
   let open Ast in
   let mapf ((x : custom_type list), (y : plain_expr), (z : exec_res)) =
-    ( ast_to_source_code y,
-      type_expr ~type_ctx:(SetTypingTypeContext.create ~custom_types:x) y,
-      z )
+    let type_ctx =
+      match
+        SetTypingTypeContext.create
+          ~type_defns:(List.map ~f:(fun ct -> Program.CustomType ct) x)
+      with
+      | Error err ->
+          failwith
+            (sprintf "Error creating type context: %s" (print_typing_error err))
+      | Ok type_ctx -> type_ctx
+    in
+    (ast_to_source_code y, type_expr ~type_ctx y, z)
   in
   let ct_list : custom_type =
     ( "list",
