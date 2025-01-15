@@ -23,7 +23,7 @@ let vtype_gen type_ctx =
       variant_types =
         TestingTypeCtx.type_defns_to_list type_ctx
         |> List.filter_map ~f:(function
-             | VariantType (ct_name, _) -> Some ct_name
+             | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
@@ -528,7 +528,7 @@ let test_cases_arb_compound_expr_typing : test list =
         variant_types =
           TestingTypeCtx.type_defns_to_list type_ctx
           |> List.filter_map ~f:(function
-               | VariantType ct -> Some ct
+               | VariantType vt -> Some vt
                | QuotientType _ -> None);
         v_gen = QCheck.Gen.unit;
         mrd = default_max_gen_rec_depth;

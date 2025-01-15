@@ -9,7 +9,7 @@ type type_defn = VariantType of variant_type | QuotientType of quotient_type
 [@@deriving sexp, equal]
 
 let type_defn_name : type_defn -> string = function
-  | VariantType (ct_name, _) -> ct_name
+  | VariantType (vt_name, _) -> vt_name
   | QuotientType qt -> qt.name
 
 type 'a program = { type_defns : type_defn list; e : 'a expr }
@@ -22,7 +22,7 @@ let program_to_source_code ?(use_newlines : bool option) (prog : 'a program) :
   let type_defns_str : string list =
     List.map
       ~f:(function
-        | VariantType ct -> variant_type_to_source_code ct
+        | VariantType vt -> variant_type_to_source_code vt
         | QuotientType qt -> quotient_type_to_source_code ?use_newlines qt)
       prog.type_defns
   in
@@ -94,7 +94,7 @@ end = struct
     fix
       (fun self ((n : int), (acc : gen_variant_types_list_acc)) ->
         if n <= 0 then
-          return (List.map ~f:(fun ct -> VariantType ct) acc.variant_types)
+          return (List.map ~f:(fun vt -> VariantType vt) acc.variant_types)
         else
           Variant_types.QCheck_testing.gen
             {
@@ -103,12 +103,12 @@ end = struct
               max_constructors = max_variant_type_constructors;
               mrd;
             }
-          >>= fun ((ct_name, cs) as ct) ->
+          >>= fun ((vt_name, cs) as vt) ->
           self
             ( n - 1,
               {
-                variant_types = ct :: acc.variant_types;
-                variant_type_names = Set.add acc.variant_type_names ct_name;
+                variant_types = vt :: acc.variant_types;
+                variant_type_names = Set.add acc.variant_type_names vt_name;
                 constructor_names =
                   List.fold cs ~init:acc.constructor_names
                     ~f:(fun acc (c_name, _) -> Set.add acc c_name);
@@ -131,7 +131,7 @@ end = struct
         t = opts.ast_type;
         variant_types =
           List.filter_map
-            ~f:(function VariantType ct -> Some ct | QuotientType _ -> None)
+            ~f:(function VariantType vt -> Some vt | QuotientType _ -> None)
             type_defns;
         v_gen = opts.v_gen;
         mrd = opts.mrd;

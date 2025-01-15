@@ -30,9 +30,9 @@ let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : 
   | Fun (_, x, fbody') -> Let ((), fname, Fix ((), f, x, fbody'), subexpr)
   | _ -> raise CustomError
 
-let add_variant_type_definition_to_program (p : plain_program) (ct : variant_type) : plain_program =
+let add_variant_type_definition_to_program (p : plain_program) (vt : variant_type) : plain_program =
   {
-    type_defns = (VariantType ct) :: p.type_defns;
+    type_defns = (VariantType vt) :: p.type_defns;
     e = p.e
   }
 
@@ -210,11 +210,11 @@ quotient_type_definition_eqconss:
 ;
 
 quotient_type_definition:
-  | QTYPE name = LNAME ASSIGN ct_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name = ct_name; eqconss=eqconss } }
+  | QTYPE name = LNAME ASSIGN vt_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name = vt_name; eqconss=eqconss } }
 ;
 
 prog:
   | e = expr EOF { { type_defns = []; e = e } }
-  | ct = variant_type_definition p = prog { add_variant_type_definition_to_program p ct }
+  | vt = variant_type_definition p = prog { add_variant_type_definition_to_program p vt }
   | qt = quotient_type_definition p = prog { add_quotient_type_definition_to_program p qt }
 ;

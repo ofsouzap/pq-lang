@@ -375,10 +375,10 @@ end = struct
           {
             t = e1_t;
             get_variant_type_constructors =
-              (fun (ct_name : string) ->
+              (fun (vt_name : string) ->
                 List.find_map_exn
-                  ~f:(fun (x_ct_name, cs) ->
-                    if equal_string ct_name x_ct_name then Some cs else None)
+                  ~f:(fun (x_vt_name, cs) ->
+                    if equal_string vt_name x_vt_name then Some cs else None)
                   variant_types);
           }
       in
@@ -515,10 +515,10 @@ end = struct
           let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
-    and gen_variant ((ct_name, cs) : variant_type)
+    and gen_variant ((vt_name, cs) : variant_type)
         (param : int * (string * vtype) list) : Tag.t expr Gen.t =
       (* Generate an expression that types as the provided variant type *)
-      let t = VTypeCustom ct_name in
+      let t = VTypeCustom vt_name in
       fix
         (fun self (d, ctx) ->
           v_gen >>= fun v ->
@@ -541,14 +541,14 @@ end = struct
       | VTypeBool -> gen_bool (d, ctx)
       | VTypeFun (t1, t2) -> gen_fun (t1, t2) (d, ctx)
       | VTypePair (t1, t2) -> gen_pair (t1, t2) (d, ctx)
-      | VTypeCustom ct_name ->
+      | VTypeCustom vt_name ->
           (Option.value_exn
              ~message:
                (sprintf
                   "The variant type specified (%s) doesn't exist in the context"
-                  ct_name)
+                  vt_name)
              (List.find
-                ~f:(fun (x_ct_name, _) -> equal_string x_ct_name ct_name)
+                ~f:(fun (x_vt_name, _) -> equal_string x_vt_name vt_name)
                 variant_types)
           |> gen_variant)
             (d, ctx)

@@ -438,7 +438,7 @@ let test_cases_constructor : basic_test_case list =
     let type_ctx =
       match
         SetTypingTypeContext.create
-          ~type_defns:(List.map ~f:(fun ct -> Program.VariantType ct) x)
+          ~type_defns:(List.map ~f:(fun vt -> Program.VariantType vt) x)
       with
       | Error err ->
           failwith
@@ -447,38 +447,38 @@ let test_cases_constructor : basic_test_case list =
     in
     (ast_to_source_code y, type_expr ~type_ctx y, z)
   in
-  let ct_list : variant_type =
+  let vt_list : variant_type =
     ( "list",
       [ ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeCustom "list")) ]
     )
   in
-  let ct_int_box : variant_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
+  let vt_int_box : variant_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
   List.map ~f:mapf
     [
-      ( [ ct_list ],
+      ( [ vt_list ],
         Constructor ((), "Nil", UnitLit ()),
-        Ok (VariantTypeValue (ct_list, "Nil", Unit)) );
-      ( [ ct_list ],
+        Ok (VariantTypeValue (vt_list, "Nil", Unit)) );
+      ( [ vt_list ],
         Constructor
           ( (),
             "Cons",
             Pair ((), IntLit ((), 1), Constructor ((), "Nil", UnitLit ())) ),
         Ok
           (VariantTypeValue
-             ( ct_list,
+             ( vt_list,
                "Cons",
-               Pair (Int 1, VariantTypeValue (ct_list, "Nil", Unit)) )) );
-      ( [ ct_int_box ],
+               Pair (Int 1, VariantTypeValue (vt_list, "Nil", Unit)) )) );
+      ( [ vt_int_box ],
         Constructor ((), "IntBox", Add ((), IntLit ((), 2), IntLit ((), 5))),
-        Ok (VariantTypeValue (ct_int_box, "IntBox", Int 7)) );
-      ( [ ct_int_box ],
+        Ok (VariantTypeValue (vt_int_box, "IntBox", Int 7)) );
+      ( [ vt_int_box ],
         Let
           ( (),
             "x",
             IntLit ((), 2),
             Constructor ((), "IntBox", Add ((), Var ((), "x"), IntLit ((), 5)))
           ),
-        Ok (VariantTypeValue (ct_int_box, "IntBox", Int 7)) );
+        Ok (VariantTypeValue (vt_int_box, "IntBox", Int 7)) );
     ]
 
 let create_test

@@ -71,9 +71,9 @@ end
 type variant_type = string * variant_type_constructor list
 [@@deriving sexp, equal]
 
-let variant_type_to_source_code ((ct_name, ct_cs) : variant_type) : string =
-  sprintf "type %s = %s" ct_name
-    (variant_type_constructors_to_source_code ct_cs)
+let variant_type_to_source_code ((vt_name, vt_cs) : variant_type) : string =
+  sprintf "type %s = %s" vt_name
+    (variant_type_constructors_to_source_code vt_cs)
 
 module QCheck_testing : sig
   type gen_options = {
@@ -133,8 +133,8 @@ end = struct
     in
     pair
       ((* Filter so that the variant type name doesn't already exist *)
-       filter_gen ~max_attempts:10000 variant_type_name_gen ~f:(fun ct_name ->
-           not (Set.mem opts.used_variant_type_names ct_name)))
+       filter_gen ~max_attempts:10000 variant_type_name_gen ~f:(fun vt_name ->
+           not (Set.mem opts.used_variant_type_names vt_name)))
       gen_constructors
 
   let print () : t QCheck.Print.t = variant_type_to_source_code

@@ -50,7 +50,7 @@ end = struct
               (if variant_type_exists then
                  Some
                    ( opts.variant_types |> Set.to_list |> oneofl
-                   >|= fun ct_name -> VTypeCustom ct_name )
+                   >|= fun vt_name -> VTypeCustom vt_name )
                else None)
         in
         let rec_cases =

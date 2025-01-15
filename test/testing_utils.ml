@@ -115,20 +115,20 @@ end = struct
   let find_type_defn_by_name ctx td_name =
     List.find ctx ~f:(fun x_td -> equal_string (type_defn_name x_td) td_name)
 
-  let type_defn_exists ctx ct_name =
-    Option.is_some (find_type_defn_by_name ctx ct_name)
+  let type_defn_exists ctx vt_name =
+    Option.is_some (find_type_defn_by_name ctx vt_name)
 
   let find_variant_type_with_constructor (ctx : t) (c_name : string) :
       (variant_type * variant_type_constructor) option =
     let open Option in
     List.find_map ctx ~f:(function
-      | VariantType ((_, cs) as ct) ->
+      | VariantType ((_, cs) as vt) ->
           List.find_map cs ~f:(fun ((x_c_name, _) as c) ->
               if equal_string c_name x_c_name then Some c else None)
-          >>| fun c -> (ct, c)
+          >>| fun c -> (vt, c)
       | QuotientType _ -> None)
 
-  let add_variant (ctx : t) (ct : variant_type) : t = VariantType ct :: ctx
+  let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
   let add_quotient (ctx : t) (qt : quotient_type) : t = QuotientType qt :: ctx
   let type_defns_to_list = Fn.id
   let from_list cts = cts
@@ -138,7 +138,7 @@ end = struct
     let choices =
       List.filter_map
         ~f:(function
-          | VariantType ct -> Some (return ct) | QuotientType _ -> None)
+          | VariantType vt -> Some (return vt) | QuotientType _ -> None)
         ctx
     in
     match choices with [] -> None | _ :: _ -> Some (oneof choices)
@@ -175,7 +175,7 @@ end = struct
                 used_variant_type_names =
                   type_ctx |> type_defns_to_list
                   |> List.filter_map ~f:(function
-                       | VariantType (ct_name, _) -> Some ct_name
+                       | VariantType (vt_name, _) -> Some vt_name
                        | QuotientType _ -> None)
                   |> StringSet.of_list;
                 used_variant_type_constructor_names =
@@ -193,10 +193,10 @@ end = struct
             Option.to_list
               (if rem_variant_types >= 0 then
                  Some
-                   ( variant_type_gen >>= fun ct ->
+                   ( variant_type_gen >>= fun vt ->
                      self
                        ( (rem_variant_types - 1, rem_quotient_types),
-                         VariantType ct :: type_ctx ) )
+                         VariantType vt :: type_ctx ) )
                else None)
             @ Option.to_list
                 (if rem_quotient_types >= 0 then None
@@ -230,7 +230,7 @@ end = struct
           ((QCheck.Print.list print_quotient_type_eqcons) qt.eqconss)
       in
       let print_type_defn : type_defn QCheck.Print.t = function
-        | VariantType ct -> sprintf "VariantType(%s)" (print_variant_type ct)
+        | VariantType vt -> sprintf "VariantType(%s)" (print_variant_type vt)
         | QuotientType qt -> sprintf "QuotientType(%s)" (print_quotient_type qt)
       in
       QCheck.Print.(Fn.compose (list print_type_defn) type_defns_to_list)
@@ -239,9 +239,9 @@ end = struct
       let open QCheck.Iter in
       QCheck.Shrink.(
         list ~shrink:(function
-          | VariantType ct ->
-              Variant_types.QCheck_testing.shrink () ct >|= fun ct ->
-              VariantType ct
+          | VariantType vt ->
+              Variant_types.QCheck_testing.shrink () vt >|= fun vt ->
+              VariantType vt
           | QuotientType qt -> nil qt >|= fun qt -> QuotientType qt))
 
     let arbitrary (opts : arb_options) : t QCheck.arbitrary =
@@ -324,7 +324,7 @@ end = struct
                 variant_types =
                   TestingTypeCtx.type_defns_to_list type_ctx
                   |> List.filter_map ~f:(function
-                       | VariantType (ct_name, _) -> Some ct_name
+                       | VariantType (vt_name, _) -> Some vt_name
                        | QuotientType _ -> None)
                   |> StringSet.of_list;
               }))

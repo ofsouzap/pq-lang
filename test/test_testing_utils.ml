@@ -15,7 +15,7 @@ let vtype_gen (type_ctx : TestingTypeCtx.t) =
       variant_types =
         TestingTypeCtx.type_defns_to_list type_ctx
         |> List.filter_map ~f:(function
-             | VariantType (ct_name, _) -> Some ct_name
+             | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
@@ -27,7 +27,7 @@ let vtype_arb (type_ctx : TestingTypeCtx.t) =
       variant_types =
         TestingTypeCtx.type_defns_to_list type_ctx
         |> List.filter_map ~f:(function
-             | VariantType (ct_name, _) -> Some ct_name
+             | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
@@ -129,7 +129,7 @@ let create_typed_expr_gen_test (name : string)
               variant_types =
                 TestingTypeCtx.type_defns_to_list type_ctx
                 |> List.filter_map ~f:(function
-                     | VariantType ct -> Some ct
+                     | VariantType vt -> Some vt
                      | QuotientType _ -> None);
               v_gen = QCheck.Gen.unit;
               mrd = default_max_gen_rec_depth;
@@ -186,8 +186,8 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
             vtype_gen type_ctx >|= fun t -> (type_ctx, t)))
        (fun (type_ctx, t) ->
          match t with
-         | VTypeCustom ct_name ->
-             TestingTypeCtx.type_defn_exists type_ctx ct_name
+         | VTypeCustom vt_name ->
+             TestingTypeCtx.type_defn_exists type_ctx vt_name
          | _ -> true))
 
 let create_test_type_ctx_gen_valid (name : string) : test =

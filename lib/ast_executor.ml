@@ -38,7 +38,7 @@ let rec value_type = function
   | Bool _ -> VTypeBool
   | Closure closure -> VTypeFun (snd closure.param, closure.out_type)
   | Pair (v1, v2) -> VTypePair (value_type v1, value_type v2)
-  | VariantTypeValue ((ct_name, _), _, _) -> VTypeCustom ct_name
+  | VariantTypeValue ((vt_name, _), _, _) -> VTypeCustom vt_name
 
 type typing_error = {
   expected_type : string option;
@@ -289,7 +289,7 @@ struct
         eval ~type_ctx store e1 >>= fun v1 ->
         TypeCtx.find_variant_type_with_constructor type_ctx c_name
         |> Result.of_option ~error:(UnknownVariantTypeConstructor c_name)
-        >>= fun (ct, _) -> Ok (VariantTypeValue (ct, c_name, v1))
+        >>= fun (vt, _) -> Ok (VariantTypeValue (vt, c_name, v1))
 
   let execute_program (tpe : 'a TypeChecker.typed_program_expression) =
     let type_ctx = TypeChecker.typed_program_expression_get_type_ctx tpe in

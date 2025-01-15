@@ -73,10 +73,10 @@ let print_typing_error = function
       sprintf "Undefined variant type constructor: %s" c_name
   | PatternMultipleVariableDefinitions xname ->
       sprintf "Variable named \"%s\" has been defined twice in a pattern" xname
-  | DuplicateTypeNameDefinition ct_name ->
+  | DuplicateTypeNameDefinition vt_name ->
       sprintf "Variant type named \"%s\" has been defined multiple times"
-        ct_name
-  | UndefinedTypeName ct_name -> sprintf "Undefined variant type: %s" ct_name
+        vt_name
+  | UndefinedTypeName vt_name -> sprintf "Undefined variant type: %s" vt_name
   | MultipleVariantTypeConstructorDefinitions c_name ->
       sprintf
         "Variant type constructor named \"%s\" has been defined multiple times"
@@ -105,7 +105,7 @@ module SetTypingTypeContext : TypingTypeContext = struct
     let type_defns_map_or_err =
       type_defns
       |> StringMap.of_list_with_key ~get_key:(function
-           | VariantType (ct_name, _) -> ct_name
+           | VariantType (vt_name, _) -> vt_name
            | QuotientType qt -> qt.name)
     in
     match type_defns_map_or_err with
@@ -115,21 +115,21 @@ module SetTypingTypeContext : TypingTypeContext = struct
   let find_type_defn_by_name (ctx : t) : string -> type_defn option =
     Map.find ctx.type_defns
 
-  let type_defn_exists (ctx : t) (ct_name : string) : bool =
-    Option.is_some (find_type_defn_by_name ctx ct_name)
+  let type_defn_exists (ctx : t) (vt_name : string) : bool =
+    Option.is_some (find_type_defn_by_name ctx vt_name)
 
   let find_variant_type_with_constructor (ctx : t) (c_name : string) :
       (variant_type * variant_type_constructor) option =
     Map.fold_until ctx.type_defns ~init:()
       ~f:(fun ~key:_ ~(data : type_defn) () ->
         match data with
-        | VariantType ((_, cs) as ct) -> (
+        | VariantType ((_, cs) as vt) -> (
             let search_res =
               List.find cs ~f:(fun (xc_name, _) -> equal_string c_name xc_name)
             in
             match search_res with
             | None -> Continue ()
-            | Some c -> Stop (Some (ct, c)))
+            | Some c -> Stop (Some (vt, c)))
         | QuotientType _ -> Continue ())
       ~finish:(fun () -> None)
 
@@ -214,10 +214,10 @@ functor
       | VTypeInt | VTypeBool | VTypeUnit -> Ok ()
       | VTypePair (t1, t2) | VTypeFun (t1, t2) ->
           check_vtype ctx t1 >>= fun () -> check_vtype ctx t2
-      | VTypeCustom ct_name ->
-          if TypeCtx.find_type_defn_by_name ctx ct_name |> Option.is_some then
+      | VTypeCustom vt_name ->
+          if TypeCtx.find_type_defn_by_name ctx vt_name |> Option.is_some then
             Ok ()
-          else UndefinedTypeName ct_name |> Error
+          else UndefinedTypeName vt_name |> Error
 
     let rec type_pattern
         (((type_ctx : checked_type_ctx), (var_ctx : VarCtx.t)) as ctx)
@@ -237,10 +237,10 @@ functor
       | PatConstructor (c_name, p) -> (
           match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
           | None -> Error (UndefinedVariantTypeConstructor c_name)
-          | Some ((ct_name, _), (_, c_t)) ->
+          | Some ((vt_name, _), (_, c_t)) ->
               type_pattern ctx p >>= fun (p_t, var_ctx_from_p) ->
               if equal_vtype c_t p_t then
-                Ok (VTypeCustom ct_name, var_ctx_from_p)
+                Ok (VTypeCustom vt_name, var_ctx_from_p)
               else Error (PatternTypeMismatch (p, c_t, p_t)))
 
     let type_expr :
@@ -434,9 +434,9 @@ functor
               TypeCtx.find_variant_type_with_constructor type_ctx c_name
             with
             | None -> Error (UndefinedVariantTypeConstructor c_name)
-            | Some ((ct_name, _), (_, c_t)) ->
+            | Some ((vt_name, _), (_, c_t)) ->
                 if equal_vtype c_t t1 then
-                  Ok (Constructor ((VTypeCustom ct_name, v), c_name, e1'))
+                  Ok (Constructor ((VTypeCustom vt_name, v), c_name, e1'))
                 else Error (TypeMismatch (c_t, t1)))
       in
       fun ((type_ctx, _) as ctx) orig_e ->
