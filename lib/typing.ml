@@ -509,6 +509,7 @@ functor
                 if Set.mem acc.types qt.base_type_name |> not then
                   Error (UndefinedTypeName qt.base_type_name)
                 else
+                  (* TODO - check that patterns on LHS of eqcons type as the quotient type's base variant type *)
                   List.fold_result ~init:()
                     ~f:(fun () eqcons ->
                       acc_to_checked_type_ctx acc >>= fun checked_type_ctx ->
