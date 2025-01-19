@@ -424,10 +424,11 @@ functor
                       else Error (TypeMismatch (t_out, t_c_e))
                 else Error (PatternTypeMismatch (p, t_in, p_t)))
               cs
-            >>| fun ( (t_out : vtype),
-                      (cs_typed_rev :
-                        (pattern * (vtype * 'a) expr) Nonempty_list.t) ) ->
-            Match ((t_out, v), e', Nonempty_list.rev cs_typed_rev)
+            >>|
+            fun ( (t_out : vtype),
+                  (cs_typed_rev : (pattern * (vtype * 'a) expr) Nonempty_list.t)
+                )
+            -> Match ((t_out, v), e', Nonempty_list.rev cs_typed_rev)
         | Constructor (v, c_name, e1) -> (
             type_expr ctx e1 >>= fun e1' ->
             let t1 = e_type e1' in

@@ -1260,7 +1260,7 @@ let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
   assert_equal
-    ~cmp:(equal_result (equal_program equal_unit) equal_frontend_error)
+    ~cmp:(Result.equal (equal_program equal_unit) equal_frontend_error)
     exp out
     ~printer:(fun x ->
       match x with
