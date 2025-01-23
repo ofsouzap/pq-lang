@@ -8,12 +8,14 @@ val lexer_keywords : string list
 module QCheck_utils : sig
   exception Filter_ran_out_of_attempts
 
-  (** Filter a generator so that it keeps trying until the generated value satisfies the specified predicate.
-    NOTE - this has a risk of causing infinite or near-infinite looping in testing *)
+  (** Filter a generator so that it keeps trying until the generated value
+      satisfies the specified predicate. NOTE - this has a risk of causing
+      infinite or near-infinite looping in testing *)
   val filter_gen :
     ?max_attempts:int -> 'a QCheck.Gen.t -> f:('a -> bool) -> 'a QCheck.Gen.t
 
-  (** A generator to take two values and keep generating until they are not equal *)
+  (** A generator to take two values and keep generating until they are not
+      equal *)
   val gen_unique_pair :
     ?max_attempts:int ->
     equal:('a -> 'a -> bool) ->
@@ -27,8 +29,8 @@ module QCheck_utils : sig
     ('a, 'b) Result.t QCheck.arbitrary
 end
 
-(** Module signature for the QCheck-related utilities for a program-related type.
-  Includes generator/shrinking options for preserving type *)
+(** Module signature for the QCheck-related utilities for a program-related
+    type. Includes generator/shrinking options for preserving type *)
 module type QCheck_testing_sig = sig
   open QCheck
 
@@ -77,7 +79,8 @@ module type Nonempty_list_sig = sig
   val fold_result :
     'a t -> init:'b -> f:('b -> 'a -> ('b, 'c) Result.t) -> ('b, 'c) Result.t
 
-  (** A variant of fold_result that is known not to return the initial value, as the list is non-empty *)
+  (** A variant of fold_result that is known not to return the initial value, as
+      the list is non-empty *)
   val fold_result_consume_init :
     'a t ->
     init:'init ->
@@ -107,7 +110,8 @@ module type SourceCodeBuilderSig = sig
   (** Type describing a state of the builder *)
   type state
 
-  (** Utility operator for chaining functions. Useful for chaining state operators *)
+  (** Utility operator for chaining functions. Useful for chaining state
+      operators *)
   val ( |.> ) : ('a -> 'b) -> ('b -> 'c) -> 'a -> 'c
 
   (** Create the initial state from the given initial parameters *)
@@ -116,9 +120,9 @@ module type SourceCodeBuilderSig = sig
   (** Write text to the builder *)
   val write : string -> state -> state
 
-  (** If the current line has contents,
-  create a new empty one with the current indent level,
-  otherwise just set the line's indent level to the current indent level *)
+  (** If the current line has contents, create a new empty one with the current
+      indent level, otherwise just set the line's indent level to the current
+      indent level *)
   val endline : state -> state
 
   (** Wrap a state operator in a block to make a block of code *)
@@ -127,7 +131,8 @@ module type SourceCodeBuilderSig = sig
   (** Build the state into the source code output *)
   val build : state -> string
 
-  (** Shortcut for creating a source code builder from a conversion function that returns state operators for given inputs *)
+  (** Shortcut for creating a source code builder from a conversion function
+      that returns state operators for given inputs *)
   val from_converter :
     converter:('a -> state -> state) -> use_newlines:bool -> 'a -> string
 end

@@ -199,9 +199,12 @@ module Nonempty_list : Nonempty_list_sig = struct
         | (h, (ts_h :: ts_ts as ts)) as xs ->
             (* Shrink the list elements, preserving the length *)
             to_list xs |> Shrink.list_elems V.shrink >|= from_list_unsafe
-            <+> (* Shrink the tail elements, preserving the head *)
+            <+>
+            (* Shrink the tail elements, preserving the head *)
             (Shrink.list_spine ts >|= fun ts' -> (h, ts'))
-            <+> (* Drop the head *) return (ts_h, ts_ts)
+            <+>
+            (* Drop the head *)
+            return (ts_h, ts_ts)
 
     let arbitrary () : t QCheck.arbitrary =
       QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen ())
