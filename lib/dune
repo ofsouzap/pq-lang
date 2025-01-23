@@ -1,7 +1,7 @@
 (library
  (public_name pq_lang.lib)
  (name pq_lang)
- (libraries core qcheck)
+ (libraries core qcheck z3)
  (modules
   utils
   vtype
@@ -13,6 +13,7 @@
   custom_types
   program
   typing
+  quotient_type_checking
   parsing_errors
   parser
   lexer
