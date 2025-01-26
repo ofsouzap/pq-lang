@@ -207,9 +207,8 @@ functor
             let new_binding_name_2, existing_names =
               generate_fresh_varname existing_names
             in
-            let p1_t, p2_t =
-              failwith "TODO - once pattern tagging implemented"
-            in
+            let p1_t = (pattern_node_val p1).t in
+            let p2_t = (pattern_node_val p2).t in
             flatten_case_pattern (existing_names, p2, e)
             >>=
             fun (existing_names, flattened_p2_case_p, flattened_p2_case_e) ->
@@ -257,7 +256,7 @@ functor
             let new_binding_name, existing_names =
               generate_fresh_varname existing_names
             in
-            let p1_t = failwith "TODO - once pattern tagging implemented" in
+            let p1_t = (pattern_node_val p1).t in
             flatten_case_pattern (existing_names, p1, e)
             >>|
             fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
@@ -460,7 +459,14 @@ functor
           sprintf "%s-%s-getval" vt_name c_name |> custom_special_prefix
 
         (** Representation of a vtype *)
-        let node_of_vtype : vtype -> node = failwith "TODO"
+        let rec node_of_vtype : vtype -> node = function
+          | VTypeInt -> Atom "Int"
+          | VTypeBool -> Atom "Bool"
+          | VTypePair _ -> failwith "TODO - once pair type implemented"
+          | VTypeFun (t1, t2) ->
+              Op ("Array", [ node_of_vtype t1; node_of_vtype t2 ])
+          | VTypeUnit -> failwith "TODO - once unit type implemented"
+          | VTypeCustom ct_name -> Atom ct_name
 
         (** Representation of a variable declaration without definition *)
         let node_of_var_decl (xname : varname) (xt : vtype) : node =
