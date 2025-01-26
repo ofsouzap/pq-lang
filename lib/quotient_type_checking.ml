@@ -107,23 +107,29 @@ functor
             * preprocessed_tag_expr
             * preprocessed_tag_expr
         | Var of ast_tag * varname
-        | LetNoRec of
+        | Let of
             ast_tag * varname * preprocessed_tag_expr * preprocessed_tag_expr
-        | LetRec of
-            ast_tag
-            * varname
-            * (varname * vtype) Nonempty_list.t
-            * preprocessed_tag_expr
-            * preprocessed_tag_expr
-            (** LetRec (tag, xname, params, e1, e2) == "let rec xname
-                ...params... = e1 in e2" *)
-        | Fun of ast_tag * (string * vtype) * preprocessed_tag_expr
         | App of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
         | Match of
             ast_tag
             * preprocessed_tag_expr
             * (flat_pattern * preprocessed_tag_expr) Nonempty_list.t
         | Constructor of ast_tag * string * preprocessed_tag_expr
+
+      (** A top-level function definition. Contains information about "captured"
+          scoped variables that should be provided with calling the function *)
+      type function_defn = {
+        name : varname;
+        scope_vars : (varname * vtype) list;
+        args : (varname * vtype) list;
+        body : preprocessed_tag_expr;
+      }
+
+      (** Complete representation of an AST expression *)
+      type preprocessed_ast_repr = {
+        funs : function_defn list;
+        body : preprocessed_tag_expr;
+      }
 
       let preprocessed_expr_node_val : preprocessed_tag_expr -> ast_tag =
         function
@@ -144,10 +150,8 @@ functor
         | Lt (v, _, _) -> v
         | LtEq (v, _, _) -> v
         | If (v, _, _, _) -> v
+        | Let (v, _, _, _) -> v
         | Var (v, _) -> v
-        | LetNoRec (v, _, _, _) -> v
-        | LetRec (v, _, _, _, _) -> v
-        | Fun (v, _, _) -> v
         | App (v, _, _) -> v
         | Match (v, _, _) -> v
         | Constructor (v, _, _) -> v
@@ -269,164 +273,149 @@ functor
                   Nonempty_list.singleton
                     (flattened_p1_case_p, flattened_p1_case_e) ) )
 
-      let rec preprocess_expr
-          ((existing_names : StringSet.t), (orig_e : tag_expr)) :
-          (StringSet.t * preprocessed_tag_expr, quotient_typing_error) Result.t
+      (** Accumulator for the preprocess_expr function. Values are carried
+          across all function calls *)
+      type preprocess_expr_acc = {
+        fn_defns : function_defn list;
+        existing_names : StringSet.t;
+      }
+
+      (** State for the preprocess_expr function. Values are "scoped", in that
+          they aren't returned by the function, only passed to recursive calls
+      *)
+      type preprocess_expr_state = {
+        scope_vars : (varname * vtype) list;
+        scoped_varname_mapping : (varname * varname) list;
+      }
+
+      let preprocess_expr :
+          StringSet.t * tag_expr ->
+          (StringSet.t * preprocessed_ast_repr, quotient_typing_error) Result.t
           =
         let open Result in
-        let unop
-            (recomb :
-              StringSet.t ->
-              preprocessed_tag_expr ->
-              StringSet.t * preprocessed_tag_expr) (e1 : tag_expr) =
-          preprocess_expr (existing_names, e1) >>| fun (existing_names, e1') ->
-          recomb existing_names e1'
+        let rec aux (acc : preprocess_expr_acc) (state : preprocess_expr_state)
+            (orig_e : tag_expr) :
+            ( preprocess_expr_acc * preprocessed_tag_expr,
+              quotient_typing_error )
+            Result.t =
+          let unop
+              (recomb :
+                preprocess_expr_acc ->
+                preprocessed_tag_expr ->
+                preprocess_expr_acc * preprocessed_tag_expr) (e1 : tag_expr) =
+            aux acc state e1 >>| fun (acc, e1') -> recomb acc e1'
+          in
+          let binop
+              (recomb :
+                preprocess_expr_acc ->
+                preprocessed_tag_expr ->
+                preprocessed_tag_expr ->
+                preprocess_expr_acc * preprocessed_tag_expr) (e1 : tag_expr)
+              (e2 : tag_expr) =
+            aux acc state e1 >>= fun (acc, e1') ->
+            aux acc state e2 >>| fun (acc, e2') -> recomb acc e1' e2'
+          in
+          match orig_e with
+          | UnitLit v -> Ok (acc, UnitLit v)
+          | IntLit (v, x) -> Ok (acc, IntLit (v, x))
+          | Add (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, Add (v, e1', e2'))) e1 e2
+          | Neg (v, e1) -> unop (fun acc e1' -> (acc, Neg (v, e1'))) e1
+          | Subtr (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, Subtr (v, e1', e2'))) e1 e2
+          | Mult (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, Mult (v, e1', e2'))) e1 e2
+          | BoolLit (v, b) -> Ok (acc, BoolLit (v, b))
+          | BNot (v, e1) -> unop (fun acc e1' -> (acc, BNot (v, e1'))) e1
+          | BOr (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, BOr (v, e1', e2'))) e1 e2
+          | BAnd (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, BAnd (v, e1', e2'))) e1 e2
+          | Pair (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, Pair (v, e1', e2'))) e1 e2
+          | Eq (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, Eq (v, e1', e2'))) e1 e2
+          | Gt (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, Gt (v, e1', e2'))) e1 e2
+          | GtEq (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, GtEq (v, e1', e2'))) e1 e2
+          | Lt (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, Lt (v, e1', e2'))) e1 e2
+          | LtEq (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, LtEq (v, e1', e2'))) e1 e2
+          | If (v, e1, e2, e3) ->
+              aux acc state e1 >>= fun (acc, e1') ->
+              aux acc state e2 >>= fun (acc, e2') ->
+              aux acc state e3 >>| fun (acc, e3') -> (acc, If (v, e1', e2', e3'))
+          | Var (v, name) ->
+              List.Assoc.find ~equal:equal_varname state.scoped_varname_mapping
+                name
+              |> Option.value ~default:name
+              |> fun mapped_name -> Ok (acc, Var (v, mapped_name))
+          | Let _ ->
+              failwith
+                "TODO - handle recursive and non-recursive let-bindings. \
+                 Recursive ones need to be turned into function definitions. \
+                 This function alters the `state` value"
+          | Fun (v, (xname, xtype), e1) ->
+              let state' =
+                { state with scope_vars = (xname, xtype) :: state.scope_vars }
+              in
+              aux acc state' e1 >>| fun (acc, e1') ->
+              let f_name, new_existing_names =
+                generate_fresh_varname acc.existing_names
+              in
+              let scope_vars = state.scope_vars in
+              ( {
+                  existing_names = new_existing_names;
+                  fn_defns =
+                    {
+                      name = f_name;
+                      scope_vars;
+                      args = [ (xname, xtype) ];
+                      body = e1';
+                    }
+                    :: acc.fn_defns;
+                },
+                Var (v, f_name) )
+          | App (v, e1, e2) ->
+              binop (fun acc e1' e2' -> (acc, App (v, e1', e2'))) e1 e2
+          | Fix _ -> Error MisplacedFixNode
+          | Match (v, e1, cs) ->
+              aux acc state e1 >>= fun (acc, e1') ->
+              Nonempty_list.fold_result_consume_init ~init:() cs
+                ~f:(fun acc_state ((p : tag_pattern), (e : tag_expr)) ->
+                  aux acc state e >>| fun (acc, e') ->
+                  match acc_state with
+                  | First () -> (acc, Nonempty_list.singleton (p, e'))
+                  | Second (acc, acc_cases) ->
+                      (acc, Nonempty_list.cons (p, e') acc_cases))
+              >>= fun (acc, preprocessed_cases) ->
+              Nonempty_list.fold_result_consume_init ~init:()
+                ~f:(fun acc_state (p, e) ->
+                  let acc, acc_fn =
+                    match acc_state with
+                    | First () -> (acc, Nonempty_list.singleton)
+                    | Second (acc, acc_cases) ->
+                        (acc, Fn.flip Nonempty_list.cons acc_cases)
+                  in
+                  flatten_case_pattern (acc.existing_names, p, e)
+                  >>| fun (existing_names, flattened_p, flattened_e) ->
+                  ( { acc with existing_names },
+                    acc_fn (flattened_p, flattened_e) ))
+                preprocessed_cases
+              >>| fun (acc, preprocessed_cases) ->
+              (acc, Match (v, e1', preprocessed_cases))
+          | Constructor (v, name, expr) ->
+              unop (fun acc e' -> (acc, Constructor (v, name, e'))) expr
         in
-        let binop
-            (recomb :
-              StringSet.t ->
-              preprocessed_tag_expr ->
-              preprocessed_tag_expr ->
-              StringSet.t * preprocessed_tag_expr) (e1 : tag_expr)
-            (e2 : tag_expr) =
-          preprocess_expr (existing_names, e1) >>= fun (existing_names, e1') ->
-          preprocess_expr (existing_names, e2) >>| fun (existing_names, e2') ->
-          recomb existing_names e1' e2'
-        in
-        match orig_e with
-        | UnitLit v -> Ok (existing_names, UnitLit v)
-        | IntLit (v, x) -> Ok (existing_names, IntLit (v, x))
-        | Add (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, Add (v, e1', e2')))
-              e1 e2
-        | Neg (v, e1) ->
-            unop (fun existing_names e1' -> (existing_names, Neg (v, e1'))) e1
-        | Subtr (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, Subtr (v, e1', e2')))
-              e1 e2
-        | Mult (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, Mult (v, e1', e2')))
-              e1 e2
-        | BoolLit (v, b) -> Ok (existing_names, BoolLit (v, b))
-        | BNot (v, e1) ->
-            unop (fun existing_names e1' -> (existing_names, BNot (v, e1'))) e1
-        | BOr (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, BOr (v, e1', e2')))
-              e1 e2
-        | BAnd (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, BAnd (v, e1', e2')))
-              e1 e2
-        | Pair (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, Pair (v, e1', e2')))
-              e1 e2
-        | Eq (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' -> (existing_names, Eq (v, e1', e2')))
-              e1 e2
-        | Gt (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' -> (existing_names, Gt (v, e1', e2')))
-              e1 e2
-        | GtEq (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, GtEq (v, e1', e2')))
-              e1 e2
-        | Lt (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' -> (existing_names, Lt (v, e1', e2')))
-              e1 e2
-        | LtEq (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, LtEq (v, e1', e2')))
-              e1 e2
-        | If (v, e1, e2, e3) ->
-            preprocess_expr (existing_names, e1)
-            >>= fun (existing_names, e1') ->
-            preprocess_expr (existing_names, e2)
-            >>= fun (existing_names, e2') ->
-            preprocess_expr (existing_names, e3)
-            >>| fun (existing_names, e3') ->
-            (existing_names, If (v, e1', e2', e3'))
-        | Var (v, name) -> Ok (existing_names, Var (v, name))
-        | Let _ ->
-            failwith "TODO - handle recursive and non-recursive let-bindings"
-        | Fun (v, (param, typ), body) ->
-            preprocess_expr (existing_names, body)
-            >>| fun (existing_names, body') ->
-            (existing_names, Fun (v, (param, typ), body'))
-        | App (v, e1, e2) ->
-            binop
-              (fun existing_names e1' e2' ->
-                (existing_names, App (v, e1', e2')))
-              e1 e2
-        | Fix _ -> Error MisplacedFixNode
-        | Match (v, e1, cs) ->
-            preprocess_expr (existing_names, e1)
-            >>=
-            fun ((existing_names : StringSet.t), (e1' : preprocessed_tag_expr))
-            ->
-            Nonempty_list.fold_result_consume_init ~init:() cs
-              ~f:(fun
-                  (acc :
-                    ( unit,
-                      StringSet.t
-                      * (tag_pattern * preprocessed_tag_expr) Nonempty_list.t
-                    )
-                    Either.t)
-                  ((p : tag_pattern), (e : tag_expr))
-                ->
-                preprocess_expr (existing_names, e)
-                >>| fun (existing_names, e') ->
-                match acc with
-                | First () -> (existing_names, Nonempty_list.singleton (p, e'))
-                | Second (existing_names, acc_cases) ->
-                    (existing_names, Nonempty_list.cons (p, e') acc_cases))
-            >>=
-            fun ( (existing_names : StringSet.t),
-                  (preprocessed_cases :
-                    (tag_pattern * preprocessed_tag_expr) Nonempty_list.t) )
-            ->
-            Nonempty_list.fold_result_consume_init ~init:()
-              ~f:(fun
-                  (acc :
-                    ( unit,
-                      StringSet.t
-                      * (flat_pattern * preprocessed_tag_expr) Nonempty_list.t
-                    )
-                    Either.t)
-                  (p, e)
-                ->
-                let existing_names, acc_fn =
-                  match acc with
-                  | First () -> (existing_names, Nonempty_list.singleton)
-                  | Second (existing_names, acc_cases) ->
-                      (existing_names, Fn.flip Nonempty_list.cons acc_cases)
-                in
-                flatten_case_pattern (existing_names, p, e)
-                >>| fun (existing_names, flattened_p, flattened_e) ->
-                (existing_names, acc_fn (flattened_p, flattened_e)))
-              preprocessed_cases
-            >>| fun (existing_names, preprocessed_cases) ->
-            (existing_names, Match (v, e1', preprocessed_cases))
-        | Constructor (v, name, expr) ->
-            unop
-              (fun existing_names e' ->
-                (existing_names, Constructor (v, name, e')))
-              expr
+        fun (existing_names, e) ->
+          aux
+            { fn_defns = []; existing_names }
+            { scope_vars = []; scoped_varname_mapping = [] }
+            e
+          >>| fun (acc, e') ->
+          (acc.existing_names, { funs = acc.fn_defns; body = e' })
     end
 
     (** Interactions with the SMT solver and state that can be provided to it *)
@@ -520,19 +509,11 @@ functor
           | If (_, e1, e2, e3) ->
               Op ("ite", [ node_of_expr e1; node_of_expr e2; node_of_expr e3 ])
           | Var (_, vname) -> Atom vname
-          | LetNoRec (_, xname, e1, e2) ->
-              Op ("let", [ Op (xname, [ node_of_expr e1 ]); node_of_expr e2 ])
-          | LetRec _ ->
-              failwith
-                "TODO - need to keep track of let-rec bindings made to insert \
-                 them at the start, and with fresh names"
-          | Fun (_, (xname, xtype), e1) ->
+          | Let (_, xname, e1, e2) ->
               Op
-                ( "lambda",
-                  [
-                    List [ Op (xname, [ node_of_vtype xtype ]) ];
-                    node_of_expr e1;
-                  ] )
+                ( "let",
+                  [ List [ Op (xname, [ node_of_expr e1 ]) ]; node_of_expr e2 ]
+                )
           | App (_, e1, e2) ->
               Op ("select", [ node_of_expr e1; node_of_expr e2 ])
           | Match (_, e1, cs) ->
@@ -633,15 +614,15 @@ functor
     end
 
     let rec check_quotient_types_in_expr
-        (orig_e : ExprPreprocessor.preprocessed_tag_expr)
+        (ast_repr : ExprPreprocessor.preprocessed_ast_repr)
         (((state : Smt.state), (type_ctx : TypeCtx.t)) as param) :
         (unit, quotient_typing_error) Result.t =
       let open Result in
       let open ExprPreprocessor in
-      match orig_e with
+      match ast_repr.body with
       | UnitLit _ | IntLit _ | BoolLit _ | Var _ -> Ok ()
       | Neg (_, e1) | BNot (_, e1) | Constructor (_, _, e1) ->
-          check_quotient_types_in_expr e1 param
+          check_quotient_types_in_expr { ast_repr with body = e1 } param
       | Add (_, e1, e2)
       | Subtr (_, e1, e2)
       | Mult (_, e1, e2)
@@ -654,45 +635,19 @@ functor
       | Lt (_, e1, e2)
       | LtEq (_, e1, e2)
       | App (_, e1, e2) ->
-          check_quotient_types_in_expr e1 param >>= fun () ->
-          check_quotient_types_in_expr e2 param
-      | If (_, e1, e2, e3) ->
-          check_quotient_types_in_expr e1 param >>= fun () ->
-          check_quotient_types_in_expr e2 param >>= fun () ->
-          check_quotient_types_in_expr e3 param
-      | LetNoRec (_, xname, e1, e2) ->
-          check_quotient_types_in_expr e1 param >>= fun () ->
-          let e1_type = (ExprPreprocessor.preprocessed_expr_node_val e1).t in
-          let state' =
-            Smt.write_variable_value (xname, e1_type, `NonRecursive, e1) state
-          in
-          check_quotient_types_in_expr e2 (state', type_ctx)
-      | LetRec (_, fname, params, e1, e2) ->
-          let ftype =
-            Nonempty_list.fold ~init:(preprocessed_expr_node_val e1).t
-              ~f:(fun acc (_, xt) -> VTypeFun (xt, acc))
-              params
-          in
-          let state_for_let_expr_checking : Smt.state =
-            (* This is the state with the function name declared, as well as the function's parameters declared *)
-            let state_with_fn_decl =
-              Smt.add_variable_declaration fname ftype state
-            in
-            Nonempty_list.fold ~init:state_with_fn_decl
-              ~f:(fun acc (pname, ptype) ->
-                Smt.add_variable_declaration pname ptype acc)
-              params
-          in
-          check_quotient_types_in_expr e1 (state_for_let_expr_checking, type_ctx)
+          check_quotient_types_in_expr { ast_repr with body = e1 } param
           >>= fun () ->
-          let state_for_in_expr_checking : Smt.state =
-            (* This is the state with the function name defined *)
-            Smt.write_variable_value (fname, ftype, `Recursive, e1) state
-          in
-          check_quotient_types_in_expr e2 (state_for_in_expr_checking, type_ctx)
-      | Fun (_, (xname, xt), e1) ->
-          let state' = Smt.add_variable_declaration xname xt state in
-          check_quotient_types_in_expr e1 (state', type_ctx)
+          check_quotient_types_in_expr { ast_repr with body = e2 } param
+      | If (_, e1, e2, e3) ->
+          check_quotient_types_in_expr { ast_repr with body = e1 } param
+          >>= fun () ->
+          check_quotient_types_in_expr { ast_repr with body = e2 } param
+          >>= fun () ->
+          check_quotient_types_in_expr { ast_repr with body = e3 } param
+      | Let (_, _, e1, e2) ->
+          check_quotient_types_in_expr { ast_repr with body = e1 } param
+          >>= fun () ->
+          check_quotient_types_in_expr { ast_repr with body = e2 } param
       | Match (_, e1, _) ->
           let e1_type : vtype =
             (ExprPreprocessor.preprocessed_expr_node_val e1).t
@@ -712,8 +667,8 @@ functor
           if e1_type_is_quotient_type then
             failwith "TODO - perform the checking"
           else
-            check_quotient_types_in_expr e1 param >>= fun () ->
-            failwith "TODO - recurse into each of the cases"
+            check_quotient_types_in_expr { ast_repr with body = e1 } param
+            >>= fun () -> failwith "TODO - recurse into each of the cases"
 
     let check_quotient_types (prog : (ast_tag, pattern_tag) program) :
         (unit, quotient_typing_error) Result.t =
@@ -731,6 +686,6 @@ functor
       |> Result.map_error ~f:(fun err -> ProgramTypingError err)
       >>= fun type_ctx ->
       ExprPreprocessor.preprocess_expr (program_existing_names prog, prog.e)
-      >>= fun (_, preprocessed_body) ->
-      check_quotient_types_in_expr preprocessed_body (state, type_ctx)
+      >>= fun (_, preprocessed_ast_repr) ->
+      check_quotient_types_in_expr preprocessed_ast_repr (state, type_ctx)
   end
