@@ -27,6 +27,18 @@ let program_to_source_code ?(use_newlines : bool option) (prog : 'a program) :
       (if (equal_option equal_bool) use_newlines (Some true) then "\n" else " ")
     str_parts
 
+let program_existing_names (prog : 'a program) =
+  List.fold ~init:StringSet.empty
+    ~f:(fun acc -> function
+      | VariantType (vt_name, vt_cs) ->
+          Set.add acc vt_name |> fun acc ->
+          List.fold ~init:acc
+            ~f:(fun acc (c_name, _) -> Set.add acc c_name)
+            vt_cs
+      | QuotientType qt -> Set.add acc qt.name)
+    prog.custom_types
+  |> fun acc -> expr_existing_names prog.e |> Set.union acc
+
 module QCheck_testing (Tag : sig
   type t
 end) : sig

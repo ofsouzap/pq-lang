@@ -152,6 +152,8 @@ let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
       let e = fmap ~f:(const x) e_raw in
       type_eq (expr_node_val e) x)
 
+(* TODO - tests for existing names collecting *)
+
 module SingleTagged_tests =
 functor
   (Tag : sig

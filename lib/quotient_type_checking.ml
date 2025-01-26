@@ -730,11 +730,7 @@ functor
       TypeCtx.create ~custom_types:prog.custom_types
       |> Result.map_error ~f:(fun err -> ProgramTypingError err)
       >>= fun type_ctx ->
-      ExprPreprocessor.preprocess_expr
-        ( failwith
-            "TODO - once programs' all defined names are being recorded or are \
-             retrievable",
-          prog.e )
+      ExprPreprocessor.preprocess_expr (program_existing_names prog, prog.e)
       >>= fun (_, preprocessed_body) ->
       check_quotient_types_in_expr preprocessed_body (state, type_ctx)
   end

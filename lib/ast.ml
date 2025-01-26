@@ -97,6 +97,55 @@ let rec fmap ~(f : 'a -> 'b) (e : 'a expr) : 'b expr =
 
 let ( >|= ) (e : 'a expr) (f : 'a -> 'b) = fmap ~f e
 
+let rec expr_existing_names : 'a expr -> StringSet.t = function
+  | UnitLit _ -> StringSet.empty
+  | IntLit (_, _) -> StringSet.empty
+  | Add (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | Neg (_, e) -> expr_existing_names e
+  | Subtr (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | Mult (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | BoolLit (_, _) -> StringSet.empty
+  | BNot (_, e) -> expr_existing_names e
+  | BOr (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | BAnd (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | Pair (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | Eq (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | Gt (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | GtEq (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | Lt (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | LtEq (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | If (_, e1, e2, e3) ->
+      Set.union (expr_existing_names e1)
+        (Set.union (expr_existing_names e2) (expr_existing_names e3))
+  | App (_, e1, e2) ->
+      Set.union (expr_existing_names e1) (expr_existing_names e2)
+  | Match (_, e, cases) ->
+      Nonempty_list.fold ~init:(expr_existing_names e)
+        ~f:(fun acc (_, e) -> Set.union acc (expr_existing_names e))
+        cases
+  | Var (_, xname) -> StringSet.singleton xname
+  | Let (_, xname, e1, e2) ->
+      Set.union
+        (StringSet.singleton xname)
+        (Set.union (expr_existing_names e1) (expr_existing_names e2))
+  | Fun (_, (xname, _), e) ->
+      Set.union (StringSet.singleton xname) (expr_existing_names e)
+  | Fix (_, (fname, _, _), (xname, _), e) ->
+      Set.union (StringSet.of_list [ fname; xname ]) (expr_existing_names e)
+  | Constructor (_, cname, e) ->
+      Set.union (StringSet.singleton cname) (expr_existing_names e)
+
 type plain_expr = unit expr [@@deriving sexp, equal]
 type 'a typed_expr = (vtype * 'a) expr [@@deriving sexp, equal]
 type plain_typed_expr = unit typed_expr [@@deriving sexp, equal]
@@ -433,12 +482,12 @@ end = struct
           let rec_cases =
             [
               ( pair self' self' >|= fun (e1, e2) -> Add (v, e1, e2)
-                (* Addition *) );
+              (* Addition *) );
               (self' >|= fun e -> Neg (v, e) (* Negation *));
               ( pair self' self' >|= fun (e1, e2) -> Subtr (v, e1, e2)
-                (* Subtraction *) );
+              (* Subtraction *) );
               ( pair self' self' >|= fun (e1, e2) -> Mult (v, e1, e2)
-                (* Multiplication *) );
+              (* Multiplication *) );
             ]
             @ standard_rec_gen_cases (self, (d, ctx), v) VTypeInt
           in
@@ -458,21 +507,26 @@ end = struct
             [
               (self' >|= fun e -> BNot (v, e) (* Negation *));
               ( pair self' self' >|= fun (e1, e2) -> BOr (v, e1, e2)
-                (* Disjunction *) );
+              (* Disjunction *) );
               ( pair self' self' >|= fun (e1, e2) -> BAnd (v, e1, e2)
-                (* Conjunction *) );
+              (* Conjunction *) );
               ( pair (gen_int (d - 1, ctx)) (gen_int (d - 1, ctx))
-              >|= fun (e1, e2) -> Eq (v, e1, e2) (* Integer equality *) );
+              >|= fun (e1, e2) -> Eq (v, e1, e2)
+              (* Integer equality *) );
               ( pair self' self' >|= fun (e1, e2) -> Eq (v, e1, e2)
-                (* Boolean equality *) );
+              (* Boolean equality *) );
               ( pair (gen_int (d - 1, ctx)) (gen_int (d - 1, ctx))
-              >|= fun (e1, e2) -> Gt (v, e1, e2) (* GT *) );
+              >|= fun (e1, e2) -> Gt (v, e1, e2)
+              (* GT *) );
               ( pair (gen_int (d - 1, ctx)) (gen_int (d - 1, ctx))
-              >|= fun (e1, e2) -> GtEq (v, e1, e2) (* GTEQ *) );
+              >|= fun (e1, e2) -> GtEq (v, e1, e2)
+              (* GTEQ *) );
               ( pair (gen_int (d - 1, ctx)) (gen_int (d - 1, ctx))
-              >|= fun (e1, e2) -> Lt (v, e1, e2) (* LT *) );
+              >|= fun (e1, e2) -> Lt (v, e1, e2)
+              (* LT *) );
               ( pair (gen_int (d - 1, ctx)) (gen_int (d - 1, ctx))
-              >|= fun (e1, e2) -> LtEq (v, e1, e2) (* LTEQ *) );
+              >|= fun (e1, e2) -> LtEq (v, e1, e2)
+              (* LTEQ *) );
             ]
             @ standard_rec_gen_cases (self, (d, ctx), v) VTypeBool
           in
@@ -491,7 +545,7 @@ end = struct
               ( varname_gen >>= fun vname ->
                 gen (d - 1, List.Assoc.add ~equal:equal_string ctx vname t1) t2
                 >|= fun e -> _create_fun_node (v, (vname, t1), e)
-                (* Function value *) );
+              (* Function value *) );
             ]
             @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
           in
