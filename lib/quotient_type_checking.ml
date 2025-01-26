@@ -45,14 +45,25 @@ end
 module QuotientTypeChecker =
 functor
   (TypeCtx : TypingTypeContext)
+  (VarCtx : TypingVarContext)
   ->
   struct
+    module TypeChecker = TypeChecker (TypeCtx) (VarCtx)
+
     type ast_tag = { t : vtype }
     type tag_expr = ast_tag expr
 
     type quotient_typing_error =
       | MisplacedFixNode
       | ProgramTypingError of typing_error
+      | MultipleVariableDefinitions of varname
+      | VariantTypeConstructorDoesNotExist of string
+      | PatternTypeMismatch of vtype * vtype
+
+    (** A special prefix to be prepended to names defined by this code , so that
+        they can't interfere with user-defined names. Therefore, this contains a
+        character not usable by the user when defining variable names *)
+    let custom_special_prefix : string -> string = String.append "PQ-"
 
     (** Preprocessing for arbitrary expressions, for usage in quotient type
         checking *)
@@ -103,67 +114,6 @@ functor
             * (flat_pattern * preprocessed_tag_expr) Nonempty_list.t
         | Constructor of ast_tag * string * preprocessed_tag_expr
 
-      let flatten_case_pattern :
-          pattern * preprocessed_tag_expr ->
-          flat_pattern * preprocessed_tag_expr =
-        failwith "TODO"
-
-      let rec preprocess_expr :
-          tag_expr -> (preprocessed_tag_expr, quotient_typing_error) Result.t =
-        let open Result in
-        let unop (recomb : preprocessed_tag_expr -> preprocessed_tag_expr)
-            (e1 : tag_expr) =
-          preprocess_expr e1 >>| recomb
-        in
-        let binop
-            (recomb :
-              preprocessed_tag_expr ->
-              preprocessed_tag_expr ->
-              preprocessed_tag_expr) (e1 : tag_expr) (e2 : tag_expr) =
-          preprocess_expr e1 >>= fun e1' ->
-          preprocess_expr e2 >>| fun e2' -> recomb e1' e2'
-        in
-        function
-        | UnitLit v -> Ok (UnitLit v)
-        | IntLit (v, x) -> Ok (IntLit (v, x))
-        | Add (v, e1, e2) -> binop (fun e1' e2' -> Add (v, e1', e2')) e1 e2
-        | Neg (v, e1) -> unop (fun e1' -> Neg (v, e1')) e1
-        | Subtr (v, e1, e2) -> binop (fun e1' e2' -> Subtr (v, e1', e2')) e1 e2
-        | Mult (v, e1, e2) -> binop (fun e1' e2' -> Mult (v, e1', e2')) e1 e2
-        | BoolLit (v, b) -> Ok (BoolLit (v, b))
-        | BNot (v, e1) -> unop (fun e1' -> BNot (v, e1')) e1
-        | BOr (v, e1, e2) -> binop (fun e1' e2' -> BOr (v, e1', e2')) e1 e2
-        | BAnd (v, e1, e2) -> binop (fun e1' e2' -> BAnd (v, e1', e2')) e1 e2
-        | Pair (v, e1, e2) -> binop (fun e1' e2' -> Pair (v, e1', e2')) e1 e2
-        | Eq (v, e1, e2) -> binop (fun e1' e2' -> Eq (v, e1', e2')) e1 e2
-        | Gt (v, e1, e2) -> binop (fun e1' e2' -> Gt (v, e1', e2')) e1 e2
-        | GtEq (v, e1, e2) -> binop (fun e1' e2' -> GtEq (v, e1', e2')) e1 e2
-        | Lt (v, e1, e2) -> binop (fun e1' e2' -> Lt (v, e1', e2')) e1 e2
-        | LtEq (v, e1, e2) -> binop (fun e1' e2' -> LtEq (v, e1', e2')) e1 e2
-        | If (v, e1, e2, e3) ->
-            preprocess_expr e1 >>= fun e1' ->
-            preprocess_expr e2 >>= fun e2' ->
-            preprocess_expr e3 >>| fun e3' -> If (v, e1', e2', e3')
-        | Var (v, name) -> Ok (Var (v, name))
-        | Let _ ->
-            failwith "TODO - handle recursive and non-recursive let-bindings"
-        | Fun (v, (param, typ), body) ->
-            preprocess_expr body >>| fun body' -> Fun (v, (param, typ), body')
-        | App (v, e1, e2) -> binop (fun e1' e2' -> App (v, e1', e2')) e1 e2
-        | Fix _ -> Error MisplacedFixNode
-        | Match (v, e1, cs) ->
-            preprocess_expr e1 >>= fun e1' ->
-            Nonempty_list.fold_result_consume_init ~init:() cs
-              ~f:(fun acc (p, e) ->
-                preprocess_expr e >>| fun e' ->
-                match acc with
-                | First () -> Nonempty_list.singleton (p, e')
-                | Second acc -> Nonempty_list.cons (p, e') acc)
-            >>| Nonempty_list.map ~f:flatten_case_pattern
-            >>= fun cs' -> Match (v, e1', cs') |> Ok
-        | Constructor (v, name, expr) ->
-            unop (fun e' -> Constructor (v, name, e')) expr
-
       let preprocessed_expr_node_val : preprocessed_tag_expr -> ast_tag =
         function
         | UnitLit v -> v
@@ -190,6 +140,301 @@ functor
         | App (v, _, _) -> v
         | Match (v, _, _) -> v
         | Constructor (v, _, _) -> v
+
+      let generate_fresh_varname (existing_names : StringSet.t) :
+          varname * StringSet.t =
+        let rec loop (i : int) : varname =
+          let candidate = sprintf "x%d" i in
+          if Set.mem existing_names candidate then loop (i + 1) else candidate
+        in
+        let new_name = loop 0 in
+        (new_name, Set.add existing_names new_name)
+
+      let rec flatten_case_pattern
+          ( (existing_names : StringSet.t),
+            (p : pattern),
+            (e : preprocessed_tag_expr) ) :
+          ( StringSet.t * flat_pattern * preprocessed_tag_expr,
+            quotient_typing_error )
+          Result.t =
+        let open Result in
+        let outer_expr_type : vtype = (preprocessed_expr_node_val e).t in
+        match p with
+        | PatName (x_name, x_t) ->
+            (* A named variable pattern *)
+            (existing_names, FlatPatName (x_name, x_t), e) |> Ok
+        | PatPair (PatName (x1_name, x1_t), PatName (x2_name, x2_t)) ->
+            (* A flat pair pattern *)
+            (existing_names, FlatPatPair ((x1_name, x1_t), (x2_name, x2_t)), e)
+            |> Ok
+        | PatPair (p1, p2) ->
+            (* A compound pair pattern.
+
+            ```
+            match orig_e with
+            | ({p1}, {p2}) -> e
+
+            becomes
+
+            match orig_e with
+              | (x1, x2) ->
+                ( match x1 with
+                  | {flattened p1} ->
+                    ( match x2 with
+                      | {flattened p2} -> e
+                    )
+                )
+            ``` *)
+            let new_binding_name_1, existing_names =
+              generate_fresh_varname existing_names
+            in
+            let new_binding_name_2, existing_names =
+              generate_fresh_varname existing_names
+            in
+            let p1_t, p2_t =
+              failwith "TODO - once pattern tagging implemented"
+            in
+            flatten_case_pattern (existing_names, p2, e)
+            >>=
+            fun (existing_names, flattened_p2_case_p, flattened_p2_case_e) ->
+            flatten_case_pattern
+              ( existing_names,
+                p1,
+                Match
+                  ( { t = outer_expr_type },
+                    Var ({ t = p2_t }, new_binding_name_2),
+                    Nonempty_list.singleton
+                      (flattened_p2_case_p, flattened_p2_case_e) ) )
+            >>|
+            fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
+            ( existing_names,
+              FlatPatPair
+                ((new_binding_name_1, p1_t), (new_binding_name_2, p2_t)),
+              Match
+                ( { t = outer_expr_type },
+                  Var ({ t = p1_t }, new_binding_name_1),
+                  Nonempty_list.singleton
+                    (flattened_p1_case_p, flattened_p1_case_e) ) )
+        | PatConstructor (c_name, PatName (x_name, x_t)) ->
+            (* A flat constructor pattern *)
+            (existing_names, FlatPatConstructor (c_name, (x_name, x_t)), e)
+            |> Ok
+        | PatConstructor (c_name, p1) ->
+            (* A compound constructor pattern
+
+            ```
+            match orig_e with
+            | C ({p1}) -> e
+
+            becomes
+
+            match orig_e with
+              | C x ->
+                ( match x with
+                  | {flattened p1} -> e
+                )
+            ``` *)
+            let new_binding_name, existing_names =
+              generate_fresh_varname existing_names
+            in
+            let p1_t = failwith "TODO - once pattern tagging implemented" in
+            flatten_case_pattern (existing_names, p1, e)
+            >>|
+            fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
+            ( existing_names,
+              FlatPatConstructor (c_name, (new_binding_name, p1_t)),
+              Match
+                ( { t = outer_expr_type },
+                  Var ({ t = p1_t }, new_binding_name),
+                  Nonempty_list.singleton
+                    (flattened_p1_case_p, flattened_p1_case_e) ) )
+
+      let rec preprocess_expr
+          ((existing_names : StringSet.t), (orig_e : tag_expr)) :
+          (StringSet.t * preprocessed_tag_expr, quotient_typing_error) Result.t
+          =
+        let open Result in
+        let unop
+            (recomb :
+              StringSet.t ->
+              preprocessed_tag_expr ->
+              StringSet.t * preprocessed_tag_expr) (e1 : tag_expr) =
+          preprocess_expr (existing_names, e1) >>| fun (existing_names, e1') ->
+          recomb existing_names e1'
+        in
+        let binop
+            (recomb :
+              StringSet.t ->
+              preprocessed_tag_expr ->
+              preprocessed_tag_expr ->
+              StringSet.t * preprocessed_tag_expr) (e1 : tag_expr)
+            (e2 : tag_expr) =
+          preprocess_expr (existing_names, e1) >>= fun (existing_names, e1') ->
+          preprocess_expr (existing_names, e2) >>| fun (existing_names, e2') ->
+          recomb existing_names e1' e2'
+        in
+        match orig_e with
+        | UnitLit v -> Ok (existing_names, UnitLit v)
+        | IntLit (v, x) -> Ok (existing_names, IntLit (v, x))
+        | Add (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, Add (v, e1', e2')))
+              e1 e2
+        | Neg (v, e1) ->
+            unop (fun existing_names e1' -> (existing_names, Neg (v, e1'))) e1
+        | Subtr (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, Subtr (v, e1', e2')))
+              e1 e2
+        | Mult (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, Mult (v, e1', e2')))
+              e1 e2
+        | BoolLit (v, b) -> Ok (existing_names, BoolLit (v, b))
+        | BNot (v, e1) ->
+            unop (fun existing_names e1' -> (existing_names, BNot (v, e1'))) e1
+        | BOr (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, BOr (v, e1', e2')))
+              e1 e2
+        | BAnd (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, BAnd (v, e1', e2')))
+              e1 e2
+        | Pair (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, Pair (v, e1', e2')))
+              e1 e2
+        | Eq (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' -> (existing_names, Eq (v, e1', e2')))
+              e1 e2
+        | Gt (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' -> (existing_names, Gt (v, e1', e2')))
+              e1 e2
+        | GtEq (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, GtEq (v, e1', e2')))
+              e1 e2
+        | Lt (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' -> (existing_names, Lt (v, e1', e2')))
+              e1 e2
+        | LtEq (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, LtEq (v, e1', e2')))
+              e1 e2
+        | If (v, e1, e2, e3) ->
+            preprocess_expr (existing_names, e1)
+            >>= fun (existing_names, e1') ->
+            preprocess_expr (existing_names, e2)
+            >>= fun (existing_names, e2') ->
+            preprocess_expr (existing_names, e3)
+            >>| fun (existing_names, e3') ->
+            (existing_names, If (v, e1', e2', e3'))
+        | Var (v, name) -> Ok (existing_names, Var (v, name))
+        | Let _ ->
+            failwith "TODO - handle recursive and non-recursive let-bindings"
+        | Fun (v, (param, typ), body) ->
+            preprocess_expr (existing_names, body)
+            >>| fun (existing_names, body') ->
+            (existing_names, Fun (v, (param, typ), body'))
+        | App (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, App (v, e1', e2')))
+              e1 e2
+        | Fix _ -> Error MisplacedFixNode
+        | Match (v, e1, cs) ->
+            preprocess_expr (existing_names, e1)
+            >>=
+            fun ((existing_names : StringSet.t), (e1' : preprocessed_tag_expr))
+            ->
+            Nonempty_list.fold_result_consume_init ~init:() cs
+              ~f:(fun
+                  (acc :
+                    ( unit,
+                      StringSet.t
+                      * (pattern * preprocessed_tag_expr) Nonempty_list.t )
+                    Either.t)
+                  ((p : pattern), (e : tag_expr))
+                ->
+                preprocess_expr (existing_names, e)
+                >>| fun (existing_names, e') ->
+                match acc with
+                | First () -> (existing_names, Nonempty_list.singleton (p, e'))
+                | Second (existing_names, acc_cases) ->
+                    (existing_names, Nonempty_list.cons (p, e') acc_cases))
+            >>=
+            fun ( (existing_names : StringSet.t),
+                  (preprocessed_cases :
+                    (pattern * preprocessed_tag_expr) Nonempty_list.t) )
+            ->
+            Nonempty_list.fold_result_consume_init ~init:()
+              ~f:(fun
+                  (acc :
+                    ( unit,
+                      StringSet.t
+                      * (flat_pattern * preprocessed_tag_expr) Nonempty_list.t
+                    )
+                    Either.t)
+                  (p, e)
+                ->
+                let existing_names, acc_fn =
+                  match acc with
+                  | First () -> (existing_names, Nonempty_list.singleton)
+                  | Second (existing_names, acc_cases) ->
+                      (existing_names, Fn.flip Nonempty_list.cons acc_cases)
+                in
+                flatten_case_pattern (existing_names, p, e)
+                >>| fun (existing_names, flattened_p, flattened_e) ->
+                (existing_names, acc_fn (flattened_p, flattened_e)))
+              preprocessed_cases
+            >>| fun (existing_names, preprocessed_cases) ->
+            (existing_names, Match (v, e1', preprocessed_cases))
+        | Constructor (v, name, expr) ->
+            unop
+              (fun existing_names e' ->
+                (existing_names, Constructor (v, name, e')))
+              expr
+
+      let type_flat_pattern ((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) :
+          flat_pattern ->
+          (vtype * (varname * vtype) list, quotient_typing_error) Result.t =
+        let open Result in
+        let check_var_not_defined (x_name : varname) :
+            (unit, quotient_typing_error) Result.t =
+          if VarCtx.exists var_ctx x_name then Ok ()
+          else Error (MultipleVariableDefinitions x_name)
+        in
+        function
+        | FlatPatName (x_name, x_t) ->
+            check_var_not_defined x_name >>| fun () -> (x_t, [ (x_name, x_t) ])
+        | FlatPatPair ((x1_name, x1_t), (x2_name, x2_t)) ->
+            check_var_not_defined x1_name >>= fun () ->
+            check_var_not_defined x2_name >>| fun () ->
+            (VTypePair (x1_t, x2_t), [ (x1_name, x1_t); (x2_name, x2_t) ])
+        | FlatPatConstructor (c_name, (x_name, x_t)) ->
+            (* Check the variable's name is not already defined *)
+            check_var_not_defined x_name >>= fun () ->
+            (* Check the variant type constructor exists *)
+            TypeCtx.find_variant_type_with_constructor type_ctx c_name
+            |> Result.of_option
+                 ~error:(VariantTypeConstructorDoesNotExist c_name)
+            >>= fun ((vt_name, _), (_, c_t)) ->
+            (* Check the variant type constructor's argument type matches *)
+            if equal_vtype c_t x_t then
+              Ok (VTypeCustom vt_name, [ (x_name, x_t) ])
+            else Error (PatternTypeMismatch (c_t, x_t))
     end
 
     (** Interactions with the SMT solver and state that can be provided to it *)
@@ -212,12 +457,6 @@ functor
       (** A state that can be provided to the SMT solver *)
       type state = state_elem list
 
-      (** A special symbol to be prepended to names defined in the SMTLIB2
-          representation, so that they can't interfere with user-defined names.
-          Therefore, this contains a character not usable by the user when
-          defining variable names *)
-      let custom_symbol : string -> string = String.append "PQ-"
-
       (** Functions for creating node representations of different parts of a
           program *)
       module SmtlibNodeRepresentation = struct
@@ -225,7 +464,7 @@ functor
 
         let get_vt_constructor_accessor_name (vt_name : string)
             (c_name : string) : string =
-          sprintf "%s-%s-getval" vt_name c_name |> custom_symbol
+          sprintf "%s-%s-getval" vt_name c_name |> custom_special_prefix
 
         (** Representation of a vtype *)
         let node_of_vtype : vtype -> node = failwith "TODO"
@@ -454,7 +693,7 @@ functor
       | Fun (_, (xname, xt), e1) ->
           let state' = Smt.add_variable_declaration xname xt state in
           check_quotient_types_in_expr e1 (state', type_ctx)
-      | Match (_, e1, cases) ->
+      | Match (_, e1, _) ->
           let e1_type : vtype =
             (ExprPreprocessor.preprocessed_expr_node_val e1).t
           in
@@ -474,8 +713,7 @@ functor
             failwith "TODO - perform the checking"
           else
             check_quotient_types_in_expr e1 param >>= fun () ->
-            failwith
-              "TODO - recurse into the cases AND must bind the cases' variables"
+            failwith "TODO - recurse into each of the cases"
 
     let check_quotient_types (prog : ast_tag program) :
         (unit, quotient_typing_error) Result.t =
@@ -492,6 +730,11 @@ functor
       TypeCtx.create ~custom_types:prog.custom_types
       |> Result.map_error ~f:(fun err -> ProgramTypingError err)
       >>= fun type_ctx ->
-      ExprPreprocessor.preprocess_expr prog.e >>= fun preprocessed_body ->
+      ExprPreprocessor.preprocess_expr
+        ( failwith
+            "TODO - once programs' all defined names are being recorded or are \
+             retrievable",
+          prog.e )
+      >>= fun (_, preprocessed_body) ->
       check_quotient_types_in_expr preprocessed_body (state, type_ctx)
   end
