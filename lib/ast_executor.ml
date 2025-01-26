@@ -6,11 +6,12 @@ open Varname
 open Pattern
 
 type ast_tag = unit [@@deriving sexp, equal]
+type pattern_tag = unit [@@deriving sexp, equal]
 
 type closure_props = {
   param : varname * vtype;
   out_type : vtype;
-  body : ast_tag Ast.typed_expr;
+  body : (ast_tag, pattern_tag) Ast.typed_expr;
   store : store;
 }
 [@@deriving sexp, equal]
@@ -98,28 +99,30 @@ let show_exec_res = function
       | UnknownVariantTypeConstructor x ->
           "[UNKNOWN VARIANT TYPE CONSTRUCTOR: " ^ x ^ "]")
 
-let rec match_pattern (p : pattern) (v : value) : (varname * value) list option
-    =
+let rec match_pattern (p : 'tag_p pattern) (v : value) :
+    (varname * value) list option =
   let open Option in
   match (p, v) with
-  | PatName (xname, xtype), v ->
+  | PatName (_, xname, xtype), v ->
       if value_type v |> equal_vtype xtype then Some [ (xname, v) ] else None
-  | PatPair (p1, p2), Pair (v1, v2) ->
+  | PatPair (_, p1, p2), Pair (v1, v2) ->
       match_pattern p1 v1 >>= fun m1 ->
       match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)
   | PatPair _, _ -> None
-  | PatConstructor (p_c_name, p1), VariantTypeValue (_, v_c_name, v') ->
+  | PatConstructor (_, p_c_name, p1), VariantTypeValue (_, v_c_name, v') ->
       if equal_string p_c_name v_c_name then match_pattern p1 v' else None
   | PatConstructor _, _ -> None
 
-(** Apply a function to the execution value if it is an integer, otherwise return a typing error *)
+(** Apply a function to the execution value if it is an integer, otherwise
+    return a typing error *)
 let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
   match x with
   | Int i -> cnt i
   | _ ->
       Error (TypingError { empty_typing_error with expected_type = Some "Int" })
 
-(** Apply a function to the execution value if it is a boolean, otherwise return a typing error *)
+(** Apply a function to the execution value if it is a boolean, otherwise return
+    a typing error *)
 let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
   match x with
   | Bool b -> cnt b
@@ -127,7 +130,8 @@ let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
       Error
         (TypingError { empty_typing_error with expected_type = Some "Bool" })
 
-(** Apply a function to the execution value if it is a function, otherwise return a typing error *)
+(** Apply a function to the execution value if it is a function, otherwise
+    return a typing error *)
 let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
   match x with
   | Closure x -> cnt x
@@ -141,28 +145,33 @@ module Executor
 struct
   module TypeChecker = Typing.TypeChecker (TypeCtx) (VarCtx)
 
-  (** Evaluate a subexpression, then apply a continuation function to the result if it an integer and give a typing error otherwise *)
+  (** Evaluate a subexpression, then apply a continuation function to the result
+      if it an integer and give a typing error otherwise *)
   let rec eval_apply_to_int ~(type_ctx : TypeCtx.t) (store : store)
-      (x : ast_tag Ast.typed_expr) (cnt : int -> exec_res) : exec_res =
+      (x : (ast_tag, pattern_tag) Ast.typed_expr) (cnt : int -> exec_res) :
+      exec_res =
     let open Result in
     eval ~type_ctx store x >>= apply_to_int cnt
 
-  (** Evaluate a subexpression, then apply a continuation function to the result if it an boolean and give a typing error otherwise *)
+  (** Evaluate a subexpression, then apply a continuation function to the result
+      if it an boolean and give a typing error otherwise *)
   and eval_apply_to_bool ~(type_ctx : TypeCtx.t) (store : store)
-      (x : ast_tag Ast.typed_expr) (cnt : bool -> exec_res) : exec_res =
+      (x : (ast_tag, pattern_tag) Ast.typed_expr) (cnt : bool -> exec_res) :
+      exec_res =
     let open Result in
     eval ~type_ctx store x >>= apply_to_bool cnt
 
-  (** Evaluate a subexpression, then apply a continuation function to the result if it an function and give a typing error otherwise *)
+  (** Evaluate a subexpression, then apply a continuation function to the result
+      if it an function and give a typing error otherwise *)
   and eval_apply_to_closure ~(type_ctx : TypeCtx.t) (store : store)
-      (x : ast_tag Ast.typed_expr) (cnt : closure_props -> exec_res) : exec_res
-      =
+      (x : (ast_tag, pattern_tag) Ast.typed_expr)
+      (cnt : closure_props -> exec_res) : exec_res =
     let open Result in
     eval ~type_ctx store x >>= apply_to_closure cnt
 
   (** Evaluate an AST subtree *)
-  and eval ~(type_ctx : TypeCtx.t) (store : store) (e : ast_tag Ast.typed_expr)
-      : exec_res =
+  and eval ~(type_ctx : TypeCtx.t) (store : store)
+      (e : (ast_tag, pattern_tag) Ast.typed_expr) : exec_res =
     let open Result in
     match e with
     | UnitLit _ -> Ok Unit
@@ -268,7 +277,8 @@ struct
     | Match (_, e1, cs) -> (
         eval ~type_ctx store e1 >>= fun v1 ->
         let matched_c_e :
-            ((varname * value) list * ast_tag Ast.typed_expr) option =
+            ((varname * value) list * (ast_tag, pattern_tag) Ast.typed_expr)
+            option =
           Nonempty_list.fold ~init:None
             ~f:(fun acc (p, c_e) ->
               match acc with
@@ -291,7 +301,8 @@ struct
         |> Result.of_option ~error:(UnknownVariantTypeConstructor c_name)
         >>= fun (vt, _) -> Ok (VariantTypeValue (vt, c_name, v1))
 
-  let execute_program (tpe : 'a TypeChecker.typed_program_expression) =
+  let execute_program
+      (tpe : ('tag_e, 'tag_p) TypeChecker.typed_program_expression) =
     let type_ctx = TypeChecker.typed_program_expression_get_type_ctx tpe in
     let e = TypeChecker.typed_program_expression_get_expression tpe in
     eval ~type_ctx

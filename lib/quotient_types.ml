@@ -7,7 +7,7 @@ open Ast
 
 type quotient_type_eqcons = {
   bindings : (varname * vtype) list;
-  body : pattern * plain_expr;
+  body : plain_pattern * plain_expr;
 }
 [@@deriving sexp, equal]
 

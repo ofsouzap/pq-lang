@@ -9,15 +9,19 @@ type typing_error =
   | UndefinedVariable of string
       (** A variable was referenced that isn't defined in the scope *)
   | TypeMismatch of vtype * vtype
-      (** An expression was expected to have the first type but had the second *)
-  | PatternTypeMismatch of pattern * vtype * vtype
+      (** An expression was expected to have the first type but had the second
+      *)
+  | PatternTypeMismatch of plain_pattern * vtype * vtype
       (** A pattern was expected to have the first type but had the second *)
   | EqConsBodyTypeMismatch of quotient_type_eqcons * vtype * vtype
-      (** The body of an equivalence constructor was expected to have the first type but had the second *)
+      (** The body of an equivalence constructor was expected to have the first
+          type but had the second *)
   | EqualOperatorTypeMistmatch of vtype * vtype
-      (** An application of the equality operation had a type mismatch as the operands had the specified types instead of compatible ones *)
+      (** An application of the equality operation had a type mismatch as the
+          operands had the specified types instead of compatible ones *)
   | ExpectedFunctionOf of vtype
-      (** A value is used as a function but isn't a function. The expected input type of the function is the value *)
+      (** A value is used as a function but isn't a function. The expected input
+          type of the function is the value *)
   | UndefinedVariantTypeConstructor of string
       (** The specified type constructor was used but hasn't been defined *)
   | PatternMultipleVariableDefinitions of string
@@ -27,7 +31,8 @@ type typing_error =
   | UndefinedTypeName of string
       (** The specified type name has been referenced but not defined *)
   | MultipleVariantTypeConstructorDefinitions of string
-      (** The specified variant type constructor name has been defined multiple times *)
+      (** The specified variant type constructor name has been defined multiple
+          times *)
 [@@deriving sexp, equal]
 
 val equal_typing_error_variant : typing_error -> typing_error -> bool
@@ -49,7 +54,8 @@ module type TypingTypeContext = sig
   (** Check whether a type definition exists in the context, by name *)
   val type_defn_exists : t -> string -> bool
 
-  (** Find a variant type in the type context with a variant of the specified name. If multiple exist, only one is returned *)
+  (** Find a variant type in the type context with a variant of the specified
+      name. If multiple exist, only one is returned *)
   val find_variant_type_with_constructor :
     t -> string -> (variant_type * variant_type_constructor) option
 
@@ -67,7 +73,8 @@ module type TypingVarContext = sig
   (** Creates an empty typing context *)
   val empty : t
 
-  (** Adds a new variable with its type to the context, overwriting any existing values *)
+  (** Adds a new variable with its type to the context, overwriting any existing
+      values *)
   val add : t -> string -> vtype -> t
 
   (** Looks up a variable's type in the context *)
@@ -76,7 +83,8 @@ module type TypingVarContext = sig
   (** Create a context with a single entry *)
   val singleton : string -> vtype -> t
 
-  (** Appends two variable contexts. When overwriting is necessary, the second argument overwrites the first *)
+  (** Appends two variable contexts. When overwriting is necessary, the second
+      argument overwrites the first *)
   val append : t -> t -> t
 
   (** Check whether a variable exists in the context, by name *)
@@ -98,31 +106,33 @@ module type TypeCheckerSig = functor
   val checked_empty_type_ctx : checked_type_ctx
 
   (** The type of a program's expression that has passed type checking *)
-  type 'a typed_program_expression
+  type ('tag_e, 'tag_p) typed_program_expression
 
   (** Get the type context from a typed program expression *)
   val typed_program_expression_get_type_ctx :
-    'a typed_program_expression -> TypeCtx.t
+    ('tag_e, 'tag_p) typed_program_expression -> TypeCtx.t
 
   (** Get the expression from a typed program expression *)
   val typed_program_expression_get_expression :
-    'a typed_program_expression -> (vtype * 'a) Ast.expr
+    ('tag_e, 'tag_p) typed_program_expression ->
+    (vtype * 'tag_e, vtype * 'tag_p) Ast.expr
 
   (** Check that a vtype is valid in the given context *)
   val check_vtype : checked_type_ctx -> vtype -> (unit, typing_error) Result.t
 
-  (** Type checks a pattern in the given context, returning either the pattern's type and declared variables, or a pattern typing error *)
+  (** Type checks a pattern in the given context, returning either the pattern's
+      type and declared variables, or a pattern typing error *)
   val type_pattern :
     checked_type_ctx * VarCtx.t ->
-    pattern ->
-    (vtype * VarCtx.t, typing_error) Result.t
+    'tag_p pattern ->
+    ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
 
-  (** Type checks an expression in the given context, returning either
-      a typed expression or a typing error *)
+  (** Type checks an expression in the given context, returning either a typed
+      expression or a typing error *)
   val type_expr :
     checked_type_ctx * VarCtx.t ->
-    'a Ast.expr ->
-    ('a typed_program_expression, typing_error) result
+    ('tag_e, 'tag_p) Ast.expr ->
+    (('tag_e, 'tag_p) typed_program_expression, typing_error) result
 
   (** Check a type context is valid *)
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
@@ -137,8 +147,11 @@ module SimpleTypeChecker : sig
       TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 end
 
-(** Type an AST expression using the default context implementations with the provided typing context *)
+(** Type an AST expression using the default context implementations with the
+    provided typing context *)
 val type_expr :
   type_ctx:SetTypingTypeContext.t ->
-  'a Ast.expr ->
-  ('a SimpleTypeChecker.typed_program_expression, typing_error) result
+  ('tag_e, 'tag_p) Ast.expr ->
+  ( ('tag_e, 'tag_p) SimpleTypeChecker.typed_program_expression,
+    typing_error )
+  result

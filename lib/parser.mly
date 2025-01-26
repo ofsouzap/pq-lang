@@ -67,8 +67,8 @@ let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_t
 
 %type <vtype> vtype
 
-%type <pattern> pattern
-%type <pattern> contained_pattern
+%type <plain_pattern> pattern
+%type <plain_pattern> contained_pattern
 
 %type <variant_type_constructor> variant_type_constructor
 %type <variant_type_constructor list> variant_type_definition_constructors_no_leading_pipe
@@ -78,15 +78,15 @@ let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_t
 %type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
 
-%type <pattern * plain_expr> match_case
-%type <(pattern * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
-%type <(pattern * plain_expr) Nonempty_list.t> match_cases
+%type <plain_pattern * plain_expr> match_case
+%type <(plain_pattern * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
+%type <(plain_pattern * plain_expr) Nonempty_list.t> match_cases
 
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
 
 %type <(string * vtype) list> quotient_type_eqcons_bindings
-%type <pattern * plain_expr> quotient_type_eqcons_body
+%type <plain_pattern * plain_expr> quotient_type_eqcons_body
 %type <quotient_type_eqcons> quotient_type_eqcons
 %type <quotient_type_eqcons list> quotient_type_definition_eqconss
 %type <quotient_type> quotient_type_definition
@@ -109,13 +109,13 @@ vtype:
 
 pattern:
   | p = contained_pattern { p }
-  | n = LNAME COLON t = vtype { PatName (n, t) }
-  | cname = UNAME p = contained_pattern { PatConstructor (cname, p) }
+  | n = LNAME COLON t = vtype { PatName ((), n, t) }
+  | cname = UNAME p = contained_pattern { PatConstructor ((), cname, p) }
 ;
 
 contained_pattern:
   | LPAREN p = pattern RPAREN { p }
-  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair (p1, p2) }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair ((), p1, p2) }
 ;
 
 variant_type_constructor:

@@ -51,7 +51,9 @@ functor
     module TypeChecker = TypeChecker (TypeCtx) (VarCtx)
 
     type ast_tag = { t : vtype }
-    type tag_expr = ast_tag expr
+    type pattern_tag = { t : vtype }
+    type tag_expr = (ast_tag, pattern_tag) expr
+    type tag_pattern = pattern_tag pattern
 
     type quotient_typing_error =
       | MisplacedFixNode
@@ -69,9 +71,18 @@ functor
         checking *)
     module ExprPreprocessor = struct
       type flat_pattern =
-        | FlatPatName of varname * vtype
-        | FlatPatPair of (varname * vtype) * (varname * vtype)
-        | FlatPatConstructor of string * (varname * vtype)
+        | FlatPatName of pattern_tag * varname * vtype
+        | FlatPatPair of
+            pattern_tag
+            * (pattern_tag * varname * vtype)
+            * (pattern_tag * varname * vtype)
+        | FlatPatConstructor of
+            pattern_tag * string * (pattern_tag * varname * vtype)
+
+      let flat_pattern_node_val : flat_pattern -> pattern_tag = function
+        | FlatPatName (v, _, _) -> v
+        | FlatPatPair (v, _, _) -> v
+        | FlatPatConstructor (v, _, _) -> v
 
       type preprocessed_tag_expr =
         | UnitLit of ast_tag
@@ -152,7 +163,7 @@ functor
 
       let rec flatten_case_pattern
           ( (existing_names : StringSet.t),
-            (p : pattern),
+            (p : tag_pattern),
             (e : preprocessed_tag_expr) ) :
           ( StringSet.t * flat_pattern * preprocessed_tag_expr,
             quotient_typing_error )
@@ -160,14 +171,19 @@ functor
         let open Result in
         let outer_expr_type : vtype = (preprocessed_expr_node_val e).t in
         match p with
-        | PatName (x_name, x_t) ->
+        | PatName (v, x_name, x_t) ->
             (* A named variable pattern *)
-            (existing_names, FlatPatName (x_name, x_t), e) |> Ok
-        | PatPair (PatName (x1_name, x1_t), PatName (x2_name, x2_t)) ->
+            (existing_names, FlatPatName (v, x_name, x_t), e) |> Ok
+        | PatPair
+            ( v_pair,
+              PatName (x1_v, x1_name, x1_t),
+              PatName (x2_v, x2_name, x2_t) ) ->
             (* A flat pair pattern *)
-            (existing_names, FlatPatPair ((x1_name, x1_t), (x2_name, x2_t)), e)
+            ( existing_names,
+              FlatPatPair (v_pair, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)),
+              e )
             |> Ok
-        | PatPair (p1, p2) ->
+        | PatPair (v, p1, p2) ->
             (* A compound pair pattern.
 
             ```
@@ -209,17 +225,21 @@ functor
             fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
             ( existing_names,
               FlatPatPair
-                ((new_binding_name_1, p1_t), (new_binding_name_2, p2_t)),
+                ( v,
+                  ({ t = p1_t }, new_binding_name_1, p1_t),
+                  ({ t = p2_t }, new_binding_name_2, p2_t) ),
               Match
                 ( { t = outer_expr_type },
                   Var ({ t = p1_t }, new_binding_name_1),
                   Nonempty_list.singleton
                     (flattened_p1_case_p, flattened_p1_case_e) ) )
-        | PatConstructor (c_name, PatName (x_name, x_t)) ->
+        | PatConstructor (v_constructor, c_name, PatName (x_v, x_name, x_t)) ->
             (* A flat constructor pattern *)
-            (existing_names, FlatPatConstructor (c_name, (x_name, x_t)), e)
+            ( existing_names,
+              FlatPatConstructor (v_constructor, c_name, (x_v, x_name, x_t)),
+              e )
             |> Ok
-        | PatConstructor (c_name, p1) ->
+        | PatConstructor (v, c_name, p1) ->
             (* A compound constructor pattern
 
             ```
@@ -242,7 +262,8 @@ functor
             >>|
             fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
             ( existing_names,
-              FlatPatConstructor (c_name, (new_binding_name, p1_t)),
+              FlatPatConstructor
+                (v, c_name, ({ t = p1_t }, new_binding_name, p1_t)),
               Match
                 ( { t = outer_expr_type },
                   Var ({ t = p1_t }, new_binding_name),
@@ -364,9 +385,10 @@ functor
                   (acc :
                     ( unit,
                       StringSet.t
-                      * (pattern * preprocessed_tag_expr) Nonempty_list.t )
+                      * (tag_pattern * preprocessed_tag_expr) Nonempty_list.t
+                    )
                     Either.t)
-                  ((p : pattern), (e : tag_expr))
+                  ((p : tag_pattern), (e : tag_expr))
                 ->
                 preprocess_expr (existing_names, e)
                 >>| fun (existing_names, e') ->
@@ -377,7 +399,7 @@ functor
             >>=
             fun ( (existing_names : StringSet.t),
                   (preprocessed_cases :
-                    (pattern * preprocessed_tag_expr) Nonempty_list.t) )
+                    (tag_pattern * preprocessed_tag_expr) Nonempty_list.t) )
             ->
             Nonempty_list.fold_result_consume_init ~init:()
               ~f:(fun
@@ -406,35 +428,6 @@ functor
               (fun existing_names e' ->
                 (existing_names, Constructor (v, name, e')))
               expr
-
-      let type_flat_pattern ((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) :
-          flat_pattern ->
-          (vtype * (varname * vtype) list, quotient_typing_error) Result.t =
-        let open Result in
-        let check_var_not_defined (x_name : varname) :
-            (unit, quotient_typing_error) Result.t =
-          if VarCtx.exists var_ctx x_name then Ok ()
-          else Error (MultipleVariableDefinitions x_name)
-        in
-        function
-        | FlatPatName (x_name, x_t) ->
-            check_var_not_defined x_name >>| fun () -> (x_t, [ (x_name, x_t) ])
-        | FlatPatPair ((x1_name, x1_t), (x2_name, x2_t)) ->
-            check_var_not_defined x1_name >>= fun () ->
-            check_var_not_defined x2_name >>| fun () ->
-            (VTypePair (x1_t, x2_t), [ (x1_name, x1_t); (x2_name, x2_t) ])
-        | FlatPatConstructor (c_name, (x_name, x_t)) ->
-            (* Check the variable's name is not already defined *)
-            check_var_not_defined x_name >>= fun () ->
-            (* Check the variant type constructor exists *)
-            TypeCtx.find_variant_type_with_constructor type_ctx c_name
-            |> Result.of_option
-                 ~error:(VariantTypeConstructorDoesNotExist c_name)
-            >>= fun ((vt_name, _), (_, c_t)) ->
-            (* Check the variant type constructor's argument type matches *)
-            if equal_vtype c_t x_t then
-              Ok (VTypeCustom vt_name, [ (x_name, x_t) ])
-            else Error (PatternTypeMismatch (c_t, x_t))
     end
 
     (** Interactions with the SMT solver and state that can be provided to it *)
@@ -494,9 +487,10 @@ functor
         let node_of_flat_pattern : ExprPreprocessor.flat_pattern -> node =
           let open ExprPreprocessor in
           function
-          | FlatPatName (xname, _) -> Atom xname
+          | FlatPatName (_, xname, _) -> Atom xname
           | FlatPatPair _ -> failwith "TODO - once pair type definition done"
-          | FlatPatConstructor (cname, (vname, _)) -> Op (cname, [ Atom vname ])
+          | FlatPatConstructor (_, cname, (_, vname, _)) ->
+              Op (cname, [ Atom vname ])
 
         (** Representation of an expression *)
         let rec node_of_expr : ExprPreprocessor.preprocessed_tag_expr -> node =
@@ -715,7 +709,7 @@ functor
             check_quotient_types_in_expr e1 param >>= fun () ->
             failwith "TODO - recurse into each of the cases"
 
-    let check_quotient_types (prog : ast_tag program) :
+    let check_quotient_types (prog : (ast_tag, pattern_tag) program) :
         (unit, quotient_typing_error) Result.t =
       let open Result in
       let state : Smt.state =
