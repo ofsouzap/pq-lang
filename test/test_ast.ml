@@ -61,68 +61,24 @@ let test_cases_equality : test list =
       (Var ((), "x"), Var ((), "x"));
       ( Let ((), "x", IntLit ((), 1), IntLit ((), 2)),
         Let ((), "x", IntLit ((), 1), IntLit ((), 2)) );
+      ( LetRec
+          ( (),
+            "f",
+            ("x", VTypeInt),
+            VTypeInt,
+            App ((), Var ((), "f"), Var ((), "x")),
+            IntLit ((), 1) ),
+        LetRec
+          ( (),
+            "f",
+            ("x", VTypeInt),
+            VTypeInt,
+            App ((), Var ((), "f"), Var ((), "x")),
+            IntLit ((), 1) ) );
       ( Fun ((), ("x", VTypeInt), IntLit ((), 1)),
         Fun ((), ("x", VTypeInt), IntLit ((), 1)) );
       ( App ((), IntLit ((), 1), IntLit ((), 2)),
         App ((), IntLit ((), 1), IntLit ((), 2)) );
-      ( Fix
-          ( (),
-            ("f", VTypeInt, VTypeInt),
-            ("x", VTypeInt),
-            App ((), Var ((), "f"), Var ((), "x")) ),
-        Fix
-          ( (),
-            ("f", VTypeInt, VTypeInt),
-            ("x", VTypeInt),
-            App ((), Var ((), "f"), Var ((), "x")) ) );
-      ( App
-          ( (),
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeInt),
-                ("x", VTypeInt),
-                App ((), Var ((), "f"), Var ((), "x")) ),
-            Fun ((), ("x", VTypeInt), Fun ((), ("x", VTypeInt), IntLit ((), 1)))
-          ),
-        App
-          ( (),
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeInt),
-                ("x", VTypeInt),
-                App ((), Var ((), "f"), Var ((), "x")) ),
-            Fun ((), ("x", VTypeInt), Fun ((), ("x", VTypeInt), IntLit ((), 1)))
-          ) );
-      ( Let
-          ( (),
-            "f",
-            App
-              ( (),
-                Fix
-                  ( (),
-                    ("f", VTypeInt, VTypeInt),
-                    ("x", VTypeInt),
-                    App ((), Var ((), "f"), Var ((), "x")) ),
-                Fun
-                  ( (),
-                    ("f", VTypeFun (VTypeInt, VTypeInt)),
-                    App ((), Var ((), "f"), IntLit ((), 0)) ) ),
-            App ((), Var ((), "f"), IntLit ((), 0)) ),
-        Let
-          ( (),
-            "f",
-            App
-              ( (),
-                Fix
-                  ( (),
-                    ("f", VTypeInt, VTypeInt),
-                    ("x", VTypeInt),
-                    App ((), Var ((), "f"), Var ((), "x")) ),
-                Fun
-                  ( (),
-                    ("f", VTypeFun (VTypeInt, VTypeInt)),
-                    App ((), Var ((), "f"), IntLit ((), 0)) ) ),
-            App ((), Var ((), "f"), IntLit ((), 0)) ) );
     ]
   @ List.map ~f:create_negative_test
       [

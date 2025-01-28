@@ -380,6 +380,18 @@ functor
             type_expr (type_ctx, VarCtx.add var_ctx xname t1) e2 >>= fun e2' ->
             let t2 = e_type e2' in
             Ok (Let ((t2, v), xname, e1', e2'))
+        | LetRec (v, fname, (xname, xtype), return_t, e1, e2) ->
+            let ftype = VTypeFun (xtype, return_t) in
+            check_vtype type_ctx xtype >>= fun () ->
+            type_expr
+              (type_ctx, VarCtx.add (VarCtx.add var_ctx fname ftype) xname xtype)
+              e1
+            >>= fun e1' ->
+            be_of_type return_t e1' >>= fun _ ->
+            type_expr (type_ctx, VarCtx.add var_ctx fname ftype) e2
+            >>= fun e2' ->
+            let e2_t = e_type e2' in
+            Ok (LetRec ((e2_t, v), fname, (xname, xtype), return_t, e1', e2'))
         | Fun (v, (xname, xtype), e') ->
             check_vtype type_ctx xtype >>= fun () ->
             type_expr (type_ctx, VarCtx.add var_ctx xname xtype) e'
@@ -396,22 +408,6 @@ functor
                 if equal_vtype t11 t2 then Ok (App ((t12, v), e1', e2'))
                 else Error (TypeMismatch (t11, t2))
             | _ -> Error (ExpectedFunctionOf t1))
-        | Fix
-            (v, ((fname, ftype1, ftype2) as fvals), ((xname, xtype) as xvals), e)
-          ->
-            check_vtype type_ctx ftype1 >>= fun () ->
-            check_vtype type_ctx ftype2 >>= fun () ->
-            check_vtype type_ctx xtype >>= fun () ->
-            let ftype = VTypeFun (ftype1, ftype2) in
-            if equal_vtype ftype1 xtype then
-              type_expr
-                ( type_ctx,
-                  VarCtx.add (VarCtx.add var_ctx fname ftype) xname xtype )
-                e
-              >>= fun e' ->
-              be_of_type ftype2 e' >>= fun _ ->
-              Ok (Fix ((ftype, v), fvals, xvals, e'))
-            else Error (TypeMismatch (ftype1, xtype))
         | Match (v, e, cs) ->
             type_expr ctx e >>= fun e' ->
             let t_in = e_type e' in

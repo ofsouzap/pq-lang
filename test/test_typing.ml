@@ -154,46 +154,48 @@ let test_cases_expr_typing : test list =
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Ok VTypeInt );
       ( None,
-        Let
+        LetRec
           ( (),
             "f",
-            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeInt), Var ((), "x")),
+            ("x", VTypeInt),
+            VTypeInt,
+            Var ((), "x"),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Ok VTypeInt );
       ( None,
-        Let
+        LetRec
           ( (),
             "f",
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeInt),
-                ("x", VTypeInt),
-                BoolLit ((), false) ),
+            ("x", VTypeInt),
+            VTypeInt,
+            BoolLit ((), false),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
       ( None,
-        Let
+        LetRec
           ( (),
             "f",
-            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
+            ("x", VTypeInt),
+            VTypeBool,
+            Var ((), "x"),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeBool, VTypeInt)) );
       ( None,
-        Let
+        LetRec
           ( (),
             "f",
-            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
+            ("x", VTypeBool),
+            VTypeInt,
+            Var ((), "x"),
             App ((), Var ((), "f"), BoolLit ((), false)) ),
         Error (TypeMismatch (VTypeInt, VTypeBool)) );
       ( None,
-        Let
+        LetRec
           ( (),
             "f",
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeBool),
-                ("x", VTypeInt),
-                BoolLit ((), false) ),
+            ("x", VTypeInt),
+            VTypeBool,
+            BoolLit ((), false),
             App ((), Var ((), "f"), IntLit ((), 3)) ),
         Ok VTypeBool );
       ( None,
@@ -675,8 +677,18 @@ let test_cases_arb_compound_expr_typing : test list =
           pair varname_gen (vtype_gen type_ctx) >>= fun (xname, xtype) ->
           pair (expr_gen ~type_ctx xtype) (expr_gen ~type_ctx t)
           >|= fun (e1, e2) -> (t, Let ((), xname, e1, e2))
-        (* Note, the tests here (and for the Fun and Fix cases) don't work with changing variable contexts. But this should be fine *)
+        (* Note, the tests here (and for the LetRec, Fun and Fix cases) don't work with changing variable contexts. But this should be fine *)
       );
+      ( "LetRec",
+        None,
+        fun type_ctx ->
+          vtype_gen type_ctx >>= fun t ->
+          triple varname_gen (vtype_gen type_ctx) (vtype_gen type_ctx)
+          >>= fun (fname, xtype, return_t) ->
+          varname_gen >>= fun xname ->
+          pair (expr_gen ~type_ctx return_t) (expr_gen ~type_ctx t)
+          >|= fun (e1, e2) ->
+          (t, LetRec ((), fname, (xname, xtype), return_t, e1, e2)) );
       ( "Fun",
         None,
         fun type_ctx ->
@@ -690,13 +702,6 @@ let test_cases_arb_compound_expr_typing : test list =
           pair (vtype_gen type_ctx) (vtype_gen type_ctx) >>= fun (t1, t2) ->
           pair (expr_gen ~type_ctx (VTypeFun (t1, t2))) (expr_gen ~type_ctx t1)
           >|= fun (e1, e2) -> (t2, App ((), e1, e2)) );
-      ( "Fix",
-        None,
-        fun type_ctx ->
-          pair varname_gen (vtype_gen type_ctx) >>= fun (fname, t1) ->
-          pair varname_gen (vtype_gen type_ctx) >>= fun (xname, t2) ->
-          expr_gen ~type_ctx t2 >|= fun e ->
-          (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );
       ( "Constructor - list Nil",
         Some
           (TestingTypeCtx.create

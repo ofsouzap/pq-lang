@@ -4,6 +4,7 @@ open Core
 open Utils
 open Vtype
 open Variant_types
+open Varname
 open Pattern
 
 (** Expressions in the language. Tagged with arbitrary values on each node. *)
@@ -46,21 +47,24 @@ type ('tag_e, 'tag_p) expr =
       * ('tag_e, 'tag_p) expr
       * ('tag_e, 'tag_p) expr  (** If-then-else *)
   (* Variables and functions *)
-  | Var of 'tag_e * string  (** Variable references *)
-  | Let of 'tag_e * string * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | Var of 'tag_e * varname  (** Variable references *)
+  | Let of 'tag_e * varname * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
       (** Let binding *)
-  | Fun of 'tag_e * (string * vtype) * ('tag_e, 'tag_p) expr
+  | LetRec of
+      'tag_e
+      * varname
+      * (varname * vtype)
+      * vtype
+      * ('tag_e, 'tag_p) expr
+      * ('tag_e, 'tag_p) expr
+      (** Let-rec binding.
+
+          `LetRec (v, f, (x, xt), ft, e1, e2)` is `let rec f (x : xt) : ft = e1
+          in e2 end`*)
+  | Fun of 'tag_e * (varname * vtype) * ('tag_e, 'tag_p) expr
       (** Function value *)
   | App of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
       (** Function application *)
-  | Fix of
-      'tag_e
-      * (string * vtype * vtype)
-      * (string * vtype)
-      * ('tag_e, 'tag_p) expr
-      (** Application of fix operator: `((function_name_for_recursion,
-          function_for_recursion_type1, function_for_recursion_type2),
-          (param_name, param_type), expr)` *)
   (* Pattern matching *)
   | Match of
       'tag_e

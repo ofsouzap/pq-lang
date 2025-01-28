@@ -369,49 +369,18 @@ functor
             of_ast ~existing_names state e3 >>| fun (existing_names, e3') ->
             (existing_names, If (v, e1', e2', e3'))
         | Var (v, name) -> Ok (existing_names, Var (v, name))
-        | Let (v, xname, e1, e2) -> (
-            let get_default_repr :
-                unit ->
-                ( StringSet.t * quotient_analysis_repr,
-                  quotient_typing_error )
-                Result.t =
-             fun () ->
-              binop
-                (fun existing_names e1' e2' ->
-                  (existing_names, LetNoRec (v, xname, e1', e2')))
-                ~existing_names
-                {
-                  var_scope =
-                    List.Assoc.add state.var_scope ~equal:equal_varname xname
-                      (expr_node_val e2).t;
-                }
-                e1 e2
-            in
-            match e1 with
-            | Fix (_, (xname2, x2type1, x2type2), (yname, ytype), e1') ->
-                (* TODO - this also needs to consider the variable scope *)
-                let x2type = VTypeFun (x2type1, x2type2) in
-                if equal_string xname xname2 then
-                  binop
-                    (fun existing_names e1'_converted e2_converted ->
-                      ( existing_names,
-                        LetRec
-                          ( v,
-                            xname,
-                            Nonempty_list.singleton (yname, ytype),
-                            e1'_converted,
-                            e2_converted ) ))
-                    ~existing_names
-                    {
-                      var_scope =
-                        List.Assoc.add
-                          (List.Assoc.add state.var_scope ~equal:equal_varname
-                             xname x2type)
-                          ~equal:equal_varname yname ytype;
-                    }
-                    e1' e2
-                else get_default_repr ()
-            | _ -> get_default_repr ())
+        | Let (v, xname, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, LetNoRec (v, xname, e1', e2')))
+              ~existing_names
+              {
+                var_scope =
+                  List.Assoc.add state.var_scope ~equal:equal_varname xname
+                    (expr_node_val e2).t;
+              }
+              e1 e2
+        | LetRec _ -> failwith "TODO"
         | Fun (v, xname, e) ->
             unop
               (fun existing_names e' -> (existing_names, Fun (v, xname, e')))
@@ -421,7 +390,6 @@ functor
               (fun existing_names e1' e2' ->
                 (existing_names, App (v, e1', [ e2' ])))
               ~existing_names state e1 e2
-        | Fix _ -> Error MisplacedFixNode
         | Match (v, e, cs) ->
             (* TODO - this also must alter the variable scope *)
             of_ast ~existing_names state e >>= fun (existing_names, e') ->

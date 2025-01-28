@@ -2,6 +2,7 @@ open Core
 open Utils
 open Vtype
 open Variant_types
+open Varname
 open Pattern
 
 type ('tag_e, 'tag_p) expr =
@@ -26,15 +27,17 @@ type ('tag_e, 'tag_p) expr =
       * ('tag_e, 'tag_p) expr
       * ('tag_e, 'tag_p) expr
       * ('tag_e, 'tag_p) expr
-  | Var of 'tag_e * string
-  | Let of 'tag_e * string * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | Fun of 'tag_e * (string * vtype) * ('tag_e, 'tag_p) expr
-  | App of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | Fix of
+  | Var of 'tag_e * varname
+  | Let of 'tag_e * varname * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | LetRec of
       'tag_e
-      * (string * vtype * vtype)
-      * (string * vtype)
+      * varname
+      * (varname * vtype)
+      * vtype
       * ('tag_e, 'tag_p) expr
+      * ('tag_e, 'tag_p) expr
+  | Fun of 'tag_e * (varname * vtype) * ('tag_e, 'tag_p) expr
+  | App of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
   | Match of
       'tag_e
       * ('tag_e, 'tag_p) expr
@@ -63,9 +66,10 @@ let expr_node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
   | If (v, e1, e2, e3) -> (f v, If (f v, e1, e2, e3))
   | Var (v, xname) -> (f v, Var (f v, xname))
   | Let (v, e1, e2, e3) -> (f v, Let (f v, e1, e2, e3))
+  | LetRec (v, fname, xname, return_t, e1, e2) ->
+      (f v, LetRec (f v, fname, xname, return_t, e1, e2))
   | Fun (v, xname, e1) -> (f v, Fun (f v, xname, e1))
   | App (v, e1, e2) -> (f v, App (f v, e1, e2))
-  | Fix (v, fname, xname, e1) -> (f v, Fix (f v, fname, xname, e1))
   | Match (v, e1, cs) -> (f v, Match (f v, e1, cs))
   | Constructor (v, cname, e1) -> (f v, Constructor (f v, cname, e1))
 
@@ -98,9 +102,10 @@ let rec fmap ~(f : 'tag_e1 -> 'tag_e2) (e : ('tag_e1, 'tag_p) expr) :
   | If (a, e1, e2, e3) -> If (f a, fmap ~f e1, fmap ~f e2, fmap ~f e3)
   | Var (a, vname) -> Var (f a, vname)
   | Let (a, xname, e1, e2) -> Let (f a, xname, fmap ~f e1, fmap ~f e2)
+  | LetRec (a, fname, xname, return_t, e1, e2) ->
+      LetRec (f a, fname, xname, return_t, fmap ~f e1, fmap ~f e2)
   | Fun (a, (xname, xtype), e) -> Fun (f a, (xname, xtype), fmap ~f e)
   | App (a, e1, e2) -> App (f a, fmap ~f e1, fmap ~f e2)
-  | Fix (a, xname, yname, e) -> Fix (f a, xname, yname, fmap ~f e)
   | Match (a, e, cs) ->
       Match
         ( f a,
@@ -136,9 +141,10 @@ let rec fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (e : ('tag_e, 'tag_p1) expr) :
   | Var (v, name) -> Var (v, name)
   | Let (v, name, e1, e2) ->
       Let (v, name, fmap_pattern ~f e1, fmap_pattern ~f e2)
+  | LetRec (v, fname, xname, return_t, e1, e2) ->
+      LetRec (v, fname, xname, return_t, fmap_pattern ~f e1, fmap_pattern ~f e2)
   | Fun (v, xname, e) -> Fun (v, xname, fmap_pattern ~f e)
   | App (v, e1, e2) -> App (v, fmap_pattern ~f e1, fmap_pattern ~f e2)
-  | Fix (v, fname, xname, e) -> Fix (v, fname, xname, fmap_pattern ~f e)
   | Match (v, e, cs) ->
       Match
         ( v,
@@ -190,10 +196,12 @@ let rec expr_existing_names : ('tag_e, 'tag_p) expr -> StringSet.t = function
       Set.union
         (StringSet.singleton xname)
         (Set.union (expr_existing_names e1) (expr_existing_names e2))
+  | LetRec (_, fname, (xname, _), _, e1, e2) ->
+      Set.union
+        (StringSet.of_list [ fname; xname ])
+        (Set.union (expr_existing_names e1) (expr_existing_names e2))
   | Fun (_, (xname, _), e) ->
       Set.union (StringSet.singleton xname) (expr_existing_names e)
-  | Fix (_, (fname, _, _), (xname, _), e) ->
-      Set.union (StringSet.of_list [ fname; xname ]) (expr_existing_names e)
   | Constructor (_, cname, e) ->
       Set.union (StringSet.singleton cname) (expr_existing_names e)
 
@@ -228,9 +236,16 @@ let rec expr_to_plain_expr (e : ('tag_e, 'tag_p) expr) : plain_expr =
   | Var (_, vname) -> Var ((), vname)
   | Let (_, xname, e1, e2) ->
       Let ((), xname, expr_to_plain_expr e1, expr_to_plain_expr e2)
+  | LetRec (_, xname, yname, return_t, e1, e2) ->
+      LetRec
+        ( (),
+          xname,
+          yname,
+          return_t,
+          expr_to_plain_expr e1,
+          expr_to_plain_expr e2 )
   | Fun (_, xname, e) -> Fun ((), xname, expr_to_plain_expr e)
   | App (_, e1, e2) -> App ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Fix (_, xname, yname, e) -> Fix ((), xname, yname, expr_to_plain_expr e)
   | Match (_, e, cs) ->
       Match
         ( (),
@@ -276,32 +291,23 @@ let ast_to_source_code ?(use_newlines : bool option) :
            |.> block (convert e3)
            |.> write "end"
        | Var (_, vname) -> write vname
-       | Let (_, xname, e1, e2) -> (
-           let default_repr : state -> state =
-             write "let " |.> write xname |.> write " = "
-             |.> block (convert e1)
-             |.> write "in"
-             |.> block (convert e2)
-             |.> write "end"
-           in
-           match e1 with
-           | Fix (_, (xname2, x2type1, x2type2), (yname, ytype), e1') ->
-               let x2type = VTypeFun (x2type1, x2type2) in
-               if equal_string xname xname2 then
-                 write "let rec (" |.> write xname |.> write " : "
-                 |.> write (vtype_to_source_code x2type)
-                 |.> write ") ="
-                 |.> block
-                       (write "fun (" |.> write yname |.> write " : "
-                       |.> write (vtype_to_source_code ytype)
-                       |.> write ") ->"
-                       |.> block (convert e1')
-                       |.> write "end")
-                 |.> write "in"
-                 |.> block (convert e2)
-                 |.> write "end"
-               else default_repr
-           | _ -> default_repr)
+       | Let (_, xname, e1, e2) ->
+           write "let " |.> write xname |.> write " = "
+           |.> block (convert e1)
+           |.> write "in"
+           |.> block (convert e2)
+           |.> write "end"
+       | LetRec (_, fname, (xname, xtype), return_t, e1, e2) ->
+           write "let rec " |.> write fname |.> write " (" |.> write xname
+           |.> write " : "
+           |.> write (vtype_to_source_code xtype)
+           |.> write ") : "
+           |.> write (vtype_to_source_code return_t)
+           |.> write " = "
+           |.> block (convert e1)
+           |.> write "in"
+           |.> block (convert e2)
+           |.> write "end"
        | Fun (_, (xname, xtype), e) ->
            write "fun (" |.> write xname |.> write " : "
            |.> write (vtype_to_source_code xtype)
@@ -309,7 +315,6 @@ let ast_to_source_code ?(use_newlines : bool option) :
            |.> block (convert e)
            |.> write "end"
        | App (_, e1, e2) -> convert e1 |.> write " " |.> convert e2
-       | Fix _ -> raise AstConverionFixError
        | Match (_, e, cs) ->
            let convert_case ((p : 'tag_p pattern), (c_e : ('tag_e, 'tag_p) expr))
                : state -> state =
@@ -487,8 +492,7 @@ end = struct
         List.Assoc.add ~equal:equal_string ctx_with_f xname ftype1
       in
       pair (gen (d - 1, ctx_with_fx) ftype2) (self (d - 1, ctx_with_f))
-      >|= fun (e1, e2) ->
-      Let (v, fname, Fix (v, (fname, ftype1, ftype2), (xname, ftype1), e1), e2)
+      >|= fun (e1, e2) -> LetRec (v, fname, (xname, ftype1), ftype2, e1, e2)
     and gen_e_match
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
@@ -767,13 +771,17 @@ end = struct
         (* Because of let-rec definitions needing a specific form when using AST to source code,
            this would need a filtered shrink function which I can't be bothered to write at the moment *)
         empty
+    | LetRec (v, fname, xname, return_t, e1, e2) ->
+        (if not preserve_type then empty
+         else
+           shrink opts e1 >|= fun e1' ->
+           LetRec (v, fname, xname, return_t, e1', e2))
+        <+> ( shrink opts e2 >|= fun e2' ->
+              LetRec (v, fname, xname, return_t, e1, e2') )
     | Fun (v, (x, t), e1) -> shrink opts e1 >|= fun e1' -> Fun (v, (x, t), e1')
     | App (v, e1, e2) ->
         binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
           (fun (v', e1', e2') -> App (v', e1', e2'))
-    | Fix _ ->
-        (* I won't try have these shrunk, since it's more complicated than most, since let-rec definitions need a specific form *)
-        empty
     | Match (v, e1, ps) ->
         (if preserve_type then empty else return e1)
         <+> ( (* Try shrinking each case expression *)

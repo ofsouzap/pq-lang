@@ -357,6 +357,7 @@ functor
                 "TODO - handle recursive and non-recursive let-bindings. \
                  Recursive ones need to be turned into function definitions. \
                  This function alters the `state` value"
+          | LetRec _ -> failwith "TODO"
           | Fun (v, (xname, xtype), e1) ->
               let state' =
                 { state with scope_vars = (xname, xtype) :: state.scope_vars }
@@ -380,7 +381,6 @@ functor
                 Var (v, f_name) )
           | App (v, e1, e2) ->
               binop (fun acc e1' e2' -> (acc, App (v, e1', e2'))) e1 e2
-          | Fix _ -> Error MisplacedFixNode
           | Match (v, e1, cs) ->
               aux acc state e1 >>= fun (acc, e1') ->
               Nonempty_list.fold_result_consume_init ~init:() cs

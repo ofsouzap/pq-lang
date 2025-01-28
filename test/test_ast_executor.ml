@@ -7,16 +7,16 @@ open Variant_types
 open Pattern
 open Typing
 open Ast_executor
+open Ast_executor.SimpleExecutor
 open Testing_utils
 
 type basic_test_case =
   string * (unit, unit) SimpleTypeChecker.typed_program_expression * exec_res
 
-let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
-    =
+let make_store (vars : (string * value) list) : store =
   List.fold_left vars
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
-    ~init:Ast_executor.empty_store
+    ~init:empty_store
 
 let type_expr ?(type_ctx : SetTypingTypeContext.t option) (e : Ast.plain_expr) =
   match
@@ -108,12 +108,12 @@ let test_cases_pairs : basic_test_case list =
   List.map ~f:mapf
     [
       ( Pair ((), IntLit ((), 1), BoolLit ((), true)),
-        Ast_executor.Pair (Int 1, Bool true) );
+        SimpleExecutor.Pair (Int 1, Bool true) );
       ( Pair
           ( (),
             Add ((), IntLit ((), 2), IntLit ((), 4)),
             BOr ((), BoolLit ((), true), BoolLit ((), false)) ),
-        Ast_executor.Pair (Int 6, Bool true) );
+        SimpleExecutor.Pair (Int 6, Bool true) );
     ]
 
 let test_cases_integer_comparisons : basic_test_case list =
@@ -213,7 +213,7 @@ let test_cases_functions : basic_test_case list =
              {
                param = ("x", VTypeInt);
                out_type = VTypeInt;
-               body = Var ((VTypeInt, ()), "x");
+               body = Var (VTypeInt, "x");
                store = empty_store;
              }) );
       ( Fun ((), ("x", VTypeBool), BOr ((), Var ((), "x"), BoolLit ((), true))),
@@ -223,10 +223,7 @@ let test_cases_functions : basic_test_case list =
                param = ("x", VTypeBool);
                out_type = VTypeBool;
                body =
-                 BOr
-                   ( (VTypeBool, ()),
-                     Var ((VTypeBool, ()), "x"),
-                     BoolLit ((VTypeBool, ()), true) );
+                 BOr (VTypeBool, Var (VTypeBool, "x"), BoolLit (VTypeBool, true));
                store = empty_store;
              }) );
       ( App
@@ -276,24 +273,22 @@ let test_cases_recursion : basic_test_case list =
   in
   List.map ~f:mapf
     [
-      ( Let
+      ( LetRec
           ( (),
             "f",
-            Fix
+            ("x", VTypeInt),
+            VTypeInt,
+            If
               ( (),
-                ("f", VTypeInt, VTypeInt),
-                ("x", VTypeInt),
-                If
+                Eq ((), Var ((), "x"), IntLit ((), 0)),
+                IntLit ((), 0),
+                Add
                   ( (),
-                    Eq ((), Var ((), "x"), IntLit ((), 0)),
-                    IntLit ((), 0),
-                    Add
+                    Var ((), "x"),
+                    App
                       ( (),
-                        Var ((), "x"),
-                        App
-                          ( (),
-                            Var ((), "f"),
-                            Subtr ((), Var ((), "x"), IntLit ((), 1)) ) ) ) ),
+                        Var ((), "f"),
+                        Subtr ((), Var ((), "x"), IntLit ((), 1)) ) ) ),
             App ((), Var ((), "f"), IntLit ((), 5)) ),
         Ok (Int 15) );
     ]
@@ -493,8 +488,7 @@ let create_test
       (exp : exec_res) ) =
   name >:: fun _ ->
   let out = Ast_executor.SimpleExecutor.execute_program inp in
-  assert_equal exp out ~cmp:override_equal_exec_res
-    ~printer:Ast_executor.show_exec_res
+  assert_equal exp out ~cmp:override_equal_exec_res ~printer:show_exec_res
 
 let suite =
   "AST Executor"

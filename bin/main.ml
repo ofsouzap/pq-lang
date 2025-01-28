@@ -17,4 +17,4 @@ let () =
           | Error err -> eprintf "Typing error: %s\n" (print_typing_error err)
           | Ok tpe ->
               let result = Ast_executor.SimpleExecutor.execute_program tpe in
-              printf "%s\n" (Ast_executor.show_exec_res result)))
+              printf "%s\n" (Ast_executor.SimpleExecutor.show_exec_res result)))

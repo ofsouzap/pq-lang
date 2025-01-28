@@ -6,29 +6,6 @@ open Pattern
 open Ast
 open Quotient_types
 open Program
-open Parsing_errors
-
-(*
- * As an example,
- *   let rec (f : t1 -> t2) = fun (x : tx) -> e end in e' end
- * gets converted to
- *   let f = fix (fun (f : t1 -> t2) -> fun (x : tx) -> e end end) in e' end
- * i.e.
- *   Let (
- *     ("f", VTypeFun (t1, t2)),
- *     Fix (
- *       ("f", VTypeFun (t1, t2)),
- *       ("x", tx),
- *       e
- *     ),
- *     e'
- *   )
-*)
-
-let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : plain_expr), (subexpr : plain_expr)) : plain_expr =
-  match fbody with
-  | Fun (_, x, fbody') -> Let ((), fname, Fix ((), f, x, fbody'), subexpr)
-  | _ -> raise CustomError
 
 let add_variant_type_definition_to_program (p : plain_program) (vt : variant_type) : plain_program =
   {
@@ -75,7 +52,6 @@ let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_t
 %type <variant_type_constructor list> variant_type_definition_constructors
 %type <variant_type> variant_type_definition
 
-%type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
 
 %type <plain_pattern * plain_expr> match_case
@@ -136,10 +112,6 @@ variant_type_definition:
   | TYPE name = LNAME ASSIGN cs = variant_type_definition_constructors { (name, cs) }
 ;
 
-typed_function_name:
-  | n = LNAME COLON t1 = vtype ARROW t2 = vtype { (n, t1, t2) }
-;
-
 typed_name:
   | n = LNAME COLON t = vtype { (n, t) }
 ;
@@ -174,7 +146,7 @@ expr:
   | e1 = expr LTEQ e2 = expr { LtEq ((), e1, e2) }  (* e1 <= e2 *)
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }  (* if e1 then e2 else e3 *)
   | LET l = LNAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
-  | LET REC LPAREN l = typed_function_name RPAREN ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
+  | LET REC f = LNAME LPAREN x = typed_name RPAREN COLON return_t = vtype ASSIGN e1 = expr IN e2 = expr END { LetRec ((), f, x, return_t, e1, e2) }  (* let rec f (x : xtype) : ftype2 = e1 in e2 end *)
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
   | MATCH e = expr WITH cs = match_cases END { Match ((), e, cs) }  (* match e with cs end *)

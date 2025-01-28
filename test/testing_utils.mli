@@ -25,12 +25,16 @@ val token_printer : Parser.token list -> string
 (** A variation of the default `exec_err` equality function, that considers all
     typing errors equal *)
 val override_equal_exec_err :
-  Ast_executor.exec_err -> Ast_executor.exec_err -> bool
+  Ast_executor.SimpleExecutor.exec_err ->
+  Ast_executor.SimpleExecutor.exec_err ->
+  bool
 
 (** A variation of the default `exec_res` equality function, that considers all
     typing errors equal *)
 val override_equal_exec_res :
-  Ast_executor.exec_res -> Ast_executor.exec_res -> bool
+  Ast_executor.SimpleExecutor.exec_res ->
+  Ast_executor.SimpleExecutor.exec_res ->
+  bool
 
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
