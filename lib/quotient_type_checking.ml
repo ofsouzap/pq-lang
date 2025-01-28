@@ -67,9 +67,30 @@ functor
         character not usable by the user when defining variable names *)
     let custom_special_prefix : string -> string = String.append "PQ-"
 
-    (** Preprocessing for arbitrary expressions, for usage in quotient type
-        checking *)
-    module ExprPreprocessor = struct
+    (** Generate a fresh variable name, given a set of the currently-defined
+        names *)
+    let generate_fresh_varname (existing_names : StringSet.t) :
+        varname * StringSet.t =
+      let rec loop (i : int) : varname =
+        let candidate = sprintf "x%d" i in
+        if Set.mem existing_names candidate then loop (i + 1) else candidate
+      in
+      let new_name = loop 0 in
+      (new_name, Set.add existing_names new_name)
+
+    (** Provides the representation of an AST for quotient analysis.
+
+        We convert Fix nodes in let-bindings to let-rec bindings, for easier
+        analysis.
+
+        We also use flattened patterns.
+
+        Also, we apply the "unscoping" transformation to let-rec bindings, where
+        functions don't capture variables, and instead will be provided all
+        values as parameters. To help with this, the function application node
+        contains a list of arguments to provide, instead of only allowing for a
+        single argument *)
+    module QuotientAnalysisRepr = struct
       type flat_pattern =
         | FlatPatName of pattern_tag * varname * vtype
         | FlatPatPair of
@@ -79,60 +100,40 @@ functor
         | FlatPatConstructor of
             pattern_tag * string * (pattern_tag * varname * vtype)
 
+      type t =
+        | UnitLit of ast_tag
+        | IntLit of ast_tag * int
+        | Add of ast_tag * t * t
+        | Neg of ast_tag * t
+        | Subtr of ast_tag * t * t
+        | Mult of ast_tag * t * t
+        | BoolLit of ast_tag * bool
+        | BNot of ast_tag * t
+        | BOr of ast_tag * t * t
+        | BAnd of ast_tag * t * t
+        | Pair of ast_tag * t * t
+        | Eq of ast_tag * t * t
+        | Gt of ast_tag * t * t
+        | GtEq of ast_tag * t * t
+        | Lt of ast_tag * t * t
+        | LtEq of ast_tag * t * t
+        | If of ast_tag * t * t * t
+        | Var of ast_tag * string
+        | LetNoRec of ast_tag * string * t * t
+        | LetRec of ast_tag * string * (string * vtype) Nonempty_list.t * t * t
+        | Fun of ast_tag * (string * vtype) * t
+        | App of ast_tag * t * t list
+        | Match of ast_tag * t * (flat_pattern * t) Nonempty_list.t
+        | Constructor of ast_tag * string * t
+
+      type quotient_analysis_repr = t
+
       let flat_pattern_node_val : flat_pattern -> pattern_tag = function
         | FlatPatName (v, _, _) -> v
         | FlatPatPair (v, _, _) -> v
         | FlatPatConstructor (v, _, _) -> v
 
-      type preprocessed_tag_expr =
-        | UnitLit of ast_tag
-        | IntLit of ast_tag * int
-        | Add of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | Neg of ast_tag * preprocessed_tag_expr
-        | Subtr of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | Mult of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | BoolLit of ast_tag * bool
-        | BNot of ast_tag * preprocessed_tag_expr
-        | BOr of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | BAnd of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | Pair of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | Eq of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | Gt of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | GtEq of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | Lt of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | LtEq of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | If of
-            ast_tag
-            * preprocessed_tag_expr
-            * preprocessed_tag_expr
-            * preprocessed_tag_expr
-        | Var of ast_tag * varname
-        | Let of
-            ast_tag * varname * preprocessed_tag_expr * preprocessed_tag_expr
-        | App of ast_tag * preprocessed_tag_expr * preprocessed_tag_expr
-        | Match of
-            ast_tag
-            * preprocessed_tag_expr
-            * (flat_pattern * preprocessed_tag_expr) Nonempty_list.t
-        | Constructor of ast_tag * string * preprocessed_tag_expr
-
-      (** A top-level function definition. Contains information about "captured"
-          scoped variables that should be provided with calling the function *)
-      type function_defn = {
-        name : varname;
-        scope_vars : (varname * vtype) list;
-        args : (varname * vtype) list;
-        body : preprocessed_tag_expr;
-      }
-
-      (** Complete representation of an AST expression *)
-      type preprocessed_ast_repr = {
-        funs : function_defn list;
-        body : preprocessed_tag_expr;
-      }
-
-      let preprocessed_expr_node_val : preprocessed_tag_expr -> ast_tag =
-        function
+      let node_val : t -> ast_tag = function
         | UnitLit v -> v
         | IntLit (v, _) -> v
         | Add (v, _, _) -> v
@@ -150,30 +151,26 @@ functor
         | Lt (v, _, _) -> v
         | LtEq (v, _, _) -> v
         | If (v, _, _, _) -> v
-        | Let (v, _, _, _) -> v
         | Var (v, _) -> v
+        | LetNoRec (v, _, _, _) -> v
+        | LetRec (v, _, _, _, _) -> v
+        | Fun (v, _, _) -> v
         | App (v, _, _) -> v
         | Match (v, _, _) -> v
         | Constructor (v, _, _) -> v
 
-      let generate_fresh_varname (existing_names : StringSet.t) :
-          varname * StringSet.t =
-        let rec loop (i : int) : varname =
-          let candidate = sprintf "x%d" i in
-          if Set.mem existing_names candidate then loop (i + 1) else candidate
-        in
-        let new_name = loop 0 in
-        (new_name, Set.add existing_names new_name)
+      type of_ast_state = { var_scope : (varname * vtype) list }
 
-      let rec flatten_case_pattern
-          ( (existing_names : StringSet.t),
-            (p : tag_pattern),
-            (e : preprocessed_tag_expr) ) :
-          ( StringSet.t * flat_pattern * preprocessed_tag_expr,
+      (** Flatten a single case of a Match node so that the pattern is a flat
+          pattern, and modify the case expression to perform any subsequent
+          matching as needed *)
+      let rec flatten_case_pattern ~(existing_names : StringSet.t)
+          ((p : tag_pattern), (e : quotient_analysis_repr)) :
+          ( StringSet.t * flat_pattern * quotient_analysis_repr,
             quotient_typing_error )
           Result.t =
         let open Result in
-        let outer_expr_type : vtype = (preprocessed_expr_node_val e).t in
+        let outer_expr_type : vtype = (node_val e).t in
         match p with
         | PatName (v, x_name, x_t) ->
             (* A named variable pattern *)
@@ -213,12 +210,11 @@ functor
             in
             let p1_t = (pattern_node_val p1).t in
             let p2_t = (pattern_node_val p2).t in
-            flatten_case_pattern (existing_names, p2, e)
+            flatten_case_pattern ~existing_names (p2, e)
             >>=
             fun (existing_names, flattened_p2_case_p, flattened_p2_case_e) ->
-            flatten_case_pattern
-              ( existing_names,
-                p1,
+            flatten_case_pattern ~existing_names
+              ( p1,
                 Match
                   ( { t = outer_expr_type },
                     Var ({ t = p2_t }, new_binding_name_2),
@@ -261,7 +257,7 @@ functor
               generate_fresh_varname existing_names
             in
             let p1_t = (pattern_node_val p1).t in
-            flatten_case_pattern (existing_names, p1, e)
+            flatten_case_pattern ~existing_names (p1, e)
             >>|
             fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
             ( existing_names,
@@ -273,419 +269,189 @@ functor
                   Nonempty_list.singleton
                     (flattened_p1_case_p, flattened_p1_case_e) ) )
 
-      (** Accumulator for the preprocess_expr function. Values are carried
-          across all function calls *)
-      type preprocess_expr_acc = {
-        fn_defns : function_defn list;
-        existing_names : StringSet.t;
-      }
-
-      (** State for the preprocess_expr function. Values are "scoped", in that
-          they aren't returned by the function, only passed to recursive calls
-      *)
-      type preprocess_expr_state = {
-        scope_vars : (varname * vtype) list;
-        scoped_varname_mapping : (varname * varname) list;
-      }
-
-      let preprocess_expr :
-          StringSet.t * tag_expr ->
-          (StringSet.t * preprocessed_ast_repr, quotient_typing_error) Result.t
-          =
+      (** Convert an AST node to its quotient-analysis representation *)
+      let rec of_ast ~(existing_names : StringSet.t) (state : of_ast_state) :
+          tag_expr -> (StringSet.t * t, quotient_typing_error) Result.t =
         let open Result in
-        let rec aux (acc : preprocess_expr_acc) (state : preprocess_expr_state)
-            (orig_e : tag_expr) :
-            ( preprocess_expr_acc * preprocessed_tag_expr,
+        let unop
+            (recomb :
+              StringSet.t ->
+              quotient_analysis_repr ->
+              StringSet.t * quotient_analysis_repr)
+            ~(existing_names : StringSet.t) (state : of_ast_state)
+            (e1 : tag_expr) :
+            ( StringSet.t * quotient_analysis_repr,
               quotient_typing_error )
             Result.t =
-          let unop
-              (recomb :
-                preprocess_expr_acc ->
-                preprocessed_tag_expr ->
-                preprocess_expr_acc * preprocessed_tag_expr) (e1 : tag_expr) =
-            aux acc state e1 >>| fun (acc, e1') -> recomb acc e1'
-          in
-          let binop
-              (recomb :
-                preprocess_expr_acc ->
-                preprocessed_tag_expr ->
-                preprocessed_tag_expr ->
-                preprocess_expr_acc * preprocessed_tag_expr) (e1 : tag_expr)
-              (e2 : tag_expr) =
-            aux acc state e1 >>= fun (acc, e1') ->
-            aux acc state e2 >>| fun (acc, e2') -> recomb acc e1' e2'
-          in
-          match orig_e with
-          | UnitLit v -> Ok (acc, UnitLit v)
-          | IntLit (v, x) -> Ok (acc, IntLit (v, x))
-          | Add (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, Add (v, e1', e2'))) e1 e2
-          | Neg (v, e1) -> unop (fun acc e1' -> (acc, Neg (v, e1'))) e1
-          | Subtr (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, Subtr (v, e1', e2'))) e1 e2
-          | Mult (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, Mult (v, e1', e2'))) e1 e2
-          | BoolLit (v, b) -> Ok (acc, BoolLit (v, b))
-          | BNot (v, e1) -> unop (fun acc e1' -> (acc, BNot (v, e1'))) e1
-          | BOr (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, BOr (v, e1', e2'))) e1 e2
-          | BAnd (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, BAnd (v, e1', e2'))) e1 e2
-          | Pair (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, Pair (v, e1', e2'))) e1 e2
-          | Eq (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, Eq (v, e1', e2'))) e1 e2
-          | Gt (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, Gt (v, e1', e2'))) e1 e2
-          | GtEq (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, GtEq (v, e1', e2'))) e1 e2
-          | Lt (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, Lt (v, e1', e2'))) e1 e2
-          | LtEq (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, LtEq (v, e1', e2'))) e1 e2
-          | If (v, e1, e2, e3) ->
-              aux acc state e1 >>= fun (acc, e1') ->
-              aux acc state e2 >>= fun (acc, e2') ->
-              aux acc state e3 >>| fun (acc, e3') -> (acc, If (v, e1', e2', e3'))
-          | Var (v, name) ->
-              List.Assoc.find ~equal:equal_varname state.scoped_varname_mapping
-                name
-              |> Option.value ~default:name
-              |> fun mapped_name -> Ok (acc, Var (v, mapped_name))
-          | Let _ ->
-              failwith
-                "TODO - handle recursive and non-recursive let-bindings. \
-                 Recursive ones need to be turned into function definitions. \
-                 This function alters the `state` value"
-          | Fun (v, (xname, xtype), e1) ->
-              let state' =
-                { state with scope_vars = (xname, xtype) :: state.scope_vars }
-              in
-              aux acc state' e1 >>| fun (acc, e1') ->
-              let f_name, new_existing_names =
-                generate_fresh_varname acc.existing_names
-              in
-              let scope_vars = state.scope_vars in
-              ( {
-                  existing_names = new_existing_names;
-                  fn_defns =
+          of_ast ~existing_names state e1 >>= fun (existing_names, e1') ->
+          Ok (recomb existing_names e1')
+        in
+        let binop
+            (recomb :
+              StringSet.t ->
+              quotient_analysis_repr ->
+              quotient_analysis_repr ->
+              StringSet.t * quotient_analysis_repr)
+            ~(existing_names : StringSet.t) (state : of_ast_state)
+            (e1 : tag_expr) (e2 : tag_expr) :
+            ( StringSet.t * quotient_analysis_repr,
+              quotient_typing_error )
+            Result.t =
+          of_ast ~existing_names state e1 >>= fun (existing_names, e1') ->
+          of_ast ~existing_names state e2 >>= fun (existing_names, e2') ->
+          Ok (recomb existing_names e1' e2')
+        in
+        function
+        | UnitLit v -> Ok (existing_names, UnitLit v)
+        | IntLit (v, x) -> Ok (existing_names, IntLit (v, x))
+        | Add (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, Add (v, e1', e2')))
+              ~existing_names state e1 e2
+        | Neg (v, e) ->
+            unop
+              (fun existing_names e' -> (existing_names, Neg (v, e')))
+              ~existing_names state e
+        | Subtr (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, Subtr (v, e1', e2')))
+              ~existing_names state e1 e2
+        | Mult (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, Mult (v, e1', e2')))
+              ~existing_names state e1 e2
+        | BoolLit (v, b) -> Ok (existing_names, BoolLit (v, b))
+        | BNot (v, e) ->
+            unop
+              (fun existing_names e' -> (existing_names, BNot (v, e')))
+              ~existing_names state e
+        | BOr (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, BOr (v, e1', e2')))
+              ~existing_names state e1 e2
+        | BAnd (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, BAnd (v, e1', e2')))
+              ~existing_names state e1 e2
+        | Pair (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, Pair (v, e1', e2')))
+              ~existing_names state e1 e2
+        | Eq (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' -> (existing_names, Eq (v, e1', e2')))
+              ~existing_names state e1 e2
+        | Gt (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' -> (existing_names, Gt (v, e1', e2')))
+              ~existing_names state e1 e2
+        | GtEq (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, GtEq (v, e1', e2')))
+              ~existing_names state e1 e2
+        | Lt (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' -> (existing_names, Lt (v, e1', e2')))
+              ~existing_names state e1 e2
+        | LtEq (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, LtEq (v, e1', e2')))
+              ~existing_names state e1 e2
+        | If (v, e1, e2, e3) ->
+            of_ast ~existing_names state e1 >>= fun (existing_names, e1') ->
+            of_ast ~existing_names state e2 >>= fun (existing_names, e2') ->
+            of_ast ~existing_names state e3 >>| fun (existing_names, e3') ->
+            (existing_names, If (v, e1', e2', e3'))
+        | Var (v, name) -> Ok (existing_names, Var (v, name))
+        | Let (v, xname, e1, e2) -> (
+            let get_default_repr :
+                unit ->
+                ( StringSet.t * quotient_analysis_repr,
+                  quotient_typing_error )
+                Result.t =
+             fun () ->
+              binop
+                (fun existing_names e1' e2' ->
+                  (existing_names, LetNoRec (v, xname, e1', e2')))
+                ~existing_names
+                {
+                  var_scope =
+                    List.Assoc.add state.var_scope ~equal:equal_varname xname
+                      (expr_node_val e2).t;
+                }
+                e1 e2
+            in
+            match e1 with
+            | Fix (_, (xname2, x2type1, x2type2), (yname, ytype), e1') ->
+                (* TODO - this also needs to consider the variable scope *)
+                let x2type = VTypeFun (x2type1, x2type2) in
+                if equal_string xname xname2 then
+                  binop
+                    (fun existing_names e1'_converted e2_converted ->
+                      ( existing_names,
+                        LetRec
+                          ( v,
+                            xname,
+                            Nonempty_list.singleton (yname, ytype),
+                            e1'_converted,
+                            e2_converted ) ))
+                    ~existing_names
                     {
-                      name = f_name;
-                      scope_vars;
-                      args = [ (xname, xtype) ];
-                      body = e1';
+                      var_scope =
+                        List.Assoc.add
+                          (List.Assoc.add state.var_scope ~equal:equal_varname
+                             xname x2type)
+                          ~equal:equal_varname yname ytype;
                     }
-                    :: acc.fn_defns;
-                },
-                Var (v, f_name) )
-          | App (v, e1, e2) ->
-              binop (fun acc e1' e2' -> (acc, App (v, e1', e2'))) e1 e2
-          | Fix _ -> Error MisplacedFixNode
-          | Match (v, e1, cs) ->
-              aux acc state e1 >>= fun (acc, e1') ->
-              Nonempty_list.fold_result_consume_init ~init:() cs
-                ~f:(fun acc_state ((p : tag_pattern), (e : tag_expr)) ->
-                  aux acc state e >>| fun (acc, e') ->
-                  match acc_state with
-                  | First () -> (acc, Nonempty_list.singleton (p, e'))
-                  | Second (acc, acc_cases) ->
-                      (acc, Nonempty_list.cons (p, e') acc_cases))
-              >>= fun (acc, preprocessed_cases) ->
-              Nonempty_list.fold_result_consume_init ~init:()
-                ~f:(fun acc_state (p, e) ->
-                  let acc, acc_fn =
-                    match acc_state with
-                    | First () -> (acc, Nonempty_list.singleton)
-                    | Second (acc, acc_cases) ->
-                        (acc, Fn.flip Nonempty_list.cons acc_cases)
-                  in
-                  flatten_case_pattern (acc.existing_names, p, e)
-                  >>| fun (existing_names, flattened_p, flattened_e) ->
-                  ( { acc with existing_names },
-                    acc_fn (flattened_p, flattened_e) ))
-                preprocessed_cases
-              >>| fun (acc, preprocessed_cases) ->
-              (acc, Match (v, e1', preprocessed_cases))
-          | Constructor (v, name, expr) ->
-              unop (fun acc e' -> (acc, Constructor (v, name, e'))) expr
-        in
-        fun (existing_names, e) ->
-          aux
-            { fn_defns = []; existing_names }
-            { scope_vars = []; scoped_varname_mapping = [] }
-            e
-          >>| fun (acc, e') ->
-          (acc.existing_names, { funs = acc.fn_defns; body = e' })
+                    e1' e2
+                else get_default_repr ()
+            | _ -> get_default_repr ())
+        | Fun (v, xname, e) ->
+            unop
+              (fun existing_names e' -> (existing_names, Fun (v, xname, e')))
+              ~existing_names state e
+        | App (v, e1, e2) ->
+            binop
+              (fun existing_names e1' e2' ->
+                (existing_names, App (v, e1', [ e2' ])))
+              ~existing_names state e1 e2
+        | Fix _ -> Error MisplacedFixNode
+        | Match (v, e, cs) ->
+            (* TODO - this also must alter the variable scope *)
+            of_ast ~existing_names state e >>= fun (existing_names, e') ->
+            Nonempty_list.fold_result_consume_init ~init:existing_names
+              ~f:(fun acc (p, e) ->
+                let existing_names =
+                  match acc with
+                  | First existing_names -> existing_names
+                  | Second (existing_names, _) -> existing_names
+                in
+                of_ast ~existing_names (failwith "TODO - state") e
+                >>= fun (existing_names, e') ->
+                flatten_case_pattern ~existing_names (p, e')
+                >>= fun (existing_names, flat_p, flat_e) ->
+                match acc with
+                | First _ ->
+                    (existing_names, Nonempty_list.singleton (flat_p, flat_e))
+                    |> Ok
+                | Second (_, acc) ->
+                    (existing_names, Nonempty_list.cons (flat_p, flat_e) acc)
+                    |> Ok)
+              cs
+            >>= fun (existing_names, flat_cases) ->
+            (existing_names, Match (v, e', flat_cases)) |> Ok
+        | Constructor (v, name, e) ->
+            unop
+              (fun existing_names e' ->
+                (existing_names, Constructor (v, name, e')))
+              ~existing_names state e
     end
-
-    (** Interactions with the SMT solver and state that can be provided to it *)
-    module Smt = struct
-      (** Details for a variable definition in the state provided to the SMT
-          solver *)
-      type state_elem_var_defn = {
-        name : varname;
-        t : vtype;
-        recursive : bool;
-        body : ExprPreprocessor.preprocessed_tag_expr;
-      }
-
-      (** A single item in the state provided to the SMT solver *)
-      type state_elem =
-        | VarDecl of varname * vtype
-        | VarDefn of state_elem_var_defn
-        | VariantTypeDefn of variant_type
-
-      (** A state that can be provided to the SMT solver *)
-      type state = state_elem list
-
-      (** Functions for creating node representations of different parts of a
-          program *)
-      module SmtlibNodeRepresentation = struct
-        open LispBuilder
-
-        let get_vt_constructor_accessor_name (vt_name : string)
-            (c_name : string) : string =
-          sprintf "%s-%s-getval" vt_name c_name |> custom_special_prefix
-
-        (** Representation of a vtype *)
-        let rec node_of_vtype : vtype -> node = function
-          | VTypeInt -> Atom "Int"
-          | VTypeBool -> Atom "Bool"
-          | VTypePair _ -> failwith "TODO - once pair type implemented"
-          | VTypeFun (t1, t2) ->
-              Op ("Array", [ node_of_vtype t1; node_of_vtype t2 ])
-          | VTypeUnit -> failwith "TODO - once unit type implemented"
-          | VTypeCustom ct_name -> Atom ct_name
-
-        (** Representation of a variable declaration without definition *)
-        let node_of_var_decl (xname : varname) (xt : vtype) : node =
-          Op ("declare-fun", [ Atom xname; Unit; node_of_vtype xt ])
-
-        (** Representation of a variant type definition *)
-        let node_of_variant_type ((vt_name, vt_cs) : variant_type) : node =
-          let for_constructor ((c_name, c_t) : variant_type_constructor) : node
-              =
-            Op
-              ( c_name,
-                [
-                  Op
-                    ( get_vt_constructor_accessor_name vt_name c_name,
-                      [ node_of_vtype c_t ] );
-                ] )
-          in
-          Op
-            ( "declare-datatypes",
-              [ Unit; List [ Op (vt_name, List.map ~f:for_constructor vt_cs) ] ]
-            )
-
-        (** Representation of a flattened pattern *)
-        let node_of_flat_pattern : ExprPreprocessor.flat_pattern -> node =
-          let open ExprPreprocessor in
-          function
-          | FlatPatName (_, xname, _) -> Atom xname
-          | FlatPatPair _ -> failwith "TODO - once pair type definition done"
-          | FlatPatConstructor (_, cname, (_, vname, _)) ->
-              Op (cname, [ Atom vname ])
-
-        (** Representation of an expression *)
-        let rec node_of_expr : ExprPreprocessor.preprocessed_tag_expr -> node =
-          function
-          | UnitLit _ -> failwith "TODO - once unit type definition done"
-          | IntLit (_, x) -> Atom (Int.to_string x)
-          | Add (_, e1, e2) -> Op ("+", [ node_of_expr e1; node_of_expr e2 ])
-          | Neg (_, e1) -> Op ("-", [ node_of_expr e1 ])
-          | Subtr (_, e1, e2) -> Op ("-", [ node_of_expr e1; node_of_expr e2 ])
-          | Mult (_, e1, e2) -> Op ("*", [ node_of_expr e1; node_of_expr e2 ])
-          | BoolLit (_, b) -> Atom (if b then "true" else "false")
-          | BNot (_, e1) -> Op ("not", [ node_of_expr e1 ])
-          | BOr (_, e1, e2) -> Op ("or", [ node_of_expr e1; node_of_expr e2 ])
-          | BAnd (_, e1, e2) -> Op ("and", [ node_of_expr e1; node_of_expr e2 ])
-          | Pair _ -> failwith "TODO - once pair type definition done"
-          | Eq (_, e1, e2) -> Op ("=", [ node_of_expr e1; node_of_expr e2 ])
-          | Gt (_, e1, e2) -> Op (">", [ node_of_expr e1; node_of_expr e2 ])
-          | GtEq (_, e1, e2) -> Op (">=", [ node_of_expr e1; node_of_expr e2 ])
-          | Lt (_, e1, e2) -> Op ("<", [ node_of_expr e1; node_of_expr e2 ])
-          | LtEq (_, e1, e2) -> Op ("<=", [ node_of_expr e1; node_of_expr e2 ])
-          | If (_, e1, e2, e3) ->
-              Op ("ite", [ node_of_expr e1; node_of_expr e2; node_of_expr e3 ])
-          | Var (_, vname) -> Atom vname
-          | Let (_, xname, e1, e2) ->
-              Op
-                ( "let",
-                  [ List [ Op (xname, [ node_of_expr e1 ]) ]; node_of_expr e2 ]
-                )
-          | App (_, e1, e2) ->
-              Op ("select", [ node_of_expr e1; node_of_expr e2 ])
-          | Match (_, e1, cs) ->
-              let node_of_case
-                  ( (p : ExprPreprocessor.flat_pattern),
-                    (e : ExprPreprocessor.preprocessed_tag_expr) ) =
-                Op ("case", [ node_of_flat_pattern p; node_of_expr e ])
-              in
-              Op
-                ( "match",
-                  [ node_of_expr e1 ]
-                  @ List.map ~f:node_of_case (Nonempty_list.to_list cs) )
-          | Constructor (_, cname, e1) -> Op (cname, [ node_of_expr e1 ])
-      end
-
-      (** The initial state *)
-      let init : state =
-        (* TODO - this should include the built-in type definitions (ie. unit, pairs, etc.) *)
-        []
-
-      (** Add a variable declaration without a definition *)
-      let add_variable_declaration (xname : varname) (xt : vtype) :
-          state -> state =
-        List.cons (VarDecl (xname, xt))
-
-      (** Add a variant type definition *)
-      let add_variant_definition (vt : variant_type) : state -> state =
-        List.cons (VariantTypeDefn vt)
-
-      (** Create, or overwrite (if already existed), a variable's definition *)
-      let write_variable_value
-          ( (name : varname),
-            (t : vtype),
-            (recursive : [ `Recursive | `NonRecursive ]),
-            (body : ExprPreprocessor.preprocessed_tag_expr) ) (state : state) :
-          state =
-        let recursive =
-          match recursive with `Recursive -> true | `NonRecursive -> false
-        in
-        VarDefn { name; t; recursive; body } :: state
-
-      (** Build a state into a representation of the state's type and variable
-          definitions. To use this in the solver, the assertions need to be
-          appended to this value *)
-      let build (state : state) :
-          (LispBuilder.node list, quotient_typing_error) Result.t =
-        let open Result in
-        let open LispBuilder in
-        let define_fun_node
-            ( (xname : string),
-              (xt : vtype),
-              (body : ExprPreprocessor.preprocessed_tag_expr) ) :
-            (node, quotient_typing_error) Result.t =
-          Op
-            ( "define-fun",
-              [
-                Atom xname;
-                SmtlibNodeRepresentation.node_of_vtype xt;
-                SmtlibNodeRepresentation.node_of_expr body;
-              ] )
-          |> Ok
-        in
-        let define_fun_rec_node
-            ( (xname : string),
-              (xt : vtype),
-              (body : ExprPreprocessor.preprocessed_tag_expr) ) :
-            (node, quotient_typing_error) Result.t =
-          Op
-            ( "define-fun-rec",
-              [
-                Atom xname;
-                SmtlibNodeRepresentation.node_of_vtype xt;
-                SmtlibNodeRepresentation.node_of_expr body;
-              ] )
-          |> Ok
-        in
-        List.fold_result ~init:([], StringSet.empty)
-          ~f:(fun (acc_exprs, acc_defined) -> function
-            | VarDecl (xname, xt) ->
-                Ok
-                  ( SmtlibNodeRepresentation.node_of_var_decl xname xt
-                    :: acc_exprs,
-                    Set.add acc_defined xname )
-            | VarDefn x ->
-                if Set.mem acc_defined x.name then Ok (acc_exprs, acc_defined)
-                else
-                  (* Create the node that defines the value, then append to the accumulator *)
-                  (if x.recursive then define_fun_rec_node (x.name, x.t, x.body)
-                   else define_fun_node (x.name, x.t, x.body))
-                  >>| fun defn_node ->
-                  (defn_node :: acc_exprs, Set.add acc_defined x.name)
-            | VariantTypeDefn vt ->
-                Ok
-                  ( SmtlibNodeRepresentation.node_of_variant_type vt :: acc_exprs,
-                    acc_defined ))
-          state
-        >>| fst
-    end
-
-    let rec check_quotient_types_in_expr
-        (ast_repr : ExprPreprocessor.preprocessed_ast_repr)
-        (((state : Smt.state), (type_ctx : TypeCtx.t)) as param) :
-        (unit, quotient_typing_error) Result.t =
-      let open Result in
-      let open ExprPreprocessor in
-      match ast_repr.body with
-      | UnitLit _ | IntLit _ | BoolLit _ | Var _ -> Ok ()
-      | Neg (_, e1) | BNot (_, e1) | Constructor (_, _, e1) ->
-          check_quotient_types_in_expr { ast_repr with body = e1 } param
-      | Add (_, e1, e2)
-      | Subtr (_, e1, e2)
-      | Mult (_, e1, e2)
-      | BOr (_, e1, e2)
-      | BAnd (_, e1, e2)
-      | Pair (_, e1, e2)
-      | Eq (_, e1, e2)
-      | Gt (_, e1, e2)
-      | GtEq (_, e1, e2)
-      | Lt (_, e1, e2)
-      | LtEq (_, e1, e2)
-      | App (_, e1, e2) ->
-          check_quotient_types_in_expr { ast_repr with body = e1 } param
-          >>= fun () ->
-          check_quotient_types_in_expr { ast_repr with body = e2 } param
-      | If (_, e1, e2, e3) ->
-          check_quotient_types_in_expr { ast_repr with body = e1 } param
-          >>= fun () ->
-          check_quotient_types_in_expr { ast_repr with body = e2 } param
-          >>= fun () ->
-          check_quotient_types_in_expr { ast_repr with body = e3 } param
-      | Let (_, _, e1, e2) ->
-          check_quotient_types_in_expr { ast_repr with body = e1 } param
-          >>= fun () ->
-          check_quotient_types_in_expr { ast_repr with body = e2 } param
-      | Match (_, e1, _) ->
-          let e1_type : vtype =
-            (ExprPreprocessor.preprocessed_expr_node_val e1).t
-          in
-          let e1_type_is_quotient_type : bool =
-            match e1_type with
-            | VTypeCustom ct_name -> (
-                match TypeCtx.find_type_defn_by_name type_ctx ct_name with
-                | Some (QuotientType _) -> true
-                | Some _ -> false
-                | None ->
-                    failwith
-                      (sprintf "Failed to find type definition for: %s" ct_name)
-                )
-            | _ -> false
-          in
-          if e1_type_is_quotient_type then
-            failwith "TODO - perform the checking"
-          else
-            check_quotient_types_in_expr { ast_repr with body = e1 } param
-            >>= fun () -> failwith "TODO - recurse into each of the cases"
-
-    let check_quotient_types (prog : (ast_tag, pattern_tag) program) :
-        (unit, quotient_typing_error) Result.t =
-      let open Result in
-      let state : Smt.state =
-        List.fold ~init:Smt.init
-          ~f:(fun acc -> function
-            | VariantType vt -> Smt.add_variant_definition vt acc
-            | QuotientType _ ->
-                (* Note that quotient types don't need to be defined for the SMT solver, they only affect what constraints are generated *)
-                acc)
-          prog.custom_types
-      in
-      TypeCtx.create ~custom_types:prog.custom_types
-      |> Result.map_error ~f:(fun err -> ProgramTypingError err)
-      >>= fun type_ctx ->
-      ExprPreprocessor.preprocess_expr (program_existing_names prog, prog.e)
-      >>= fun (_, preprocessed_ast_repr) ->
-      check_quotient_types_in_expr preprocessed_ast_repr (state, type_ctx)
   end
