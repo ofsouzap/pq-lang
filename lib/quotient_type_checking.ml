@@ -1,11 +1,9 @@
 open Core
 open Utils
 open Vtype
-open Variant_types
 open Varname
 open Pattern
 open Ast
-open Program
 open Typing
 
 module type LispBuilderSig = sig
