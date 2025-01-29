@@ -13,7 +13,6 @@
   custom_types
   program
   typing
-  old_quotient_type_checking ; TODO - remove this once finished using as a reference
   quotient_type_checking
   parsing_errors
   parser
