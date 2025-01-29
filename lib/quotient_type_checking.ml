@@ -48,8 +48,8 @@ functor
   struct
     module TypeChecker = TypeChecker (TypeCtx) (VarCtx)
 
-    type ast_tag = { t : vtype }
-    type pattern_tag = { t : vtype }
+    type ast_tag = { t : vtype } [@@deriving sexp, equal]
+    type pattern_tag = { t : vtype } [@@deriving sexp, equal]
     type tag_expr = (ast_tag, pattern_tag) expr
     type tag_pattern = pattern_tag pattern
 
@@ -60,10 +60,19 @@ functor
       | VariantTypeConstructorDoesNotExist of string
       | PatternTypeMismatch of vtype * vtype
 
-    (** A special prefix to be prepended to names defined by this code , so that
-        they can't interfere with user-defined names. Therefore, this contains a
-        character not usable by the user when defining variable names *)
-    let custom_special_prefix : string -> string = String.append "PQ-"
+    let custom_special_name x =
+      "PQ-"
+      ^ (function
+          | `VariantType _ -> "VT-"
+          | `VariantTypeConstructor (_, _) -> "VTC"
+          | `Function _ -> "Fun")
+          x
+      ^
+      match x with
+      | `VariantType (vt_name : string) -> vt_name
+      | `VariantTypeConstructor ((vt_name : string), (c_name : string)) ->
+          vt_name ^ "-" ^ c_name
+      | `Function (f_name : string) -> f_name
 
     (** Generate a fresh variable name, given a set of the currently-defined
         names *)
@@ -96,8 +105,9 @@ functor
               * (pattern_tag * varname * vtype)
           | FlatPatConstructor of
               pattern_tag * string * (pattern_tag * varname * vtype)
+        [@@deriving sexp, equal]
 
-        type flat_pattern = t
+        type flat_pattern = t [@@deriving sexp, equal]
 
         type flat_ast =
           | UnitLit of ast_tag
@@ -131,6 +141,7 @@ functor
           | Match of
               ast_tag * flat_ast * (flat_pattern * flat_ast) Nonempty_list.t
           | Constructor of ast_tag * string * flat_ast
+        [@@deriving sexp, equal]
 
         let flat_pattern_node_val : flat_pattern -> pattern_tag = function
           | FlatPatName (v, _, _) -> v
@@ -423,6 +434,252 @@ functor
                 ~existing_names e
       end
 
+      (** Provides functionality for applying defunctionalization to AST
+          expressions to remove lambda-abstraction terms *)
+      module Defunctionalization = struct
+        let fun_variant_type_name : string =
+          custom_special_name (`VariantType "Fn")
+
+        let apply_fun_function_name : string =
+          custom_special_name (`Function "applyfn")
+
+        let apply_fun_type (return_t : vtype) : vtype =
+          VTypeFun (VTypeCustom fun_variant_type_name, return_t)
+
+        (** A defunctionalized AST expression *)
+        type defunctionalized_expr =
+          | UnitLit of ast_tag
+          | IntLit of ast_tag * int
+          | Add of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | Neg of ast_tag * defunctionalized_expr
+          | Subtr of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | Mult of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | BoolLit of ast_tag * bool
+          | BNot of ast_tag * defunctionalized_expr
+          | BOr of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | BAnd of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | Pair of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | Eq of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | Gt of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | GtEq of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | Lt of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | LtEq of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | If of
+              ast_tag
+              * defunctionalized_expr
+              * defunctionalized_expr
+              * defunctionalized_expr
+          | Var of ast_tag * string
+          | LetNoRec of
+              ast_tag * varname * defunctionalized_expr * defunctionalized_expr
+          | LetRec of
+              ast_tag
+              * varname
+              * (varname * vtype)
+              * vtype
+              * defunctionalized_expr
+              * defunctionalized_expr
+          | App of ast_tag * defunctionalized_expr * defunctionalized_expr
+          | Match of
+              ast_tag
+              * defunctionalized_expr
+              * (FlatPattern.flat_pattern * defunctionalized_expr)
+                Nonempty_list.t
+          | Constructor of ast_tag * string * defunctionalized_expr
+        [@@deriving sexp, equal]
+
+        let defunctionalized_expr_node_val : defunctionalized_expr -> ast_tag =
+          function
+          | UnitLit v -> v
+          | IntLit (v, _) -> v
+          | Add (v, _, _) -> v
+          | Neg (v, _) -> v
+          | Subtr (v, _, _) -> v
+          | Mult (v, _, _) -> v
+          | BoolLit (v, _) -> v
+          | BNot (v, _) -> v
+          | BOr (v, _, _) -> v
+          | BAnd (v, _, _) -> v
+          | Pair (v, _, _) -> v
+          | Eq (v, _, _) -> v
+          | Gt (v, _, _) -> v
+          | GtEq (v, _, _) -> v
+          | Lt (v, _, _) -> v
+          | LtEq (v, _, _) -> v
+          | If (v, _, _, _) -> v
+          | Var (v, _) -> v
+          | LetNoRec (v, _, _, _) -> v
+          | LetRec (v, _, _, _, _, _) -> v
+          | App (v, _, _) -> v
+          | Match (v, _, _) -> v
+          | Constructor (v, _, _) -> v
+
+        let fun_variant_type_fresh_constructor
+            (existing_constructors :
+              Variant_types.variant_type_constructor list) (t : vtype) :
+            Variant_types.variant_type_constructor list
+            * Variant_types.variant_type_constructor =
+          let rec loop (i : int) : Variant_types.variant_type_constructor =
+            let candidate = sprintf "x%d" i in
+            if
+              List.exists existing_constructors ~f:(fun (c_name, _) ->
+                  equal_string candidate c_name)
+            then loop (i + 1)
+            else (candidate, t)
+          in
+          let new_constructor = loop 0 in
+          (new_constructor :: existing_constructors, new_constructor)
+
+        type of_flat_ast_acc = {
+          fun_variant_type_constructors :
+            Variant_types.variant_type_constructor list;
+        }
+
+        type of_flat_ast_state = { var_scope : vtype StringMap.t }
+
+        let rec of_flat_ast (acc : of_flat_ast_acc) (state : of_flat_ast_state)
+            :
+            FlatPattern.flat_ast ->
+            ( of_flat_ast_acc * defunctionalized_expr,
+              quotient_typing_error )
+            Result.t =
+          let open Result in
+          let unop (acc : of_flat_ast_acc) (state : of_flat_ast_state)
+              (recomb :
+                of_flat_ast_acc ->
+                defunctionalized_expr ->
+                of_flat_ast_acc * defunctionalized_expr)
+              (e1 : FlatPattern.flat_ast) :
+              ( of_flat_ast_acc * defunctionalized_expr,
+                quotient_typing_error )
+              Result.t =
+            of_flat_ast acc state e1 >>| fun (acc, e1') -> recomb acc e1'
+          in
+          let binop (acc : of_flat_ast_acc) (state : of_flat_ast_state)
+              (recomb :
+                of_flat_ast_acc ->
+                defunctionalized_expr ->
+                defunctionalized_expr ->
+                of_flat_ast_acc * defunctionalized_expr)
+              (e1 : FlatPattern.flat_ast) (e2 : FlatPattern.flat_ast) :
+              ( of_flat_ast_acc * defunctionalized_expr,
+                quotient_typing_error )
+              Result.t =
+            of_flat_ast acc state e1 >>= fun (acc, e1') ->
+            of_flat_ast acc state e2 >>| fun (acc, e2') -> recomb acc e1' e2'
+          in
+          function
+          | UnitLit v -> (acc, UnitLit v) |> Ok
+          | IntLit (v, x) -> (acc, IntLit (v, x)) |> Ok
+          | Add (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, Add (v, e1, e2))) e1 e2
+          | Neg (v, e) -> unop acc state (fun acc e -> (acc, Neg (v, e))) e
+          | Subtr (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, Subtr (v, e1, e2))) e1 e2
+          | Mult (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, Mult (v, e1, e2))) e1 e2
+          | BoolLit (v, b) -> (acc, BoolLit (v, b)) |> Ok
+          | BNot (v, e) -> unop acc state (fun acc e -> (acc, BNot (v, e))) e
+          | BOr (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, BOr (v, e1, e2))) e1 e2
+          | BAnd (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, BAnd (v, e1, e2))) e1 e2
+          | Pair (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, Pair (v, e1, e2))) e1 e2
+          | Eq (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, Eq (v, e1, e2))) e1 e2
+          | Gt (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, Gt (v, e1, e2))) e1 e2
+          | GtEq (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, GtEq (v, e1, e2))) e1 e2
+          | Lt (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, Lt (v, e1, e2))) e1 e2
+          | LtEq (v, e1, e2) ->
+              binop acc state (fun acc e1 e2 -> (acc, LtEq (v, e1, e2))) e1 e2
+          | If (v, e1, e2, e3) ->
+              of_flat_ast acc state e1 >>= fun (acc, e1') ->
+              of_flat_ast acc state e2 >>= fun (acc, e2') ->
+              of_flat_ast acc state e3 >>| fun (acc, e3') ->
+              (acc, If (v, e1', e2', e3'))
+          | Var (v, name) -> (acc, Var (v, name)) |> Ok
+          | LetNoRec (v, xname, e1, e2) ->
+              let xtype = (FlatPattern.flat_node_val e1).t in
+              let state =
+                { var_scope = Map.set state.var_scope ~key:xname ~data:xtype }
+              in
+              binop acc state
+                (fun acc e1 e2 -> (acc, LetNoRec (v, xname, e1, e2)))
+                e1 e2
+          | LetRec (v, fname, (xname, xtype), return_t, e1, e2) ->
+              let ftype = VTypeFun (xtype, return_t) in
+              of_flat_ast acc
+                {
+                  var_scope =
+                    Map.set
+                      (Map.set state.var_scope ~key:xname ~data:xtype)
+                      ~key:fname ~data:ftype;
+                }
+                e1
+              >>= fun (acc, e1') ->
+              of_flat_ast acc
+                { var_scope = Map.set state.var_scope ~key:fname ~data:ftype }
+                e2
+              >>| fun (acc, e2') ->
+              (acc, LetRec (v, fname, (xname, xtype), return_t, e1', e2'))
+          | Fun _ ->
+              (* https://claude.ai/chat/df051576-1a03-40a3-8afd-da705929c1fb *)
+              failwith "TODO - defunctionalize"
+          | App (v, e1, e2) ->
+              binop acc state
+                (fun acc e1' e2' ->
+                  let get_default_res = fun () -> (acc, App (v, e1', e2')) in
+                  match failwith "TODO - get type of e1'" with
+                  | VTypeCustom ct_name ->
+                      if equal_string fun_variant_type_name ct_name then
+                        failwith
+                          "TODO - this must use `apply` on the \
+                           defunctionalized e1, then also provide e2 as the \
+                           input to the result of this. Ideas for acheiving \
+                           this at the moment are: create a variant for \
+                           arbitrary data values, apply then just needs to \
+                           deconstruct these (throw error if the wrong type of \
+                           input value); have variants of apply for each \
+                           possible data type (not sure how this works for \
+                           recursive types)"
+                      else get_default_res ()
+                  | _ -> get_default_res ())
+                e1 e2
+          | Match (v, e, cases) ->
+              of_flat_ast acc state e >>= fun (acc, e') ->
+              Nonempty_list.fold_result_consume_init ~init:acc
+                ~f:(fun fold_acc (p, case_e) ->
+                  let acc_custom_types =
+                    match fold_acc with
+                    | First acc -> acc
+                    | Second (acc, _) -> acc
+                  in
+                  let pattern_var_scope = FlatPattern.defined_vars p in
+                  of_flat_ast acc_custom_types
+                    {
+                      var_scope =
+                        List.fold ~init:state.var_scope
+                          ~f:(fun acc (xname, xtype) ->
+                            Map.set acc ~key:xname ~data:xtype)
+                          pattern_var_scope;
+                    }
+                    case_e
+                  >>| fun (acc_custom_types, case_e') ->
+                  match fold_acc with
+                  | First _ -> (acc, Nonempty_list.singleton (p, case_e'))
+                  | Second (_, prev_cases) ->
+                      ( acc_custom_types,
+                        Nonempty_list.cons (p, case_e') prev_cases ))
+                cases
+              >>| fun (acc, cases') -> (acc, Match (v, e', cases'))
+          | Constructor (v, name, e) ->
+              unop acc state (fun acc e -> (acc, Constructor (v, name, e))) e
+      end
+
       (** Provides functionality for unscoped AST expressions, where functions'
           captured variables are explicitly passed as parameters *)
       module Unscoping = struct
@@ -571,8 +828,7 @@ functor
                   var_scope = Map.set state.var_scope ~key:xname ~data:xtype;
                 }
                 e1 e2
-          | LetRec (v, fname, (xname, xtype), return_t, e1, e2) ->
-              failwith "TODO"
+          | LetRec _ -> failwith "TODO"
           | Fun (v, (xname, xtype), e) ->
               unop
                 (fun e' -> Fun (v, (xname, xtype), e'))
