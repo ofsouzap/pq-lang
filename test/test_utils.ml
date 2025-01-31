@@ -95,7 +95,7 @@ let nonempty_list_test_fold_result =
            xs |> Nonempty_list.to_list
            |> List.fold_result ~init ~f:(QCheck.Fn.apply f_)
          in
-         (equal_result equal_int equal_int) exp out))
+         (Result.equal equal_int equal_int) exp out))
 
 let nonempty_list_test_fold_result_consume_init =
   let open QCheck in
@@ -115,7 +115,7 @@ let nonempty_list_test_fold_result_consume_init =
            xs |> Nonempty_list.to_list
            |> List.fold_result ~init ~f:(QCheck.Fn.apply f_)
          in
-         (equal_result equal_int equal_int) exp out))
+         (Result.equal equal_int equal_int) exp out))
 
 let nonempty_list_tests =
   [

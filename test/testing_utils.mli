@@ -22,11 +22,13 @@ val default_max_gen_rec_depth : int
 (** A printing method for token lists *)
 val token_printer : Parser.token list -> string
 
-(** A variation of the default `exec_err` equality function, that considers all typing errors equal *)
+(** A variation of the default `exec_err` equality function, that considers all
+    typing errors equal *)
 val override_equal_exec_err :
   Ast_executor.exec_err -> Ast_executor.exec_err -> bool
 
-(** A variation of the default `exec_res` equality function, that considers all typing errors equal *)
+(** A variation of the default `exec_res` equality function, that considers all
+    typing errors equal *)
 val override_equal_exec_res :
   Ast_executor.exec_res -> Ast_executor.exec_res -> bool
 
@@ -43,7 +45,8 @@ module TestingTypeCtx : sig
   (** Creates a type from a list *)
   val from_list : custom_type list -> t
 
-  (** If there are any defined variant types, get a generator for a random one of them *)
+  (** If there are any defined variant types, get a generator for a random one
+      of them *)
   val variant_gen_opt : t -> variant_type QCheck.Gen.t option
 
   (** Get the type context as a sexp *)
@@ -106,11 +109,11 @@ module UnitTag : sig
 end
 
 module Unit_ast_qcheck_testing : sig
-  include module type of Ast.QCheck_testing (UnitTag)
+  include module type of Ast.QCheck_testing (UnitTag) (UnitTag)
 end
 
 module Unit_program_qcheck_testing : sig
-  include module type of Program.QCheck_testing (UnitTag)
+  include module type of Program.QCheck_testing (UnitTag) (UnitTag)
 end
 
 val unit_program_arbitrary_with_default_options :

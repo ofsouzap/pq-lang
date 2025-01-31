@@ -11,9 +11,14 @@ open Testing_utils
 
 (* TODO - tests for type context checking *)
 
-module Vtype_ast_qcheck_testing = Ast.QCheck_testing (struct
-  type t = vtype
-end)
+module Vtype_ast_qcheck_testing =
+  Ast.QCheck_testing
+    (struct
+      type t = vtype
+    end)
+    (struct
+      type t = vtype
+    end)
 
 let varname_gen = Varname.QCheck_testing.gen ()
 
@@ -199,14 +204,14 @@ let test_cases_expr_typing : test list =
           ( (),
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
-              [ (PatName ("x", VTypeInt), BoolLit ((), true)) ] ),
+              [ (PatName ((), "x", VTypeInt), BoolLit ((), true)) ] ),
         Ok VTypeBool );
       ( None,
         Match
           ( (),
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
-              [ (PatName ("x", VTypeInt), Var ((), "x")) ] ),
+              [ (PatName ((), "x", VTypeInt), Var ((), "x")) ] ),
         Ok VTypeInt );
       ( None,
         Match
@@ -214,8 +219,8 @@ let test_cases_expr_typing : test list =
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
               [
-                (PatName ("x", VTypeInt), BoolLit ((), true));
-                (PatName ("y", VTypeInt), BoolLit ((), true));
+                (PatName ((), "x", VTypeInt), BoolLit ((), true));
+                (PatName ((), "y", VTypeInt), BoolLit ((), true));
               ] ),
         Ok VTypeBool );
       ( None,
@@ -224,20 +229,20 @@ let test_cases_expr_typing : test list =
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
               [
-                (PatName ("x", VTypeInt), BoolLit ((), true));
-                (PatName ("y", VTypeBool), BoolLit ((), true));
+                (PatName ((), "x", VTypeInt), BoolLit ((), true));
+                (PatName ((), "y", VTypeBool), BoolLit ((), true));
               ] ),
         Error
-          (PatternTypeMismatch (PatName ("y", VTypeBool), VTypeInt, VTypeBool))
-      );
+          (PatternTypeMismatch
+             (PatName ((), "y", VTypeBool), VTypeInt, VTypeBool)) );
       ( None,
         Match
           ( (),
             IntLit ((), 3),
             Nonempty_list.from_list_unsafe
               [
-                (PatName ("x", VTypeInt), BoolLit ((), true));
-                (PatName ("y", VTypeInt), IntLit ((), 5));
+                (PatName ((), "x", VTypeInt), BoolLit ((), true));
+                (PatName ((), "y", VTypeInt), IntLit ((), 5));
               ] ),
         Error (TypeMismatch (VTypeBool, VTypeInt)) );
       ( (* Valid for constructor pattern *)
@@ -262,11 +267,13 @@ let test_cases_expr_typing : test list =
               ),
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ("Nil", PatName ("z", VTypeUnit)),
+                ( PatConstructor ((), "Nil", PatName ((), "z", VTypeUnit)),
                   IntLit ((), 0) );
                 ( PatConstructor
-                    ( "Cons",
-                      PatName ("x", VTypePair (VTypeInt, VTypeCustom "int_list"))
+                    ( (),
+                      "Cons",
+                      PatName
+                        ((), "x", VTypePair (VTypeInt, VTypeCustom "int_list"))
                     ),
                   IntLit ((), 1) );
               ] ),
@@ -282,11 +289,13 @@ let test_cases_expr_typing : test list =
               ),
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ("Nil", PatName ("z", VTypeUnit)),
+                ( PatConstructor ((), "Nil", PatName ((), "z", VTypeUnit)),
                   IntLit ((), 0) );
                 ( PatConstructor
-                    ( "Cons",
-                      PatName ("x", VTypePair (VTypeInt, VTypeCustom "int_list"))
+                    ( (),
+                      "Cons",
+                      PatName
+                        ((), "x", VTypePair (VTypeInt, VTypeCustom "int_list"))
                     ),
                   IntLit ((), 1) );
               ] ),
@@ -332,7 +341,7 @@ let test_cases_expr_typing_full_check : test list =
       ( (name : string),
         (type_ctx : SetTypingTypeContext.t option),
         (e : plain_expr),
-        (exp : vtype expr) ) : test =
+        (exp : (vtype, vtype) expr) ) : test =
     name >:: fun _ ->
     let open Result in
     let out =
@@ -344,10 +353,13 @@ let test_cases_expr_typing_full_check : test list =
     | Ok tpe ->
         let typed_out =
           tpe |> SimpleTypeChecker.typed_program_expression_get_expression
-          >|= fst
+          |> Ast.fmap ~f:fst |> Ast.fmap_pattern ~f:fst
         in
-        assert_equal ~cmp:(equal_expr equal_vtype)
-          ~printer:(Vtype_ast_qcheck_testing.print (PrintSexp sexp_of_vtype))
+        assert_equal
+          ~cmp:(equal_expr equal_vtype equal_vtype)
+          ~printer:
+            (Vtype_ast_qcheck_testing.print
+               (PrintSexp (sexp_of_vtype, sexp_of_vtype)))
           exp typed_out
     | Error _ -> assert_failure "Failed to type"
   in
@@ -490,9 +502,9 @@ module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
       ]
 end
 
-(** An implementation of a variable context using functions.
-    It isn't efficient, but is just meant to be used
-    as a ground truth to test against the actually-used implementations *)
+(** An implementation of a variable context using functions. It isn't efficient,
+    but is just meant to be used as a ground truth to test against the
+    actually-used implementations *)
 module FunctionTypingVarContext : TypingVarContext = struct
   type t = string -> vtype option
 
@@ -521,7 +533,8 @@ module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in
-  let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : vtype) : unit expr Gen.t =
+  let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : vtype) :
+      (unit, unit) expr Gen.t =
     Unit_ast_qcheck_testing.gen
       {
         t = Some t;
@@ -531,6 +544,7 @@ let test_cases_arb_compound_expr_typing : test list =
                | VariantType vt -> Some vt
                | QuotientType _ -> None);
         v_gen = QCheck.Gen.unit;
+        pat_v_gen = QCheck.Gen.unit;
         mrd = default_max_gen_rec_depth;
       }
   in

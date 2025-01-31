@@ -9,16 +9,24 @@ let test_cases_equality : test list =
   let create_positive_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) x)
-        (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) y)
+        (Unit_ast_qcheck_testing.print
+           (PrintSexp (sexp_of_unit, sexp_of_unit))
+           x)
+        (Unit_ast_qcheck_testing.print
+           (PrintSexp (sexp_of_unit, sexp_of_unit))
+           y)
     in
     name >:: fun _ -> assert_bool "not equal" (equal_plain_expr x y)
   in
   let create_negative_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) x)
-        (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) y)
+        (Unit_ast_qcheck_testing.print
+           (PrintSexp (sexp_of_unit, sexp_of_unit))
+           x)
+        (Unit_ast_qcheck_testing.print
+           (PrintSexp (sexp_of_unit, sexp_of_unit))
+           y)
     in
     name >:: fun _ -> assert_bool "equal" (not (equal_plain_expr x y))
   in
@@ -136,8 +144,12 @@ let test_cases_to_source_code_inv =
           else
             Test.fail_reportf
               "Got different AST. Expected:\n\n%s\n\nActual:\n\n%s"
-              (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) e)
-              (Unit_ast_qcheck_testing.print (PrintSexp sexp_of_unit) prog.e)
+              (Unit_ast_qcheck_testing.print
+                 (PrintSexp (sexp_of_unit, sexp_of_unit))
+                 e)
+              (Unit_ast_qcheck_testing.print
+                 (PrintSexp (sexp_of_unit, sexp_of_unit))
+                 prog.e)
       | Error err ->
           Test.fail_reportf "Got frontend error: %s"
             (err |> sexp_of_frontend_error |> Sexp.to_string))
@@ -164,7 +176,7 @@ functor
    end)
   ->
   struct
-    module Program_qcheck_testing = Program.QCheck_testing (Tag)
+    module Program_qcheck_testing = Program.QCheck_testing (Tag) (UnitTag)
 
     let create_test_cases_expr_node_map_val =
       let open QCheck in
@@ -179,9 +191,10 @@ functor
                     max_variant_type_constructors =
                       default_max_variant_type_constructor_count;
                     ast_type = None;
-                    v_gen = QCheck.get_gen Tag.arb;
+                    expr_v_gen = QCheck.get_gen Tag.arb;
+                    pat_v_gen = QCheck.Gen.unit;
                   };
-                print = PrintSexp Tag.sexp;
+                print = PrintSexp (Tag.sexp, sexp_of_unit);
                 shrink = { preserve_type = false };
               }))
         (fun (f_, prog) ->
@@ -208,7 +221,7 @@ functor
    end)
   ->
   struct
-    module Tag1_program_qcheck_testing = Program.QCheck_testing (Tag1)
+    module Tag1_program_qcheck_testing = Program.QCheck_testing (Tag1) (UnitTag)
 
     let create_test_cases_expr_fmap_root =
       let open QCheck in
@@ -223,9 +236,10 @@ functor
                     max_variant_type_constructors =
                       default_max_variant_type_constructor_count;
                     ast_type = None;
-                    v_gen = QCheck.get_gen Tag1.arb;
+                    expr_v_gen = QCheck.get_gen Tag1.arb;
+                    pat_v_gen = QCheck.Gen.unit;
                   };
-                print = PrintSexp Tag1.sexp;
+                print = PrintSexp (Tag1.sexp, sexp_of_unit);
                 shrink = { preserve_type = false };
               }))
         (fun (x, f_, prog) ->

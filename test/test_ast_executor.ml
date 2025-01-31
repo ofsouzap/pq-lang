@@ -10,7 +10,7 @@ open Ast_executor
 open Testing_utils
 
 type basic_test_case =
-  string * unit SimpleTypeChecker.typed_program_expression * exec_res
+  string * (unit, unit) SimpleTypeChecker.typed_program_expression * exec_res
 
 let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     =
@@ -326,7 +326,7 @@ let test_cases_match : basic_test_case list =
                 Var ((), "x"),
                 Nonempty_list.from_list_unsafe
                   [
-                    ( PatName ("y", VTypeInt),
+                    ( PatName ((), "y", VTypeInt),
                       Add ((), Var ((), "y"), IntLit ((), 1)) );
                   ] ) ),
         Ok (Int 4) );
@@ -340,9 +340,9 @@ let test_cases_match : basic_test_case list =
                 Var ((), "x"),
                 Nonempty_list.from_list_unsafe
                   [
-                    ( PatName ("y", VTypeBool),
+                    ( PatName ((), "y", VTypeBool),
                       If ((), Var ((), "y"), IntLit ((), 4), IntLit ((), 0)) );
-                    (PatName ("z", VTypeBool), IntLit ((), 9));
+                    (PatName ((), "z", VTypeBool), IntLit ((), 9));
                   ] ) ),
         Ok (Int 0) );
       ( None,
@@ -355,7 +355,10 @@ let test_cases_match : basic_test_case list =
                 Var ((), "x"),
                 Nonempty_list.from_list_unsafe
                   [
-                    ( PatPair (PatName ("y", VTypeBool), PatName ("z", VTypeInt)),
+                    ( PatPair
+                        ( (),
+                          PatName ((), "y", VTypeBool),
+                          PatName ((), "z", VTypeInt) ),
                       If ((), Var ((), "y"), Var ((), "z"), IntLit ((), 0)) );
                   ] ) ),
         Ok (Int 1) );
@@ -373,8 +376,9 @@ let test_cases_match : basic_test_case list =
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatPair
-                        ( PatName ("y", VTypePair (VTypeBool, VTypeBool)),
-                          PatName ("z", VTypeInt) ),
+                        ( (),
+                          PatName ((), "y", VTypePair (VTypeBool, VTypeBool)),
+                          PatName ((), "z", VTypeInt) ),
                       Var ((), "y") );
                   ] ) ),
         Ok (Pair (Bool true, Bool true)) );
@@ -395,7 +399,7 @@ let test_cases_match : basic_test_case list =
             Constructor ((), "BoolBox", BoolLit ((), true)),
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ("BoolBox", PatName ("x", VTypeBool)),
+                ( PatConstructor ((), "BoolBox", PatName ((), "x", VTypeBool)),
                   Var ((), "x") );
               ] ),
         Ok (Bool true) );
@@ -420,13 +424,15 @@ let test_cases_match : basic_test_case list =
               ),
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ("Nil", PatName ("x", VTypeUnit)),
+                ( PatConstructor ((), "Nil", PatName ((), "x", VTypeUnit)),
                   IntLit ((), 0) );
                 ( PatConstructor
-                    ( "Cons",
+                    ( (),
+                      "Cons",
                       PatPair
-                        ( PatName ("x", VTypeInt),
-                          PatName ("y", VTypeCustom "int_list") ) ),
+                        ( (),
+                          PatName ((), "x", VTypeInt),
+                          PatName ((), "y", VTypeCustom "int_list") ) ),
                   Var ((), "x") );
               ] ),
         Ok (Int 7) );
@@ -483,7 +489,7 @@ let test_cases_constructor : basic_test_case list =
 
 let create_test
     ( (name : string),
-      (inp : unit SimpleTypeChecker.typed_program_expression),
+      (inp : (unit, unit) SimpleTypeChecker.typed_program_expression),
       (exp : exec_res) ) =
   name >:: fun _ ->
   let out = Ast_executor.SimpleExecutor.execute_program inp in

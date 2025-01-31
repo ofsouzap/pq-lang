@@ -354,8 +354,8 @@ module UnitTag = struct
   type t = unit
 end
 
-module Unit_ast_qcheck_testing = Ast.QCheck_testing (UnitTag)
-module Unit_program_qcheck_testing = Program.QCheck_testing (UnitTag)
+module Unit_ast_qcheck_testing = Ast.QCheck_testing (UnitTag) (UnitTag)
+module Unit_program_qcheck_testing = Program.QCheck_testing (UnitTag) (UnitTag)
 
 let unit_program_arbitrary_with_default_options =
   Unit_program_qcheck_testing.arbitrary
@@ -367,7 +367,8 @@ let unit_program_arbitrary_with_default_options =
           max_variant_type_constructors =
             default_max_variant_type_constructor_count;
           ast_type = None;
-          v_gen = QCheck.Gen.unit;
+          expr_v_gen = QCheck.Gen.unit;
+          pat_v_gen = QCheck.Gen.unit;
         };
       print = Unit_ast_qcheck_testing.PrintExprSource;
       shrink = { preserve_type = false };
