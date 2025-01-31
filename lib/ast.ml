@@ -266,10 +266,12 @@ end) : sig
     | GenVTypePair of gen_vtype * gen_vtype
     | GenVTypeCustom of string
 
+  val vtype_to_gen_vtype_unsafe : vtype -> gen_vtype
+
   type gen_options = {
     t : gen_vtype option;
     variant_types : variant_type list;
-    top_level_defns : (varname * vtype list * vtype) list;
+    top_level_defns : (varname * (vtype * vtype)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;
@@ -329,10 +331,19 @@ end = struct
         VTypePair (gen_vtype_to_vtype t1, gen_vtype_to_vtype t2)
     | GenVTypeCustom ct_name -> VTypeCustom ct_name
 
+  let rec vtype_to_gen_vtype_unsafe = function
+    | VTypeUnit -> GenVTypeUnit
+    | VTypeInt -> GenVTypeInt
+    | VTypeBool -> GenVTypeBool
+    | VTypePair (t1, t2) ->
+        GenVTypePair (vtype_to_gen_vtype_unsafe t1, vtype_to_gen_vtype_unsafe t2)
+    | VTypeCustom ct_name -> GenVTypeCustom ct_name
+    | VTypeFun _ -> failwith "Can't generate gen_vtype for function type"
+
   type gen_options = {
     t : gen_vtype option;
     variant_types : variant_type list;
-    top_level_defns : (varname * vtype list * vtype) list;
+    top_level_defns : (varname * (vtype * vtype)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;

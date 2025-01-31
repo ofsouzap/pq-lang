@@ -1,12 +1,27 @@
 open Utils
 open Vtype
+open Variant_types
+open Varname
 open Ast
 open Custom_types
 
-(** A program, consisting of any number of custom type definitions and an
-    expression to evaluate *)
+(** A top-level function definition *)
+type ('tag_e, 'tag_p) top_level_defn = {
+  recursive : bool;
+  name : string;
+  param : varname * vtype;
+  return_t : vtype;
+  body : ('tag_e, 'tag_p) expr;
+}
+[@@deriving sexp, equal]
+
+type plain_top_level_defn = (unit, unit) top_level_defn
+
+(** A program, consisting of any number of custom type definitions, top-level
+    definitions and an expression to evaluate *)
 type ('tag_e, 'tag_p) program = {
   custom_types : custom_type list;
+  top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
   e : ('tag_e, 'tag_p) expr;
 }
 [@@deriving sexp, equal]
@@ -30,10 +45,19 @@ module QCheck_testing : functor
     mrd : int;
     max_variant_types : int;
     max_variant_type_constructors : int;
+    max_top_level_defns : int;
     ast_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
   }
+
+  val gen_top_level_defn :
+    expr_v_gen:TagExpr.t QCheck.Gen.t ->
+    pat_v_gen:TagPat.t QCheck.Gen.t ->
+    top_level_defns:(varname * (vtype * vtype)) list ->
+    variant_types:variant_type list ->
+    mrd:int ->
+    (TagExpr.t, TagPat.t) top_level_defn QCheck.Gen.t
 
   type arb_options = {
     gen : gen_options;

@@ -137,10 +137,12 @@ module QCheck_testing : functor
     | GenVTypePair of gen_vtype * gen_vtype
     | GenVTypeCustom of string
 
+  val vtype_to_gen_vtype_unsafe : vtype -> gen_vtype
+
   type gen_options = {
     t : gen_vtype option;
     variant_types : variant_type list;
-    top_level_defns : (varname * vtype list * vtype) list;
+    top_level_defns : (varname * (vtype * vtype)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;
