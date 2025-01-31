@@ -108,8 +108,6 @@ let rec fmap ~(f : 'tag_e1 -> 'tag_e2) (e : ('tag_e1, 'tag_p) expr) :
           Nonempty_list.map ~f:(fun (p, c_e) -> (p, fmap ~f c_e)) cs )
   | Constructor (a, cname, e) -> Constructor (f a, cname, fmap ~f e)
 
-let ( >|= ) (e : ('tag_e1, 'tag_p) expr) (f : 'tag_e1 -> 'tag_e2) = fmap ~f e
-
 let rec fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (e : ('tag_e, 'tag_p1) expr) :
     ('tag_e, 'tag_p2) expr =
   match e with

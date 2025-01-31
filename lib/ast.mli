@@ -83,10 +83,6 @@ val expr_node_map_val :
 val fmap :
   f:('tag_e1 -> 'tag_e2) -> ('tag_e1, 'tag_p) expr -> ('tag_e2, 'tag_p) expr
 
-(** Map a function onto values in an expression *)
-val ( >|= ) :
-  ('tag_e1, 'tag_p) expr -> ('tag_e1 -> 'tag_e2) -> ('tag_e2, 'tag_p) expr
-
 (** Map a function onto all patterns in an entire tagged AST expression with
     tagged patterns *)
 val fmap_pattern :
