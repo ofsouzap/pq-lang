@@ -25,21 +25,22 @@ open Parsing_errors
  *   )
 *)
 
-let create_let_rec (((fname : string), (_ : vtype), (_ : vtype) as f), (fbody : plain_expr), (subexpr : plain_expr)) : plain_expr =
-  match fbody with
-  | Fun (_, x, fbody') -> Let ((), fname, Fix ((), f, x, fbody'), subexpr)
-  | _ -> raise CustomError
-
 let add_variant_type_definition_to_program (p : plain_program) (vt : variant_type) : plain_program =
   {
+    p with
     custom_types = (VariantType vt) :: p.custom_types;
-    e = p.e
   }
 
 let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_type) : plain_program =
   {
+    p with
     custom_types = (QuotientType qt) :: p.custom_types;
-    e = p.e
+  }
+
+let add_top_level_definition_to_program (p : plain_program) (fun_defn : fun_defn) : plain_program =
+  {
+    p with
+    fun_defns = p.fun_defns @ [fun_defn];
   }
 %}
 
@@ -75,7 +76,6 @@ let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_t
 %type <variant_type_constructor list> variant_type_definition_constructors
 %type <variant_type> variant_type_definition
 
-%type <string * vtype * vtype> typed_function_name
 %type <string * vtype> typed_name
 
 %type <plain_pattern * plain_expr> match_case
@@ -90,6 +90,10 @@ let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_t
 %type <quotient_type_eqcons> quotient_type_eqcons
 %type <quotient_type_eqcons list> quotient_type_definition_eqconss
 %type <quotient_type> quotient_type_definition
+
+%type <(varname * vtype) list> top_level_defn_param
+%type <(varname * vtype) list> top_level_defn_params
+%type <top_level_defn> top_level_defn
 
 // Main program
 
@@ -136,10 +140,6 @@ variant_type_definition:
   | TYPE name = LNAME ASSIGN cs = variant_type_definition_constructors { (name, cs) }
 ;
 
-typed_function_name:
-  | n = LNAME COLON t1 = vtype ARROW t2 = vtype { (n, t1, t2) }
-;
-
 typed_name:
   | n = LNAME COLON t = vtype { (n, t) }
 ;
@@ -174,7 +174,6 @@ expr:
   | e1 = expr LTEQ e2 = expr { LtEq ((), e1, e2) }  (* e1 <= e2 *)
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }  (* if e1 then e2 else e3 *)
   | LET l = LNAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
-  | LET REC LPAREN l = typed_function_name RPAREN ASSIGN r = expr IN subexpr = expr END { create_let_rec (l, r, subexpr) }  (* let rec (lname : ltype) = r in subexpr end *)
   | FUN LPAREN x = typed_name RPAREN ARROW e = expr END { Fun ((), x, e) }  (* fun (xname : xtype) -> e *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
   | MATCH e = expr WITH cs = match_cases END { Match ((), e, cs) }  (* match e with cs end *)
@@ -213,8 +212,25 @@ quotient_type_definition:
   | QTYPE name = LNAME ASSIGN vt_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name = vt_name; eqconss=eqconss } }
 ;
 
+top_level_defn_param:
+  | LPAREN x = typed_name RPAREN { x }
+;
+
+top_level_defn_params:
+  | p = top_level_defn_param { [p] }  (* Singleton *)
+  | p = top_level_defn_param ts = top_level_defn_params { p :: ts }  (* Cons *)
+;
+
+top_level_defn:
+  | LET fname = LNAME COLON return_t = vtype ASSIGN e = expr END { { recursive=false; name=fname; params=[]; body=e } }
+  | LET fname = LNAME ps = top_level_defn_params COLON return_t = vtype ASSIGN e = expr END { { recursive=false; name=fname; params=ps; body=e } }
+  | LET REC fname = LNAME COLON return_t = vtype ASSIGN e = expr END { { recursive=true; name=fname; params=[]; body=e } }
+  | LET REC fname = LNAME ps = top_level_defn_params COLON return_t = vtype ASSIGN e = expr END { { recursive=true; name=fname; params=ps; body=e } }
+;
+
 prog:
   | e = expr EOF { { custom_types = []; e = e } }
   | vt = variant_type_definition p = prog { add_variant_type_definition_to_program p vt }
   | qt = quotient_type_definition p = prog { add_quotient_type_definition_to_program p qt }
+  | fun_defn = top_level_defn p = prog { add_top_level_definition_to_program p fun_defn }
 ;
