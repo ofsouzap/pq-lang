@@ -6,8 +6,9 @@ open Ast
 (** A single equality constructor on a quotient type *)
 type quotient_type_eqcons = {
   bindings : (varname * vtype) list;
-      (** The variable bindings for the equality constructor of the equality constructor *)
-  body : pattern * plain_expr;
+      (** The variable bindings for the equality constructor of the equality
+          constructor *)
+  body : plain_pattern * plain_expr;
       (** The equality definition of the equality constructor *)
 }
 [@@deriving sexp, equal]
@@ -22,7 +23,8 @@ val quotient_type_eqcons_to_source_code :
 type quotient_type = {
   name : string;  (** The name of the quotient type *)
   base_type_name : string;
-      (** The name of the variant/quotient type that the quotient type is based on *)
+      (** The name of the variant/quotient type that the quotient type is based
+          on *)
   eqconss : quotient_type_eqcons list;
       (** The list of equality constructors for the quotient type *)
 }
