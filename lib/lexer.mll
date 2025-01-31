@@ -17,7 +17,6 @@ rule token = parse
   | "in" { IN }
   | "true" { TRUE }
   | "false" { FALSE }
-  | "fun" { FUN }
   | "unit" { UNIT }
   | "int" { INT }
   | "bool" { BOOL }
