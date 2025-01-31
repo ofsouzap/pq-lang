@@ -3,6 +3,7 @@
 open Core
 open Utils
 open Vtype
+open Varname
 open Variant_types
 open Pattern
 
@@ -49,18 +50,8 @@ type ('tag_e, 'tag_p) expr =
   | Var of 'tag_e * string  (** Variable references *)
   | Let of 'tag_e * string * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
       (** Let binding *)
-  | Fun of 'tag_e * (string * vtype) * ('tag_e, 'tag_p) expr
-      (** Function value *)
   | App of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
       (** Function application *)
-  | Fix of
-      'tag_e
-      * (string * vtype * vtype)
-      * (string * vtype)
-      * ('tag_e, 'tag_p) expr
-      (** Application of fix operator: `((function_name_for_recursion,
-          function_for_recursion_type1, function_for_recursion_type2),
-          (param_name, param_type), expr)` *)
   (* Pattern matching *)
   | Match of
       'tag_e
@@ -139,10 +130,17 @@ module QCheck_testing : functor
   (** A default AST printing method *)
   val default_ast_print_method : ast_print_method
 
+  type gen_vtype =
+    | GenVTypeUnit
+    | GenVTypeInt
+    | GenVTypeBool
+    | GenVTypePair of gen_vtype * gen_vtype
+    | GenVTypeCustom of string
+
   type gen_options = {
-    t : vtype option;
+    t : gen_vtype option;
     variant_types : variant_type list;
-    (* TODO - include quotient types *)
+    top_level_defns : (varname * vtype list * vtype) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;
