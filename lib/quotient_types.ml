@@ -7,7 +7,7 @@ open Ast
 
 type quotient_type_eqcons = {
   bindings : (varname * vtype) list;
-  body : pattern * plain_expr;
+  body : plain_pattern * plain_expr;
 }
 [@@deriving sexp, equal]
 
@@ -24,11 +24,9 @@ let quotient_type_eqcons_to_source_code ?(use_newlines : bool option)
     (ast_to_source_code ?use_newlines e)
 
 type quotient_type = {
-  name : string;  (** The name of the quotient type *)
+  name : string;
   base_type_name : string;
-      (** The name of the variant type that the quotient type is based on *)
   eqconss : quotient_type_eqcons list;
-      (** The list of equality constructors for the quotient type *)
 }
 [@@deriving sexp, equal]
 

@@ -38,14 +38,17 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
   QCheck_runner.to_ounit2_test
     (Test.make ~name ~count:100
        (let open QCheck.Gen in
-        let gen : (TestingTypeCtx.t * 'a expr * 'a expr) option Gen.t =
+        let gen :
+            (TestingTypeCtx.t * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr)
+            option
+            Gen.t =
           get_gen unit_program_arbitrary_with_default_options >>= fun prog ->
           let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
           let e = prog.e in
-          let shrinks : 'a expr Iter.t =
+          let shrinks : ('tag_e, 'tag_p) expr Iter.t =
             Unit_ast_qcheck_testing.shrink { preserve_type = true } e
           in
-          let shrinks_list_opt : 'a expr list =
+          let shrinks_list_opt : ('tag_e, 'tag_p) expr list =
             let xs = ref [] in
             shrinks (fun x -> xs := x :: !xs);
             !xs
@@ -121,7 +124,8 @@ let create_typed_expr_gen_test (name : string)
   QCheck_runner.to_ounit2_test
     (Test.make ~name ~count:1000
        (let open QCheck.Gen in
-        let gen : (TestingTypeCtx.t * (vtype * unit Ast.expr)) QCheck.Gen.t =
+        let gen :
+            (TestingTypeCtx.t * (vtype * (unit, unit) Ast.expr)) QCheck.Gen.t =
           types_gen >>= fun (type_ctx, t) ->
           Unit_ast_qcheck_testing.gen
             {
@@ -132,6 +136,7 @@ let create_typed_expr_gen_test (name : string)
                      | VariantType vt -> Some vt
                      | QuotientType _ -> None);
               v_gen = QCheck.Gen.unit;
+              pat_v_gen = QCheck.Gen.unit;
               mrd = default_max_gen_rec_depth;
             }
           >|= fun e -> (type_ctx, (t, e))
@@ -201,7 +206,8 @@ let create_test_type_ctx_gen_valid (name : string) : test =
             max_quotient_types = default_max_quotient_type_count;
             mrd = default_max_gen_rec_depth;
           }
-       |> (* Don't allow shrinking as we are considering the generated type contexts *)
+       |>
+       (* Don't allow shrinking as we are considering the generated type contexts *)
        QCheck.set_shrink QCheck.Shrink.nil)
        (fun type_ctx ->
          match TestingTypeChecker.check_type_ctx type_ctx with

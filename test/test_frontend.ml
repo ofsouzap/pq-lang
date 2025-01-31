@@ -602,7 +602,7 @@ let test_cases_match : test_case_no_variant_types list =
              ( (),
                Var ((), "x"),
                Nonempty_list.from_list_unsafe
-                 [ (PatName ("y", VTypeInt), Var ((), "y")) ] )) );
+                 [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Simple match with leading pipe *)
         "match x with | (y : int) -> y end",
         [
@@ -624,7 +624,7 @@ let test_cases_match : test_case_no_variant_types list =
              ( (),
                Var ((), "x"),
                Nonempty_list.from_list_unsafe
-                 [ (PatName ("y", VTypeInt), Var ((), "y")) ] )) );
+                 [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Match with compound inner expression *)
         "match (1 + (if true then x else 4 end)) with (y : int) -> y end",
         [
@@ -660,7 +660,7 @@ let test_cases_match : test_case_no_variant_types list =
                    IntLit ((), 1),
                    If ((), BoolLit ((), true), Var ((), "x"), IntLit ((), 4)) ),
                Nonempty_list.from_list_unsafe
-                 [ (PatName ("y", VTypeInt), Var ((), "y")) ] )) );
+                 [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Match with multiple patterns *)
         "match x with (y : int) -> y | (z : int) -> z end",
         [
@@ -690,8 +690,8 @@ let test_cases_match : test_case_no_variant_types list =
                Var ((), "x"),
                Nonempty_list.from_list_unsafe
                  [
-                   (PatName ("y", VTypeInt), Var ((), "y"));
-                   (PatName ("z", VTypeInt), Var ((), "z"));
+                   (PatName ((), "y", VTypeInt), Var ((), "y"));
+                   (PatName ((), "z", VTypeInt), Var ((), "z"));
                  ] )) );
       ( (* Matching pair *)
         "match x with ((y : int), (z : bool)) -> y end",
@@ -722,7 +722,10 @@ let test_cases_match : test_case_no_variant_types list =
                Var ((), "x"),
                Nonempty_list.from_list_unsafe
                  [
-                   ( PatPair (PatName ("y", VTypeInt), PatName ("z", VTypeBool)),
+                   ( PatPair
+                       ( (),
+                         PatName ((), "y", VTypeInt),
+                         PatName ((), "z", VTypeBool) ),
                      Var ((), "y") );
                  ] )) );
       ( (* Matching nested pair *)
@@ -770,10 +773,12 @@ let test_cases_match : test_case_no_variant_types list =
                Nonempty_list.from_list_unsafe
                  [
                    ( PatPair
-                       ( PatName ("y", VTypeBool),
+                       ( (),
+                         PatName ((), "y", VTypeBool),
                          PatPair
-                           (PatName ("z1", VTypeBool), PatName ("z2", VTypeBool))
-                       ),
+                           ( (),
+                             PatName ((), "z1", VTypeBool),
+                             PatName ((), "z2", VTypeBool) ) ),
                      If ((), Var ((), "y"), Var ((), "z1"), Var ((), "z2")) );
                  ] )) );
       ( (* Matching variant data type constructor *)
@@ -820,13 +825,15 @@ let test_cases_match : test_case_no_variant_types list =
                Var ((), "x"),
                Nonempty_list.from_list_unsafe
                  [
-                   ( PatConstructor ("Nil", PatName ("z", VTypeInt)),
+                   ( PatConstructor ((), "Nil", PatName ((), "z", VTypeInt)),
                      IntLit ((), 0) );
                    ( PatConstructor
-                       ( "Cons",
+                       ( (),
+                         "Cons",
                          PatPair
-                           ( PatName ("h", VTypeInt),
-                             PatName ("ts", VTypeCustom "int_list") ) ),
+                           ( (),
+                             PatName ((), "h", VTypeInt),
+                             PatName ((), "ts", VTypeCustom "int_list") ) ),
                      IntLit ((), 1) );
                  ] )) );
     ]
@@ -1030,7 +1037,8 @@ qtype int_boxed
                       {
                         bindings = [ ("x", VTypeInt) ];
                         body =
-                          ( PatConstructor ("Int", PatName ("x", VTypeInt)),
+                          ( PatConstructor
+                              ((), "Int", PatName ((), "x", VTypeInt)),
                             Var ((), "x") );
                       };
                     ];
@@ -1126,10 +1134,12 @@ qtype mobile
                           ];
                         body =
                           ( PatConstructor
-                              ( "Node",
+                              ( (),
+                                "Node",
                                 PatPair
-                                  ( PatName ("l", VTypeCustom "tree"),
-                                    PatName ("r", VTypeCustom "tree") ) ),
+                                  ( (),
+                                    PatName ((), "l", VTypeCustom "tree"),
+                                    PatName ((), "r", VTypeCustom "tree") ) ),
                             Constructor
                               ( (),
                                 "Node",
@@ -1260,7 +1270,8 @@ let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
   name >:: fun _ ->
   let out = run_frontend_string inp in
   assert_equal
-    ~cmp:(equal_result (equal_program equal_unit) equal_frontend_error)
+    ~cmp:
+      (Result.equal (equal_program equal_unit equal_unit) equal_frontend_error)
     exp out
     ~printer:(fun x ->
       match x with

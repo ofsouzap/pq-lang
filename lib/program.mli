@@ -3,18 +3,26 @@ open Vtype
 open Ast
 open Custom_types
 
-(** A program, consisting of any number of custom type definitions and an expression to evaluate *)
-type 'a program = { custom_types : custom_type list; e : 'a expr }
+(** A program, consisting of any number of custom type definitions and an
+    expression to evaluate *)
+type ('tag_e, 'tag_p) program = {
+  custom_types : custom_type list;
+  e : ('tag_e, 'tag_p) expr;
+}
 [@@deriving sexp, equal]
 
 (** A program with no tagging *)
-type plain_program = unit program [@@deriving sexp, equal]
+type plain_program = (unit, unit) program [@@deriving sexp, equal]
 
 (** Convert a program into source code *)
-val program_to_source_code : ?use_newlines:bool -> 'a program -> string
+val program_to_source_code :
+  ?use_newlines:bool -> ('tag_e, 'tag_p) program -> string
 
 module QCheck_testing : functor
-  (Tag : sig
+  (TagExpr : sig
+     type t
+   end)
+  (TagPat : sig
      type t
    end)
   -> sig
@@ -23,20 +31,23 @@ module QCheck_testing : functor
     max_variant_types : int;
     max_variant_type_constructors : int;
     ast_type : vtype option;
-    v_gen : Tag.t QCheck.Gen.t;
+    expr_v_gen : TagExpr.t QCheck.Gen.t;
+    pat_v_gen : TagPat.t QCheck.Gen.t;
   }
 
   type arb_options = {
     gen : gen_options;
-    print : Ast.QCheck_testing(Tag).ast_print_method;
-    shrink : Ast.QCheck_testing(Tag).shrink_options;
+    print : Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method;
+    shrink : Ast.QCheck_testing(TagExpr)(TagPat).shrink_options;
   }
 
   include
     QCheck_testing_sig
-      with type t = Tag.t program
+      with type t = (TagExpr.t, TagPat.t) program
        and type gen_options := gen_options
-       and type print_options = Ast.QCheck_testing(Tag).ast_print_method
-       and type shrink_options = Ast.QCheck_testing(Tag).shrink_options
+       and type print_options =
+        Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method
+       and type shrink_options =
+        Ast.QCheck_testing(TagExpr)(TagPat).shrink_options
        and type arb_options := arb_options
 end

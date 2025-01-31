@@ -6,13 +6,16 @@ open Ast
 open Quotient_types
 open Custom_types
 
-type 'a program = { custom_types : custom_type list; e : 'a expr }
+type ('tag_e, 'tag_p) program = {
+  custom_types : custom_type list;
+  e : ('tag_e, 'tag_p) expr;
+}
 [@@deriving sexp, equal]
 
-type plain_program = unit program [@@deriving sexp, equal]
+type plain_program = (unit, unit) program [@@deriving sexp, equal]
 
-let program_to_source_code ?(use_newlines : bool option) (prog : 'a program) :
-    string =
+let program_to_source_code ?(use_newlines : bool option)
+    (prog : ('tag_e, 'tag_p) program) : string =
   let type_defns_str : string list =
     List.map
       ~f:(function
@@ -27,7 +30,9 @@ let program_to_source_code ?(use_newlines : bool option) (prog : 'a program) :
       (if (equal_option equal_bool) use_newlines (Some true) then "\n" else " ")
     str_parts
 
-module QCheck_testing (Tag : sig
+module QCheck_testing (TagExpr : sig
+  type t
+end) (TagPat : sig
   type t
 end) : sig
   type gen_options = {
@@ -35,33 +40,37 @@ end) : sig
     max_variant_types : int;
     max_variant_type_constructors : int;
     ast_type : vtype option;
-    v_gen : Tag.t QCheck.Gen.t;
+    expr_v_gen : TagExpr.t QCheck.Gen.t;
+    pat_v_gen : TagPat.t QCheck.Gen.t;
   }
 
   type arb_options = {
     gen : gen_options;
-    print : Ast.QCheck_testing(Tag).ast_print_method;
-    shrink : Ast.QCheck_testing(Tag).shrink_options;
+    print : Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method;
+    shrink : Ast.QCheck_testing(TagExpr)(TagPat).shrink_options;
   }
 
   include
     QCheck_testing_sig
-      with type t = Tag.t program
+      with type t = (TagExpr.t, TagPat.t) program
        and type gen_options := gen_options
-       and type print_options = Ast.QCheck_testing(Tag).ast_print_method
-       and type shrink_options = Ast.QCheck_testing(Tag).shrink_options
+       and type print_options =
+        Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method
+       and type shrink_options =
+        Ast.QCheck_testing(TagExpr)(TagPat).shrink_options
        and type arb_options := arb_options
 end = struct
-  type t = Tag.t program
+  type t = (TagExpr.t, TagPat.t) program
 
-  module Ast_qcheck_testing = Ast.QCheck_testing (Tag)
+  module Ast_qcheck_testing = Ast.QCheck_testing (TagExpr) (TagPat)
 
   type gen_options = {
     mrd : int;
     max_variant_types : int;
     max_variant_type_constructors : int;
     ast_type : vtype option;
-    v_gen : Tag.t QCheck.Gen.t;
+    expr_v_gen : TagExpr.t QCheck.Gen.t;
+    pat_v_gen : TagPat.t QCheck.Gen.t;
   }
 
   type print_options = Ast_qcheck_testing.ast_print_method
@@ -127,7 +136,8 @@ end = struct
           List.filter_map
             ~f:(function VariantType vt -> Some vt | QuotientType _ -> None)
             custom_types;
-        v_gen = opts.v_gen;
+        v_gen = opts.expr_v_gen;
+        pat_v_gen = opts.pat_v_gen;
         mrd = opts.mrd;
       }
     >|= fun e -> { custom_types; e }
