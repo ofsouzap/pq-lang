@@ -26,7 +26,6 @@ let sexp_of_token = function
   | IN -> Sexp.Atom "IN"
   | TRUE -> Sexp.Atom "TRUE"
   | FALSE -> Sexp.Atom "FALSE"
-  | FUN -> Sexp.Atom "FUN"
   | UNIT -> Sexp.Atom "UNIT"
   | INT -> Sexp.Atom "INT"
   | BOOL -> Sexp.Atom "BOOL"
