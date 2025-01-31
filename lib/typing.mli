@@ -125,7 +125,7 @@ module type TypeCheckerSig = functor
   val type_pattern :
     checked_type_ctx * VarCtx.t ->
     'tag_p pattern ->
-    (vtype * VarCtx.t, typing_error) Result.t
+    ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
 
   (** Type checks an expression in the given context, returning either a typed
       expression or a typing error *)
