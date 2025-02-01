@@ -292,17 +292,20 @@ struct
       List.fold
         ~init:(VarnameMap.empty : store)
         ~f:(fun acc defn ->
+          let plain_typed_body =
+            defn.body
+            |> Ast.fmap ~f:(fun (t, _) -> (t, ()))
+            |> Ast.fmap_pattern ~f:(fun (t, _) -> (t, ()))
+          in
           Map.set acc ~key:defn.name
             ~data:
               (Closure
                  {
                    param = defn.param;
                    out_type = defn.return_t;
-                   body = defn.body;
+                   body = plain_typed_body;
                  }))
-        (failwith
-           "TODO - should be given a typed program input and then get the \
-            top-level defns from this")
+        prog.top_level_defns
     in
     let e = prog.e in
     eval ~type_ctx store

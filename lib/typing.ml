@@ -540,11 +540,22 @@ functor
       List.fold_result (* Check the top-level definitions *)
         ~init:{ defns = []; defns_var_ctx = VarCtx.empty }
         ~f:(fun acc defn ->
+          (* Check the definition's name doesn't already exist *)
           if VarCtx.exists acc.defns_var_ctx defn.name then
             Error (MultipleTopLevelNameDefinitions defn.name)
           else
-            type_expr (type_ctx, acc.defns_var_ctx) defn.body
-            >>= fun typed_body ->
+            (* Type the TLD's body *)
+            let body_var_ctx =
+              (* Add the parameter to the variable context *)
+              VarCtx.add acc.defns_var_ctx (fst defn.param) (snd defn.param)
+              |>
+              (* If recursive, add the function's name to the variable context *)
+              if defn.recursive then fun acc ->
+                VarCtx.add acc defn.name
+                  (VTypeFun (snd defn.param, defn.return_t))
+              else Fn.id
+            in
+            type_expr (type_ctx, body_var_ctx) defn.body >>= fun typed_body ->
             let defn_t = VTypeFun (snd defn.param, defn.return_t) in
             {
               defns = { defn with body = typed_body } :: acc.defns;
