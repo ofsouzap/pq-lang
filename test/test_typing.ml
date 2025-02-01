@@ -32,6 +32,7 @@ let vtype_gen type_ctx =
              | QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
+      allow_fun_types = false;
     }
 
 let test_cases_expr_typing : test list =
@@ -51,11 +52,8 @@ let test_cases_expr_typing : test list =
     in
     let out = Typing.type_expr ~type_ctx e in
     match (out, t) with
-    | Ok tpe, Ok exp_t ->
-        let out_t =
-          tpe |> SimpleTypeChecker.typed_program_expression_get_expression
-          |> expr_node_val |> fst
-        in
+    | Ok e_typed, Ok exp_t ->
+        let out_t = e_typed |> expr_node_val |> fst in
         assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
@@ -133,72 +131,9 @@ let test_cases_expr_typing : test list =
         If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
         Ok VTypeInt );
       (None, Var ((), "x"), Error (UndefinedVariable "x"));
-      ( None,
-        Fun ((), ("x", VTypeInt), Var ((), "x")),
-        Ok (VTypeFun (VTypeInt, VTypeInt)) );
       (None, Let ((), "x", IntLit ((), 3), Var ((), "x")), Ok VTypeInt);
       (None, Let ((), "x", BoolLit ((), true), Var ((), "x")), Ok VTypeBool);
       (None, Let ((), "x", IntLit ((), 3), BoolLit ((), true)), Ok VTypeBool);
-      ( None,
-        Let
-          ( (),
-            "f",
-            Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
-            App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Ok VTypeInt );
-      ( None,
-        Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
-        Ok (VTypeFun (VTypeInt, VTypeInt)) );
-      ( None,
-        Let
-          ( (),
-            "f",
-            Fun ((), ("x", VTypeInt), Var ((), "x")),
-            App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Ok VTypeInt );
-      ( None,
-        Let
-          ( (),
-            "f",
-            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeInt), Var ((), "x")),
-            App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Ok VTypeInt );
-      ( None,
-        Let
-          ( (),
-            "f",
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeInt),
-                ("x", VTypeInt),
-                BoolLit ((), false) ),
-            App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( None,
-        Let
-          ( (),
-            "f",
-            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
-            App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( None,
-        Let
-          ( (),
-            "f",
-            Fix ((), ("f", VTypeInt, VTypeInt), ("x", VTypeBool), Var ((), "x")),
-            App ((), Var ((), "f"), BoolLit ((), false)) ),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
-      ( None,
-        Let
-          ( (),
-            "f",
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeBool),
-                ("x", VTypeInt),
-                BoolLit ((), false) ),
-            App ((), Var ((), "f"), IntLit ((), 3)) ),
-        Ok VTypeBool );
       ( None,
         Match
           ( (),
@@ -350,11 +285,8 @@ let test_cases_expr_typing_full_check : test list =
         e
     in
     match out with
-    | Ok tpe ->
-        let typed_out =
-          tpe |> SimpleTypeChecker.typed_program_expression_get_expression
-          |> Ast.fmap ~f:fst |> Ast.fmap_pattern ~f:fst
-        in
+    | Ok e_typed ->
+        let typed_out = e_typed |> Ast.fmap ~f:fst |> Ast.fmap_pattern ~f:fst in
         assert_equal
           ~cmp:(equal_expr equal_vtype equal_vtype)
           ~printer:
@@ -416,11 +348,8 @@ let test_cases_typing_with_var_ctx : test list =
         e
     in
     match (out, t) with
-    | Ok tpe, Ok exp_t ->
-        let out_t =
-          tpe |> SimpleTypeChecker.typed_program_expression_get_expression
-          |> expr_node_val |> fst
-        in
+    | Ok e_typed, Ok exp_t ->
+        let out_t = e_typed |> expr_node_val |> fst in
         assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
@@ -434,12 +363,6 @@ let test_cases_typing_with_var_ctx : test list =
       ([ ("x", VTypeInt) ], Var ((), "x"), Ok VTypeInt);
       ([ ("x", VTypeBool) ], Var ((), "x"), Ok VTypeBool);
       ([ ("x", VTypeBool) ], Var ((), "y"), Error (UndefinedVariable "y"));
-      ( [ ("x", VTypeBool) ],
-        Fun ((), ("y", VTypeInt), IntLit ((), 2)),
-        Ok (VTypeFun (VTypeInt, VTypeInt)) );
-      ( [ ("x", VTypeBool) ],
-        Fun ((), ("x", VTypeInt), IntLit ((), 2)),
-        Ok (VTypeFun (VTypeInt, VTypeInt)) );
     ]
 
 (* TODO - type context tester module and implementations *)
@@ -537,12 +460,13 @@ let test_cases_arb_compound_expr_typing : test list =
       (unit, unit) expr Gen.t =
     Unit_ast_qcheck_testing.gen
       {
-        t = Some t;
+        t = Some (Unit_ast_qcheck_testing.vtype_to_gen_vtype_unsafe t);
         variant_types =
           TestingTypeCtx.type_defns_to_list type_ctx
           |> List.filter_map ~f:(function
                | VariantType vt -> Some vt
                | QuotientType _ -> None);
+        top_level_defns = (* TODO - have arbitrary TLDs *) [];
         v_gen = QCheck.Gen.unit;
         pat_v_gen = QCheck.Gen.unit;
         mrd = default_max_gen_rec_depth;
@@ -576,13 +500,8 @@ let test_cases_arb_compound_expr_typing : test list =
                match
                  TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
                with
-               | Ok tpe ->
-                   let t =
-                     tpe
-                     |> TestingTypeChecker
-                        .typed_program_expression_get_expression
-                     |> expr_node_val |> fst
-                   in
+               | Ok e_typed ->
+                   let t = e_typed |> expr_node_val |> fst in
                    equal_vtype exp_t t
                | Error _ -> false)))
   in
@@ -681,26 +600,6 @@ let test_cases_arb_compound_expr_typing : test list =
           >|= fun (e1, e2) -> (t, Let ((), xname, e1, e2))
         (* Note, the tests here (and for the Fun and Fix cases) don't work with changing variable contexts. But this should be fine *)
       );
-      ( "Fun",
-        None,
-        fun type_ctx ->
-          vtype_gen type_ctx >>= fun t2 ->
-          pair varname_gen (vtype_gen type_ctx) >>= fun (xname, t1) ->
-          expr_gen ~type_ctx t2 >|= fun e ->
-          (VTypeFun (t1, t2), Ast.Fun ((), (xname, t1), e)) );
-      ( "App",
-        None,
-        fun type_ctx ->
-          pair (vtype_gen type_ctx) (vtype_gen type_ctx) >>= fun (t1, t2) ->
-          pair (expr_gen ~type_ctx (VTypeFun (t1, t2))) (expr_gen ~type_ctx t1)
-          >|= fun (e1, e2) -> (t2, App ((), e1, e2)) );
-      ( "Fix",
-        None,
-        fun type_ctx ->
-          pair varname_gen (vtype_gen type_ctx) >>= fun (fname, t1) ->
-          pair varname_gen (vtype_gen type_ctx) >>= fun (xname, t2) ->
-          expr_gen ~type_ctx t2 >|= fun e ->
-          (VTypeFun (t1, t2), Fix ((), (fname, t1, t2), (xname, t1), e)) );
       ( "Constructor - list Nil",
         Some
           (TestingTypeCtx.create
@@ -772,13 +671,9 @@ let test_cases_typing_maintains_structure : test =
              match
                TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
              with
-             | Ok tpe ->
+             | Ok e_typed ->
                  let plain_e = expr_to_plain_expr e in
-                 let plain_typed_e =
-                   tpe
-                   |> TestingTypeChecker.typed_program_expression_get_expression
-                   |> expr_to_plain_expr
-                 in
+                 let plain_typed_e = e_typed |> expr_to_plain_expr in
                  equal_plain_expr plain_e plain_typed_e
              | Error _ -> false)))
 

@@ -4,6 +4,7 @@ open Vtype
 open Variant_types
 open Varname
 open Pattern
+open Program
 
 type ast_tag = unit [@@deriving sexp, equal]
 type pattern_tag = unit [@@deriving sexp, equal]
@@ -13,6 +14,7 @@ type closure_props = {
   out_type : vtype;
   body : (ast_tag, pattern_tag) Ast.typed_expr;
   store : store;
+  recursive : [ `Recursive of varname | `NonRecursive ];
 }
 [@@deriving sexp, equal]
 
@@ -75,6 +77,7 @@ let show_typing_error (terr : typing_error) : string =
   |> String.concat ~sep:", "
 
 type exec_err =
+  | TypeContextCreationError of Typing.typing_error
   | TypingError of typing_error
   | UndefinedVarError of varname
   | MisplacedFixError
@@ -90,6 +93,10 @@ let show_exec_res = function
   | Ok v -> sexp_of_value v |> Sexp.to_string
   | Error e -> (
       match e with
+      | TypeContextCreationError terr ->
+          "[TYPE CONTEXT CREATION ERROR: "
+          ^ Typing.print_typing_error terr
+          ^ "]"
       | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
       | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
       | MisplacedFixError -> "[MISPLACED FIX NODE]"
@@ -241,39 +248,21 @@ struct
     | Let (_, xname, e1, e2) ->
         eval ~type_ctx store e1 >>= fun v ->
         eval ~type_ctx (store_set store ~key:xname ~value:v) e2
-    | Fun (_, (xname, xtype), e) ->
-        Ok
-          (Closure
-             {
-               param = (xname, xtype);
-               out_type = Ast.expr_node_val e |> fst;
-               body = e;
-               store;
-             })
     | App (_, e1, e2) ->
         (* This uses call-by-value semantics *)
         eval_apply_to_closure ~type_ctx store e1 (fun closure ->
             eval ~type_ctx store e2 >>= fun v2 ->
-            eval ~type_ctx
-              (store_set closure.store ~key:(closure.param |> fst) ~value:v2)
-              closure.body)
-    | Fix (_, (fname, ftype1, ftype2), ((xname, xtype) as x), fxbody) as e ->
-        (* fix (\f. \x. e2) ~> \x. [(\f. \x. e2) (fix (\f. \x. e2))] x *)
-        let ftype = VTypeFun (ftype1, ftype2) in
-        eval ~type_ctx store
-          (Fun
-             ( (ftype, ()),
-               x,
-               App
-                 ( (ftype2, ()),
-                   App
-                     ( (ftype, ()),
-                       Fun
-                         ( (VTypeFun (ftype, ftype), ()),
-                           (fname, ftype),
-                           Fun ((ftype, ()), x, fxbody) ),
-                       e ),
-                   Var ((xtype, ()), xname) ) ))
+            let new_store =
+              store_set closure.store ~key:(closure.param |> fst) ~value:v2
+            in
+            let new_store =
+              (* If the function is recursive, make it re-accessible in the execution of the function *)
+              match closure.recursive with
+              | `Recursive fname ->
+                  store_set new_store ~key:fname ~value:(Closure closure)
+              | `NonRecursive -> new_store
+            in
+            eval ~type_ctx new_store closure.body)
     | Match (_, e1, cs) -> (
         eval ~type_ctx store e1 >>= fun v1 ->
         let matched_c_e :
@@ -301,14 +290,44 @@ struct
         |> Result.of_option ~error:(UnknownVariantTypeConstructor c_name)
         >>= fun (vt, _) -> Ok (VariantTypeValue (vt, c_name, v1))
 
-  let execute_program
-      (tpe : ('tag_e, 'tag_p) TypeChecker.typed_program_expression) =
-    let type_ctx = TypeChecker.typed_program_expression_get_type_ctx tpe in
-    let e = TypeChecker.typed_program_expression_get_expression tpe in
-    eval ~type_ctx
-      (VarnameMap.empty : store)
-      (Ast.fmap ~f:(fun (t, _) -> (t, ())) e
-      |> Ast.fmap_pattern ~f:(fun (t, _) -> (t, ())))
+  let execute_program (tprog : ('tag_e, 'tag_p) TypeChecker.typed_program) =
+    let open Result in
+    let prog = TypeChecker.typed_program_get_program tprog in
+    TypeCtx.create ~custom_types:prog.custom_types
+    |> Result.map_error ~f:(fun err -> TypeContextCreationError err)
+    >>= fun type_ctx ->
+    let store =
+      List.fold
+        ~init:(VarnameMap.empty : store)
+        ~f:(fun acc defn ->
+          let plain_typed_body =
+            defn.body
+            |> Ast.fmap ~f:(fun (t, _) -> (t, ()))
+            |> Ast.fmap_pattern ~f:(fun (t, _) -> (t, ()))
+          in
+          Map.set acc ~key:defn.name
+            ~data:
+              (Closure
+                 {
+                   param = defn.param;
+                   out_type = defn.return_t;
+                   body = plain_typed_body;
+                   store = acc;
+                   recursive =
+                     (if defn.recursive then `Recursive defn.name
+                      else `NonRecursive);
+                 }))
+        prog.top_level_defns
+    in
+    let e = prog.e in
+    eval ~type_ctx store
+      (e
+      |>
+      (* Remove AST tags except type *)
+      Ast.fmap ~f:(fun (t, _) -> (t, ()))
+      |>
+      (* Remove pattern tags except type *)
+      Ast.fmap_pattern ~f:(fun (t, _) -> (t, ())))
 end
 
 module SimpleExecutor =

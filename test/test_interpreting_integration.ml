@@ -1,79 +1,74 @@
 open Core
 open OUnit2
 open Pq_lang
-open Typing
 open Ast_executor
 open Testing_utils
+
+let program_triangles (x : int) =
+  sprintf
+    {|
+let rec f (x : int) : int =
+  if x == 0
+  then
+    0
+  else
+    x + f (x - 1)
+  end
+end
+
+f %d
+|}
+    x
 
 let program_pred_or_zero (x : int) =
   sprintf
     {|
-let rec (f : (int * (int * int)) -> int) =
-  fun (p : (int * (int * int))) ->
-    match p with
-    | ((x : int), ((acc : int), (pred : int))) ->
-      if
-        x == acc
-        then
-          pred
-        else
-          f (x, (acc + 1, acc))
-      end
+let rec f (p : int * (int * int)) : int =
+  match p with
+  | ((x : int), ((acc : int), (pred : int))) ->
+    if x == acc
+    then
+      pred
+    else
+      f (x, (acc + 1, acc))
     end
-  end
-in
-  let predOrZero =
-    fun (x : int) ->
-      f (x, (0, 0))
-    end
-  in
-    predOrZero %d
   end
 end
+
+let predOrZero (x : int) : int =
+  f (x, (0, 0))
+end
+
+predOrZero %d
 |}
     x
 
-let create_test ((name : string), (inp : string), (exp : exec_res)) =
+let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
   name >:: fun _ ->
   let open Result in
-  let lexbuf = Lexing.from_string inp in
-  let prog = Parser.prog Lexer.token lexbuf in
-  let main_result : (unit, Typing.typing_error) Result.t =
-    SetTypingTypeContext.create ~custom_types:prog.custom_types
-    >>= fun type_ctx ->
-    Typing.type_expr ~type_ctx prog.e >>= fun tpe ->
-    let result : Ast_executor.exec_res =
-      Ast_executor.SimpleExecutor.execute_program tpe
-    in
-    Ok
-      (assert_equal exp result ~cmp:override_equal_exec_res
-         ~printer:Ast_executor.show_exec_res)
-  in
-  match main_result with
+  match Frontend.run_frontend_string inp with
+  | Ok prog -> (
+      match Typing.type_program prog with
+      | Ok typed_prog ->
+          let result : Ast_executor.exec_res =
+            Ast_executor.SimpleExecutor.execute_program typed_prog
+          in
+          assert_equal ~cmp:override_equal_exec_res
+            ~printer:Ast_executor.show_exec_res exp result
+      | Error err ->
+          failwith
+            (sprintf "Error in typing: %s" (Typing.print_typing_error err)))
   | Error err ->
-      failwith (sprintf "Error in typing: %s" (print_typing_error err))
-  | Ok _ -> ()
+      failwith
+        (sprintf "Error in frontend: %s"
+           (err |> Frontend.sexp_of_frontend_error |> Sexp.to_string))
 
 let suite =
-  "Lexer-Parser-AST Executor"
+  "Interpreting Integration Tests"
   >::: List.map ~f:create_test
          [
-           ( "Program 1a",
-             "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x \
-              else y end end end end) true 1 2",
-             Ok (Int 1) );
-           ( "Program 1b",
-             "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x \
-              else y end end end end) false 1 2",
-             Ok (Int 2) );
-           ( "Program Triangles-a",
-             "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 \
-              else x + f (x - 1) end end in f 0 end",
-             Ok (Int 0) );
-           ( "Program Triangles-b",
-             "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 \
-              else x + f (x - 1) end end in f 5 end",
-             Ok (Int 15) );
+           ("Program Triangles-a", program_triangles 0, Ok (Int 0));
+           ("Program Triangles-b", program_triangles 5, Ok (Int 15));
            ( "Program Pairs0",
              "let x = 4 in (x + 1, if false then x else x * 2 end) end",
              Ok (Pair (Int 5, Int 8)) );
@@ -89,16 +84,14 @@ type int_list =
   | Nil of unit
   | Cons of (int * int_list)
 
-let rec (sum_int_list : int_list -> int) =
-  fun (xs : int_list) ->
-    match xs with
-    | (Nil (x : unit)) -> 0
-    | (Cons ((h : int), (ts : int_list))) -> h + sum_int_list ts
-    end
+let rec sum_int_list (xs : int_list) : int =
+  match xs with
+  | Nil (x : unit) -> 0
+  | Cons ((h : int), (ts : int_list)) -> h + sum_int_list ts
   end
-in
-  sum_int_list (Cons (1, Cons (2, Cons (3, Cons (4, Nil ())))))
 end
+
+sum_int_list (Cons (1, Cons (2, Cons (3, Cons (4, Nil ())))))
 |},
              Ok (Int 10) );
            ( "Program very recursive variant data type",

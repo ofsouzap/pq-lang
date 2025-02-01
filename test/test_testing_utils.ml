@@ -9,7 +9,7 @@ open Custom_types
 open Typing
 open Testing_utils
 
-let vtype_gen (type_ctx : TestingTypeCtx.t) =
+let vtype_gen_no_fun (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.gen
     {
       variant_types =
@@ -18,10 +18,11 @@ let vtype_gen (type_ctx : TestingTypeCtx.t) =
              | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
+      allow_fun_types = false;
       mrd = default_max_gen_rec_depth;
     }
 
-let vtype_arb (type_ctx : TestingTypeCtx.t) =
+let vtype_arb_no_fun_type (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.arbitrary
     {
       variant_types =
@@ -30,6 +31,7 @@ let vtype_arb (type_ctx : TestingTypeCtx.t) =
              | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
+      allow_fun_types = false;
       mrd = default_max_gen_rec_depth;
     }
 
@@ -86,24 +88,16 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                      (type_ctx, TestingVarCtx.empty)
                      e
                  with
-                 | Ok e_tpe -> (
-                     let e_type =
-                       e_tpe
-                       |> TestingTypeChecker
-                          .typed_program_expression_get_expression
-                       |> Ast.expr_node_val |> fst
-                     in
+                 | Ok e_typed -> (
+                     let e_type = e_typed |> Ast.expr_node_val |> fst in
                      match
                        TestingTypeChecker.type_expr
                          (type_ctx, TestingVarCtx.empty)
                          e_shrunk
                      with
-                     | Ok e_shrunk_tpe ->
+                     | Ok e_shrunk_typed ->
                          let e_shrunk_type =
-                           e_shrunk_tpe
-                           |> TestingTypeChecker
-                              .typed_program_expression_get_expression
-                           |> Ast.expr_node_val |> fst
+                           e_shrunk_typed |> Ast.expr_node_val |> fst
                          in
                          if equal_vtype e_type e_shrunk_type then true
                          else
@@ -129,12 +123,13 @@ let create_typed_expr_gen_test (name : string)
           types_gen >>= fun (type_ctx, t) ->
           Unit_ast_qcheck_testing.gen
             {
-              t = Some t;
+              t = Some (Unit_ast_qcheck_testing.vtype_to_gen_vtype_unsafe t);
               variant_types =
                 TestingTypeCtx.type_defns_to_list type_ctx
                 |> List.filter_map ~f:(function
                      | VariantType vt -> Some vt
                      | QuotientType _ -> None);
+              top_level_defns = [] (* TODO - have this arbitrary too *);
               v_gen = QCheck.Gen.unit;
               pat_v_gen = QCheck.Gen.unit;
               mrd = default_max_gen_rec_depth;
@@ -162,12 +157,8 @@ let create_typed_expr_gen_test (name : string)
              match
                TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
              with
-             | Ok tpe ->
-                 let et =
-                   tpe
-                   |> TestingTypeChecker.typed_program_expression_get_expression
-                   |> Ast.expr_node_val |> fst
-                 in
+             | Ok e_typed ->
+                 let et = e_typed |> Ast.expr_node_val |> fst in
                  equal_vtype t et
              | Error _ -> false)))
 
@@ -188,7 +179,7 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
               pair (TestingTypeCtx.QCheck_testing.print ()) vtype_to_source_code)
           QCheck.Gen.(
             default_testing_type_ctx_gen >>= fun type_ctx ->
-            vtype_gen type_ctx >|= fun t -> (type_ctx, t)))
+            vtype_gen_no_fun type_ctx >|= fun t -> (type_ctx, t)))
        (fun (type_ctx, t) ->
          match t with
          | VTypeCustom vt_name ->
@@ -227,7 +218,7 @@ let create_list_impl_var_ctx (xs : (string * vtype) list) :
 
 let var_ctx_list_arb ~(type_ctx : TestingTypeCtx.t) =
   let open QCheck in
-  list (pair string (vtype_arb type_ctx))
+  list (pair string (vtype_arb_no_fun_type type_ctx))
 
 (* TODO - test that TestingTypeChecker types things the same as the SimpleTypeChecker *)
 
@@ -243,15 +234,10 @@ let suite =
                 create_typed_expr_gen_test_for_fixed_type "unit" VTypeUnit;
                 create_typed_expr_gen_test_for_fixed_type "int" VTypeInt;
                 create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
-                create_typed_expr_gen_test "'a -> 'b"
-                  Gen.(
-                    default_testing_type_ctx_gen >>= fun type_ctx ->
-                    pair (vtype_gen type_ctx) (vtype_gen type_ctx)
-                    >|= fun (t1, t2) -> (type_ctx, VTypeFun (t1, t2)));
                 create_typed_expr_gen_test "'a * 'b"
                   Gen.(
                     default_testing_type_ctx_gen >>= fun type_ctx ->
-                    pair (vtype_gen type_ctx) (vtype_gen type_ctx)
+                    pair (vtype_gen_no_fun type_ctx) (vtype_gen_no_fun type_ctx)
                     >|= fun (t1, t2) -> (type_ctx, VTypePair (t1, t2)));
               ];
        ]

@@ -1,13 +1,45 @@
 open Core
 open Utils
 open Vtype
+open Varname
 open Variant_types
 open Ast
 open Quotient_types
 open Custom_types
 
+(** A top-level function definition *)
+type ('tag_e, 'tag_p) top_level_defn = {
+  recursive : bool;
+  name : string;
+  param : varname * vtype;
+  return_t : vtype;
+  body : ('tag_e, 'tag_p) expr;
+}
+[@@deriving sexp, equal]
+
+type plain_top_level_defn = (unit, unit) top_level_defn
+
+let top_level_defn_to_source_code ~(use_newlines : bool) :
+    ('tag_e, 'tag_p) top_level_defn -> string =
+  let open SourceCodeBuilder in
+  let convert (defn : ('tag_e, 'tag_p) top_level_defn) : state -> state =
+    write "let "
+    |.> (if defn.recursive then write "rec " else nothing)
+    |.> write defn.name |.> write " ("
+    |.> write (fst defn.param)
+    |.> write " : "
+    |.> write (vtype_to_source_code (snd defn.param))
+    |.> write ") : "
+    |.> write (vtype_to_source_code defn.return_t)
+    |.> write " ="
+    |.> block (write (ast_to_source_code ~use_newlines defn.body))
+    |.> write "end"
+  in
+  SourceCodeBuilder.from_converter ~converter:convert ~use_newlines
+
 type ('tag_e, 'tag_p) program = {
   custom_types : custom_type list;
+  top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
   e : ('tag_e, 'tag_p) expr;
 }
 [@@deriving sexp, equal]
@@ -16,19 +48,24 @@ type plain_program = (unit, unit) program [@@deriving sexp, equal]
 
 let program_to_source_code ?(use_newlines : bool option)
     (prog : ('tag_e, 'tag_p) program) : string =
+  let use_newlines = Option.value ~default:true use_newlines in
   let type_defns_str : string list =
     List.map
       ~f:(function
         | VariantType vt -> variant_type_to_source_code vt
-        | QuotientType qt -> quotient_type_to_source_code ?use_newlines qt)
+        | QuotientType qt -> quotient_type_to_source_code ~use_newlines qt)
       prog.custom_types
   in
-  let e_str : string = ast_to_source_code ?use_newlines prog.e in
-  let str_parts : string list = type_defns_str @ [ e_str ] in
-  String.concat
-    ~sep:
-      (if (equal_option equal_bool) use_newlines (Some true) then "\n" else " ")
-    str_parts
+  let top_level_defns_str : string list =
+    List.map
+      ~f:(top_level_defn_to_source_code ~use_newlines)
+      prog.top_level_defns
+  in
+  let e_str : string = ast_to_source_code ~use_newlines prog.e in
+  let str_parts : string list =
+    type_defns_str @ top_level_defns_str @ [ e_str ]
+  in
+  String.concat ~sep:(if use_newlines then "\n" else " ") str_parts
 
 module QCheck_testing (TagExpr : sig
   type t
@@ -39,6 +76,8 @@ end) : sig
     mrd : int;
     max_variant_types : int;
     max_variant_type_constructors : int;
+    max_top_level_defns : int;
+    allow_fun_types : bool;
     ast_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -49,6 +88,14 @@ end) : sig
     print : Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method;
     shrink : Ast.QCheck_testing(TagExpr)(TagPat).shrink_options;
   }
+
+  val gen_top_level_defn :
+    expr_v_gen:TagExpr.t QCheck.Gen.t ->
+    pat_v_gen:TagPat.t QCheck.Gen.t ->
+    top_level_defns:(varname * (vtype * vtype)) list ->
+    variant_types:variant_type list ->
+    mrd:int ->
+    (TagExpr.t, TagPat.t) top_level_defn QCheck.Gen.t
 
   include
     QCheck_testing_sig
@@ -68,6 +115,8 @@ end = struct
     mrd : int;
     max_variant_types : int;
     max_variant_type_constructors : int;
+    max_top_level_defns : int;
+    allow_fun_types : bool;
     ast_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -89,8 +138,8 @@ end = struct
   }
 
   let gen_type_defns_list ~(max_variant_types : int)
-      ~(max_variant_type_constructors : int) ~(mrd : int) :
-      custom_type list QCheck.Gen.t =
+      ~(max_variant_type_constructors : int) ~(allow_fun_types : bool)
+      ~(mrd : int) : custom_type list QCheck.Gen.t =
     (* TODO - allow this to generate quotient types too *)
     let open QCheck.Gen in
     int_range 0 max_variant_types >>= fun (n : int) ->
@@ -104,6 +153,7 @@ end = struct
               used_variant_type_names = acc.variant_type_names;
               used_variant_type_constructor_names = acc.constructor_names;
               max_constructors = max_variant_type_constructors;
+              allow_fun_types;
               mrd;
             }
           >>= fun ((vt_name, cs) as vt) ->
@@ -123,24 +173,105 @@ end = struct
           constructor_names = StringSet.empty;
         } )
 
+  let gen_top_level_defn ~(expr_v_gen : TagExpr.t QCheck.Gen.t)
+      ~(pat_v_gen : TagPat.t QCheck.Gen.t)
+      ~(top_level_defns : (varname * (vtype * vtype)) list)
+      ~(variant_types : variant_type list) ~(mrd : int) :
+      (TagExpr.t, TagPat.t) top_level_defn QCheck.Gen.t =
+    let open QCheck.Gen in
+    let top_level_names =
+      List.map ~f:(fun (name, _) -> name) top_level_defns |> StringSet.of_list
+    in
+    let variant_type_names =
+      List.map ~f:(fun (vt_name, _) -> vt_name) variant_types
+      |> StringSet.of_list
+    in
+    bool >>= fun recursive ->
+    QCheck_utils.gen_unique_pair ~equal:equal_string
+      (QCheck_utils.filter_gen (Varname.QCheck_testing.gen ()) ~f:(fun name ->
+           Set.mem top_level_names name |> not))
+    >>= fun (name, param_name) ->
+    (* TODO - maybe consider allowing functions to return functions.
+    This is only possible when there is a previously-defined function that aids this *)
+    let vtype_gen =
+      Vtype.QCheck_testing.gen
+        { variant_types = variant_type_names; allow_fun_types = false; mrd }
+    in
+    pair vtype_gen vtype_gen >>= fun (param_t, return_t) ->
+    Ast_qcheck_testing.gen
+      {
+        t = Some (Ast_qcheck_testing.vtype_to_gen_vtype_unsafe return_t);
+        variant_types;
+        top_level_defns;
+        v_gen = expr_v_gen;
+        pat_v_gen;
+        mrd;
+      }
+    >|= fun body ->
+    { recursive; name; param = (param_name, param_t); return_t; body }
+
+  type gen_top_level_defns_acc = {
+    top_level_defns : (TagExpr.t, TagPat.t) top_level_defn list;
+    used_names : StringSet.t;
+  }
+
+  let gen_top_level_defns_list ~(expr_v_gen : TagExpr.t QCheck.Gen.t)
+      ~(pat_v_gen : TagPat.t QCheck.Gen.t) ~(variant_types : variant_type list)
+      ~(max_top_level_defns : int) ~(mrd : int) :
+      (TagExpr.t, TagPat.t) top_level_defn list QCheck.Gen.t =
+    let open QCheck.Gen in
+    int_range 0 max_top_level_defns >>= fun (n : int) ->
+    fix
+      (fun self ((n : int), (acc : gen_top_level_defns_acc)) ->
+        if n <= 0 then return acc.top_level_defns
+        else
+          gen_top_level_defn ~expr_v_gen ~pat_v_gen
+            ~top_level_defns:
+              (List.map
+                 ~f:(fun defn -> (defn.name, (snd defn.param, defn.return_t)))
+                 acc.top_level_defns)
+            ~variant_types ~mrd
+          >>= fun defn ->
+          self
+            ( n - 1,
+              {
+                top_level_defns = defn :: acc.top_level_defns;
+                used_names = Set.add acc.used_names defn.name;
+              } ))
+      (n, { top_level_defns = []; used_names = StringSet.empty })
+
   let gen (opts : gen_options) : t QCheck.Gen.t =
     let open QCheck.Gen in
     gen_type_defns_list ~max_variant_types:opts.max_variant_types
       ~max_variant_type_constructors:opts.max_variant_type_constructors
-      ~mrd:opts.mrd
+      ~allow_fun_types:opts.allow_fun_types ~mrd:opts.mrd
     >>= fun custom_types ->
+    gen_top_level_defns_list ~expr_v_gen:opts.expr_v_gen
+      ~pat_v_gen:opts.pat_v_gen
+      ~variant_types:
+        (List.filter_map
+           ~f:(function VariantType vt -> Some vt | QuotientType _ -> None)
+           custom_types)
+      ~max_top_level_defns:opts.max_top_level_defns ~mrd:opts.mrd
+    >>= fun top_level_defns ->
     Ast_qcheck_testing.gen
       {
-        t = opts.ast_type;
+        t =
+          Option.(
+            opts.ast_type >>| Ast_qcheck_testing.vtype_to_gen_vtype_unsafe);
         variant_types =
           List.filter_map
             ~f:(function VariantType vt -> Some vt | QuotientType _ -> None)
             custom_types;
+        top_level_defns =
+          List.map
+            ~f:(fun defn -> (defn.name, (snd defn.param, defn.return_t)))
+            top_level_defns;
         v_gen = opts.expr_v_gen;
         pat_v_gen = opts.pat_v_gen;
         mrd = opts.mrd;
       }
-    >|= fun e -> { custom_types; e }
+    >|= fun e -> { custom_types; top_level_defns; e }
 
   let print (print_method : print_options) : t QCheck.Print.t =
    fun prog ->

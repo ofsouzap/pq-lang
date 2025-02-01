@@ -2,7 +2,6 @@ open Core
 open OUnit2
 open Pq_lang
 open Ast
-open Vtype
 open Testing_utils
 
 let test_cases_equality : test list =
@@ -61,68 +60,8 @@ let test_cases_equality : test list =
       (Var ((), "x"), Var ((), "x"));
       ( Let ((), "x", IntLit ((), 1), IntLit ((), 2)),
         Let ((), "x", IntLit ((), 1), IntLit ((), 2)) );
-      ( Fun ((), ("x", VTypeInt), IntLit ((), 1)),
-        Fun ((), ("x", VTypeInt), IntLit ((), 1)) );
       ( App ((), IntLit ((), 1), IntLit ((), 2)),
         App ((), IntLit ((), 1), IntLit ((), 2)) );
-      ( Fix
-          ( (),
-            ("f", VTypeInt, VTypeInt),
-            ("x", VTypeInt),
-            App ((), Var ((), "f"), Var ((), "x")) ),
-        Fix
-          ( (),
-            ("f", VTypeInt, VTypeInt),
-            ("x", VTypeInt),
-            App ((), Var ((), "f"), Var ((), "x")) ) );
-      ( App
-          ( (),
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeInt),
-                ("x", VTypeInt),
-                App ((), Var ((), "f"), Var ((), "x")) ),
-            Fun ((), ("x", VTypeInt), Fun ((), ("x", VTypeInt), IntLit ((), 1)))
-          ),
-        App
-          ( (),
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeInt),
-                ("x", VTypeInt),
-                App ((), Var ((), "f"), Var ((), "x")) ),
-            Fun ((), ("x", VTypeInt), Fun ((), ("x", VTypeInt), IntLit ((), 1)))
-          ) );
-      ( Let
-          ( (),
-            "f",
-            App
-              ( (),
-                Fix
-                  ( (),
-                    ("f", VTypeInt, VTypeInt),
-                    ("x", VTypeInt),
-                    App ((), Var ((), "f"), Var ((), "x")) ),
-                Fun
-                  ( (),
-                    ("f", VTypeFun (VTypeInt, VTypeInt)),
-                    App ((), Var ((), "f"), IntLit ((), 0)) ) ),
-            App ((), Var ((), "f"), IntLit ((), 0)) ),
-        Let
-          ( (),
-            "f",
-            App
-              ( (),
-                Fix
-                  ( (),
-                    ("f", VTypeInt, VTypeInt),
-                    ("x", VTypeInt),
-                    App ((), Var ((), "f"), Var ((), "x")) ),
-                Fun
-                  ( (),
-                    ("f", VTypeFun (VTypeInt, VTypeInt)),
-                    App ((), Var ((), "f"), IntLit ((), 0)) ) ),
-            App ((), Var ((), "f"), IntLit ((), 0)) ) );
     ]
   @ List.map ~f:create_negative_test
       [
@@ -190,6 +129,8 @@ functor
                     max_variant_types = default_max_variant_type_count;
                     max_variant_type_constructors =
                       default_max_variant_type_constructor_count;
+                    max_top_level_defns = default_max_top_level_defns_count;
+                    allow_fun_types = false;
                     ast_type = None;
                     expr_v_gen = QCheck.get_gen Tag.arb;
                     pat_v_gen = QCheck.Gen.unit;
@@ -235,6 +176,8 @@ functor
                     max_variant_types = default_max_variant_type_count;
                     max_variant_type_constructors =
                       default_max_variant_type_constructor_count;
+                    max_top_level_defns = default_max_top_level_defns_count;
+                    allow_fun_types = false;
                     ast_type = None;
                     expr_v_gen = QCheck.get_gen Tag1.arb;
                     pat_v_gen = QCheck.Gen.unit;

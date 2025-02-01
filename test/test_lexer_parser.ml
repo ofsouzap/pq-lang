@@ -282,300 +282,6 @@ let test_cases_variables : test_case_no_variant_types list =
           END;
         ],
         Error ParsingError );
-      ( "let f = fun (x : int) -> true end in f 1 end",
-        [
-          LET;
-          LNAME "f";
-          ASSIGN;
-          FUN;
-          LPAREN;
-          LNAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          TRUE;
-          END;
-          IN;
-          LNAME "f";
-          INTLIT 1;
-          END;
-        ],
-        Ok
-          (Let
-             ( (),
-               "f",
-               Fun ((), ("x", VTypeInt), BoolLit ((), true)),
-               App ((), Var ((), "f"), IntLit ((), 1)) )) );
-    ]
-
-let test_cases_functions : test_case_no_variant_types list =
-  List.map
-    ~f:(fun (x, y, z) -> (x, x, y, z))
-    [
-      ( "fun (x : int) -> x end",
-        [ FUN; LPAREN; LNAME "x"; COLON; INT; RPAREN; ARROW; LNAME "x"; END ],
-        Ok (Fun ((), ("x", VTypeInt), Var ((), "x"))) );
-      ( "fun (x : int) -> x + 1 end",
-        [
-          FUN;
-          LPAREN;
-          LNAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          LNAME "x";
-          PLUS;
-          INTLIT 1;
-          END;
-        ],
-        Ok (Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))))
-      );
-      ( "fun (x : int) -> fun (y : int) -> x + y end end",
-        [
-          FUN;
-          LPAREN;
-          LNAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          FUN;
-          LPAREN;
-          LNAME "y";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          LNAME "x";
-          PLUS;
-          LNAME "y";
-          END;
-          END;
-        ],
-        Ok
-          (Fun
-             ( (),
-               ("x", VTypeInt),
-               Fun ((), ("y", VTypeInt), Add ((), Var ((), "x"), Var ((), "y")))
-             )) );
-      ( "(fun (x : int) -> x + 1 end) 4",
-        [
-          LPAREN;
-          FUN;
-          LPAREN;
-          LNAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          LNAME "x";
-          PLUS;
-          INTLIT 1;
-          END;
-          RPAREN;
-          INTLIT 4;
-        ],
-        Ok
-          (App
-             ( (),
-               Fun ((), ("x", VTypeInt), Add ((), Var ((), "x"), IntLit ((), 1))),
-               IntLit ((), 4) )) );
-      ( "x 5",
-        [ LNAME "x"; INTLIT 5 ],
-        Ok (App ((), Var ((), "x"), IntLit ((), 5))) );
-      ( "x y",
-        [ LNAME "x"; LNAME "y" ],
-        Ok (App ((), Var ((), "x"), Var ((), "y"))) );
-      ( "(fun (b : bool) -> fun (x : int) -> fun (y : int) -> if b then x else \
-         y end end end end ) true 1 2",
-        [
-          LPAREN;
-          FUN;
-          LPAREN;
-          LNAME "b";
-          COLON;
-          BOOL;
-          RPAREN;
-          ARROW;
-          FUN;
-          LPAREN;
-          LNAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          FUN;
-          LPAREN;
-          LNAME "y";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          IF;
-          LNAME "b";
-          THEN;
-          LNAME "x";
-          ELSE;
-          LNAME "y";
-          END;
-          END;
-          END;
-          END;
-          RPAREN;
-          TRUE;
-          INTLIT 1;
-          INTLIT 2;
-        ],
-        Ok
-          (App
-             ( (),
-               App
-                 ( (),
-                   App
-                     ( (),
-                       Fun
-                         ( (),
-                           ("b", VTypeBool),
-                           Fun
-                             ( (),
-                               ("x", VTypeInt),
-                               Fun
-                                 ( (),
-                                   ("y", VTypeInt),
-                                   If
-                                     ( (),
-                                       Var ((), "b"),
-                                       Var ((), "x"),
-                                       Var ((), "y") ) ) ) ),
-                       BoolLit ((), true) ),
-                   IntLit ((), 1) ),
-               IntLit ((), 2) )) );
-      ( "f1 f2 f3",
-        [ LNAME "f1"; LNAME "f2"; LNAME "f3" ],
-        Ok (App ((), App ((), Var ((), "f1"), Var ((), "f2")), Var ((), "f3")))
-      );
-    ]
-
-let test_cases_recursion : test_case_no_variant_types list =
-  List.map
-    ~f:(fun (x, y, z) -> (x, x, y, z))
-    [
-      ( "let rec (f : int -> int) = fun (x : int) -> if x == 0 then 0 else x + \
-         f (x - 1) end end in f 5 end",
-        [
-          LET;
-          REC;
-          LPAREN;
-          LNAME "f";
-          COLON;
-          INT;
-          ARROW;
-          INT;
-          RPAREN;
-          ASSIGN;
-          FUN;
-          LPAREN;
-          LNAME "x";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          IF;
-          LNAME "x";
-          EQUATE;
-          INTLIT 0;
-          THEN;
-          INTLIT 0;
-          ELSE;
-          LNAME "x";
-          PLUS;
-          LNAME "f";
-          LPAREN;
-          LNAME "x";
-          MINUS;
-          INTLIT 1;
-          RPAREN;
-          END;
-          END;
-          IN;
-          LNAME "f";
-          INTLIT 5;
-          END;
-        ],
-        Ok
-          (Let
-             ( (),
-               "f",
-               Fix
-                 ( (),
-                   ("f", VTypeInt, VTypeInt),
-                   ("x", VTypeInt),
-                   If
-                     ( (),
-                       Eq ((), Var ((), "x"), IntLit ((), 0)),
-                       IntLit ((), 0),
-                       Add
-                         ( (),
-                           Var ((), "x"),
-                           App
-                             ( (),
-                               Var ((), "f"),
-                               Subtr ((), Var ((), "x"), IntLit ((), 1)) ) ) )
-                 ),
-               App ((), Var ((), "f"), IntLit ((), 5)) )) );
-      ( "let rec (f : int -> int) = 2 in f end",
-        [
-          LET;
-          REC;
-          LPAREN;
-          LNAME "f";
-          COLON;
-          INT;
-          ARROW;
-          INT;
-          RPAREN;
-          ASSIGN;
-          INTLIT 2;
-          IN;
-          LNAME "f";
-          END;
-        ],
-        Error ParsingError );
-      ( "let rec (f : int -> int) = fun (y : int) -> y end in f 5 end",
-        [
-          LET;
-          REC;
-          LPAREN;
-          LNAME "f";
-          COLON;
-          INT;
-          ARROW;
-          INT;
-          RPAREN;
-          ASSIGN;
-          FUN;
-          LPAREN;
-          LNAME "y";
-          COLON;
-          INT;
-          RPAREN;
-          ARROW;
-          LNAME "y";
-          END;
-          IN;
-          LNAME "f";
-          INTLIT 5;
-          END;
-        ],
-        Ok
-          (Let
-             ( (),
-               "f",
-               Fix
-                 ((), ("f", VTypeInt, VTypeInt), ("y", VTypeInt), Var ((), "y")),
-               App ((), Var ((), "f"), IntLit ((), 5)) )) );
     ]
 
 let test_cases_match : test_case_no_variant_types list =
@@ -847,7 +553,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
 1
 |},
         [ INTLIT 1 ],
-        Ok { custom_types = []; e = IntLit ((), 1) } );
+        Ok { custom_types = []; top_level_defns = []; e = IntLit ((), 1) } );
       ( (* Simple type definition *)
         {|
         type int_or_bool = Int of int | Bool of bool
@@ -874,6 +580,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
                 VariantType
                   ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
               ];
+            top_level_defns = [];
             e = IntLit ((), 1);
           } );
       ( (* Simple type definition (with leading pipe) *)
@@ -903,6 +610,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
                 VariantType
                   ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
               ];
+            top_level_defns = [];
             e = IntLit ((), 1);
           } );
       ( (* Incorrectly using upper-name for type name *)
@@ -977,6 +685,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
                     ] );
               ];
+            top_level_defns = [];
             e = IntLit ((), 1);
           } );
     ]
@@ -1044,6 +753,7 @@ qtype int_boxed
                     ];
                 };
             ];
+          top_level_defns = [];
           e = IntLit ((), 1);
         } );
     ( "Multiple variable bindings",
@@ -1148,6 +858,7 @@ qtype mobile
                     ];
                 };
             ];
+          top_level_defns = [];
           e = IntLit ((), 1);
         } );
     ( "Incorrectly using upper-name for type name",
@@ -1187,38 +898,6 @@ qtype Int_boxed
       Error ParsingError );
   ]
 
-let test_cases_variant_type_referencing : test_case_no_variant_types list =
-  List.map
-    ~f:(fun (x, y, z) -> (x, x, y, z))
-    [
-      ( "fun (x : int_or_bool) -> x end",
-        [
-          FUN;
-          LPAREN;
-          LNAME "x";
-          COLON;
-          LNAME "int_or_bool";
-          RPAREN;
-          ARROW;
-          LNAME "x";
-          END;
-        ],
-        Ok (Fun ((), ("x", VTypeCustom "int_or_bool"), Var ((), "x"))) );
-      ( "fun (x : Int_or_bool) -> x end",
-        [
-          FUN;
-          LPAREN;
-          LNAME "x";
-          COLON;
-          UNAME "Int_or_bool";
-          RPAREN;
-          ARROW;
-          LNAME "x";
-          END;
-        ],
-        Error ParsingError );
-    ]
-
 let test_cases_variant_type_construction : test_case_no_variant_types list =
   List.map
     ~f:(fun (x, y, z) -> (x, x, y, z))
@@ -1254,6 +933,8 @@ let test_cases_precedence : test_case_precedence list =
       ( "f x + y",
         Add ((), App ((), Var ((), "f"), Var ((), "x")), Var ((), "y")) );
     ]
+
+(* TODO - test cases with top-level definitions *)
 
 let create_lexer_test ((name, inp, exp, _) : test_case_full_prog) =
   name >:: fun _ ->
@@ -1292,7 +973,11 @@ let tests_no_variant_types (test_create_func : test_case_full_prog -> test) :
     test list =
   let f =
     Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
-        (name, inp, tokens, Result.(ast >>| fun e -> { custom_types = []; e })))
+        ( name,
+          inp,
+          tokens,
+          Result.(
+            ast >>| fun e -> { custom_types = []; top_level_defns = []; e }) ))
   in
   [
     "Unit Value" >::: List.map ~f test_cases_unit_value;
@@ -1302,11 +987,7 @@ let tests_no_variant_types (test_create_func : test_case_full_prog -> test) :
     "Integer Comparisons" >::: List.map ~f test_cases_integer_comparisons;
     "If-Then-Else" >::: List.map ~f test_cases_if_then_else;
     "Variables" >::: List.map ~f test_cases_variables;
-    "Functions" >::: List.map ~f test_cases_functions;
-    "Recursion" >::: List.map ~f test_cases_recursion;
     "Match" >::: List.map ~f test_cases_match;
-    "Variant type referencing"
-    >::: List.map ~f test_cases_variant_type_referencing;
     "Variant type construction"
     >::: List.map ~f test_cases_variant_type_construction;
   ]

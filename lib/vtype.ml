@@ -23,7 +23,11 @@ let rec vtype_to_source_code = function
   | VTypeCustom tname -> tname
 
 module QCheck_testing : sig
-  type gen_options = { variant_types : StringSet.t; mrd : int }
+  type gen_options = {
+    variant_types : StringSet.t;
+    allow_fun_types : bool;
+    mrd : int;
+  }
 
   include
     Utils.QCheck_testing_sig
@@ -34,7 +38,13 @@ module QCheck_testing : sig
        and type arb_options := gen_options
 end = struct
   type t = vtype
-  type gen_options = { variant_types : StringSet.t; mrd : int }
+
+  type gen_options = {
+    variant_types : StringSet.t;
+    allow_fun_types : bool;
+    mrd : int;
+  }
+
   type print_options = unit
   type shrink_options = unit
   type arb_options = gen_options
@@ -54,10 +64,12 @@ end = struct
                else None)
         in
         let rec_cases =
-          [
-            (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2));
-            (pair self' self' >|= fun (t1, t2) -> VTypePair (t1, t2));
-          ]
+          (if
+             (* Have a case for the function case if it is allowed *)
+             opts.allow_fun_types
+           then [ (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2)) ]
+           else [])
+          @ [ (pair self' self' >|= fun (t1, t2) -> VTypePair (t1, t2)) ]
         in
         if opts.mrd > 0 then oneof (base_cases @ rec_cases)
         else oneof base_cases)

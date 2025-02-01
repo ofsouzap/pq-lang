@@ -9,7 +9,7 @@
   test_ast
   test_program
   test_typing
-  test_frontend
+  test_lexer_parser
   test_ast_executor
   test_ast_executor_store
   test_interpreting_integration))

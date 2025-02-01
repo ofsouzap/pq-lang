@@ -18,6 +18,7 @@ module QCheck_testing_constructors : sig
   type gen_options = {
     used_variant_type_names : StringSet.t;
     used_variant_type_constructor_names : StringSet.t;
+    allow_fun_types : bool;
     mrd : int;
   }
 
@@ -34,6 +35,7 @@ end = struct
   type gen_options = {
     used_variant_type_names : StringSet.t;
     used_variant_type_constructor_names : StringSet.t;
+    allow_fun_types : bool;
     mrd : int;
   }
 
@@ -55,7 +57,11 @@ end = struct
     filter_gen ~max_attempts:10000
       (pair variant_type_constructor_name_gen
          (Vtype.QCheck_testing.gen
-            { variant_types = opts.used_variant_type_names; mrd = opts.mrd }))
+            {
+              variant_types = opts.used_variant_type_names;
+              allow_fun_types = opts.allow_fun_types;
+              mrd = opts.mrd;
+            }))
       ~f:(fun (c_name, _) ->
         not (Set.mem opts.used_variant_type_constructor_names c_name))
 
@@ -79,6 +85,7 @@ module QCheck_testing : sig
   type gen_options = {
     used_variant_type_names : StringSet.t;
     used_variant_type_constructor_names : StringSet.t;
+    allow_fun_types : bool;
     max_constructors : int;
     mrd : int;
   }
@@ -96,6 +103,7 @@ end = struct
   type gen_options = {
     used_variant_type_names : StringSet.t;
     used_variant_type_constructor_names : StringSet.t;
+    allow_fun_types : bool;
     max_constructors : int;
     mrd : int;
   }
@@ -126,6 +134,7 @@ end = struct
                 used_variant_type_names = opts.used_variant_type_names;
                 used_variant_type_constructor_names =
                   used_constructors_with_acc ~acc;
+                allow_fun_types = opts.allow_fun_types;
                 mrd = opts.mrd;
               }
             >>= fun c -> self (n - 1, c :: acc))

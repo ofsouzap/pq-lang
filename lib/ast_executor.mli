@@ -17,6 +17,10 @@ type closure_props = {
   out_type : vtype;  (** The output type of the function *)
   body : (ast_tag, pattern_tag) Ast.typed_expr;  (** The body of the function *)
   store : store;  (** The store to use when executing the function *)
+  recursive : [ `Recursive of varname | `NonRecursive ];
+      (** Whether the function is recursive or not. If so, the name of the
+          function itself, that is made re-accessible when executing the
+          function *)
 }
 [@@deriving sexp, equal]
 
@@ -67,6 +71,8 @@ type typing_error = {
 val empty_typing_error : typing_error
 
 type exec_err =
+  | TypeContextCreationError of Typing.typing_error
+      (** Error when forming a type context from a program *)
   | TypingError of typing_error
       (** Execution was halted due to a typing error *)
   | UndefinedVarError of varname
@@ -101,9 +107,7 @@ module Executor : functor
   (** Execute a typed program using the type checker constructed from TypeCtx
       and VarCtx *)
   val execute_program :
-    ( 'tag_e,
-      'tag_p )
-    Typing.TypeChecker(TypeCtx)(VarCtx).typed_program_expression ->
+    ('tag_e, 'tag_p) Typing.TypeChecker(TypeCtx)(VarCtx).typed_program ->
     exec_res
 end
 

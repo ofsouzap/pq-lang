@@ -5,12 +5,14 @@ open Utils
 open Vtype
 open Variant_types
 open Pattern
+open Custom_types
+open Program
 open Typing
 open Ast_executor
 open Testing_utils
 
 type basic_test_case =
-  string * (unit, unit) SimpleTypeChecker.typed_program_expression * exec_res
+  string * (unit, unit) SimpleTypeChecker.typed_program * exec_res
 
 let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     =
@@ -18,11 +20,16 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
     ~init:Ast_executor.empty_store
 
-let type_expr ?(type_ctx : SetTypingTypeContext.t option) (e : Ast.plain_expr) =
+let type_expr ?(custom_types : custom_type list option)
+    ?(top_level_defns : (unit, unit) top_level_defn list option)
+    (e : Ast.plain_expr) : (unit, unit) SimpleTypeChecker.typed_program =
   match
-    type_expr
-      ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
-      e
+    type_program
+      {
+        custom_types = Option.value ~default:[] custom_types;
+        top_level_defns = Option.value ~default:[] top_level_defns;
+        e;
+      }
   with
   | Ok x -> x
   | Error err ->
@@ -192,127 +199,15 @@ let test_cases_variables : basic_test_case list =
       ( Let
           ((), "x", BoolLit ((), false), BOr ((), Var ((), "x"), Var ((), "x"))),
         Ok (Bool false) );
-      ( Let
-          ( (),
-            "f",
-            Fun ((), ("x", VTypeInt), Var ((), "x")),
-            App ((), Var ((), "f"), IntLit ((), 8)) ),
-        Ok (Int 8) );
-    ]
-
-let test_cases_functions : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) =
-    (ast_to_source_code x, type_expr x, y)
-  in
-  List.map ~f:mapf
-    [
-      ( Fun ((), ("x", VTypeInt), Var ((), "x")),
-        Ok
-          (Closure
-             {
-               param = ("x", VTypeInt);
-               out_type = VTypeInt;
-               body = Var ((VTypeInt, ()), "x");
-               store = empty_store;
-             }) );
-      ( Fun ((), ("x", VTypeBool), BOr ((), Var ((), "x"), BoolLit ((), true))),
-        Ok
-          (Closure
-             {
-               param = ("x", VTypeBool);
-               out_type = VTypeBool;
-               body =
-                 BOr
-                   ( (VTypeBool, ()),
-                     Var ((VTypeBool, ()), "x"),
-                     BoolLit ((VTypeBool, ()), true) );
-               store = empty_store;
-             }) );
-      ( App
-          ( (),
-            App
-              ( (),
-                Fun
-                  ( (),
-                    ("a", VTypeInt),
-                    Fun
-                      ( (),
-                        ("b", VTypeInt),
-                        Add ((), Var ((), "a"), Var ((), "b")) ) ),
-                IntLit ((), 3) ),
-            IntLit ((), 5) ),
-        Ok (Int 8) );
-      ( App
-          ( (),
-            App
-              ( (),
-                App
-                  ( (),
-                    Fun
-                      ( (),
-                        ("b", VTypeBool),
-                        Fun
-                          ( (),
-                            ("x", VTypeInt),
-                            Fun
-                              ( (),
-                                ("y", VTypeInt),
-                                If
-                                  ( (),
-                                    Var ((), "b"),
-                                    Var ((), "x"),
-                                    Var ((), "y") ) ) ) ),
-                    BoolLit ((), true) ),
-                IntLit ((), 1) ),
-            IntLit ((), 2) ),
-        Ok (Int 1) );
-    ]
-
-let test_cases_recursion : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) =
-    (ast_to_source_code x, type_expr x, y)
-  in
-  List.map ~f:mapf
-    [
-      ( Let
-          ( (),
-            "f",
-            Fix
-              ( (),
-                ("f", VTypeInt, VTypeInt),
-                ("x", VTypeInt),
-                If
-                  ( (),
-                    Eq ((), Var ((), "x"), IntLit ((), 0)),
-                    IntLit ((), 0),
-                    Add
-                      ( (),
-                        Var ((), "x"),
-                        App
-                          ( (),
-                            Var ((), "f"),
-                            Subtr ((), Var ((), "x"), IntLit ((), 1)) ) ) ) ),
-            App ((), Var ((), "f"), IntLit ((), 5)) ),
-        Ok (Int 15) );
     ]
 
 let test_cases_match : basic_test_case list =
   let open Ast in
   let mapf
-      ( (type_ctx :
-          (SetTypingTypeContext.t, Typing.typing_error) Result.t option),
+      ( (custom_types : custom_type list option),
         (x : plain_expr),
-        (y : exec_res) ) =
-    let type_ctx =
-      match Option.value ~default:(Ok SetTypingTypeContext.empty) type_ctx with
-      | Error err ->
-          failwith
-            (sprintf "Error creating type context: %s" (print_typing_error err))
-      | Ok type_ctx -> type_ctx
-    in
-    (ast_to_source_code x, type_expr ~type_ctx x, y)
+        (y : exec_res) ) : basic_test_case =
+    (ast_to_source_code x, type_expr ?custom_types x, y)
   in
   List.map ~f:mapf
     [
@@ -383,17 +278,15 @@ let test_cases_match : basic_test_case list =
                   ] ) ),
         Ok (Pair (Bool true, Bool true)) );
       ( Some
-          (SetTypingTypeContext.create
-             ~custom_types:
-               [
-                 VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-                 VariantType
-                   ( "int_list",
-                     [
-                       ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                     ] );
-               ]),
+          [
+            VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+            VariantType
+              ( "int_list",
+                [
+                  ("Nil", VTypeUnit);
+                  ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                ] );
+          ],
         Match
           ( (),
             Constructor ((), "BoolBox", BoolLit ((), true)),
@@ -404,17 +297,15 @@ let test_cases_match : basic_test_case list =
               ] ),
         Ok (Bool true) );
       ( Some
-          (SetTypingTypeContext.create
-             ~custom_types:
-               [
-                 VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-                 VariantType
-                   ( "int_list",
-                     [
-                       ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                     ] );
-               ]),
+          [
+            VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+            VariantType
+              ( "int_list",
+                [
+                  ("Nil", VTypeUnit);
+                  ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                ] );
+          ],
         Match
           ( (),
             Constructor
@@ -440,18 +331,13 @@ let test_cases_match : basic_test_case list =
 
 let test_cases_constructor : basic_test_case list =
   let open Ast in
-  let mapf ((x : variant_type list), (y : plain_expr), (z : exec_res)) =
-    let type_ctx =
-      match
-        SetTypingTypeContext.create
-          ~custom_types:(List.map ~f:(fun vt -> Custom_types.VariantType vt) x)
-      with
-      | Error err ->
-          failwith
-            (sprintf "Error creating type context: %s" (print_typing_error err))
-      | Ok type_ctx -> type_ctx
-    in
-    (ast_to_source_code y, type_expr ~type_ctx y, z)
+  let mapf
+      ((variant_types : variant_type list), (y : plain_expr), (z : exec_res)) =
+    ( ast_to_source_code y,
+      type_expr
+        ~custom_types:(List.map ~f:(fun vt -> VariantType vt) variant_types)
+        y,
+      z )
   in
   let vt_list : variant_type =
     ( "list",
@@ -487,9 +373,11 @@ let test_cases_constructor : basic_test_case list =
         Ok (VariantTypeValue (vt_int_box, "IntBox", Int 7)) );
     ]
 
+(* TODO - tests with top-level definitions (recursive and non-recursive) *)
+
 let create_test
     ( (name : string),
-      (inp : (unit, unit) SimpleTypeChecker.typed_program_expression),
+      (inp : (unit, unit) SimpleTypeChecker.typed_program),
       (exp : exec_res) ) =
   name >:: fun _ ->
   let out = Ast_executor.SimpleExecutor.execute_program inp in
@@ -507,8 +395,6 @@ let suite =
          >::: List.map ~f:create_test test_cases_integer_comparisons;
          "Control Flow" >::: List.map ~f:create_test test_cases_control_flow;
          "Variables" >::: List.map ~f:create_test test_cases_variables;
-         "Functions" >::: List.map ~f:create_test test_cases_functions;
-         "Recursion" >::: List.map ~f:create_test test_cases_recursion;
          "Match" >::: List.map ~f:create_test test_cases_match;
          "Constructor" >::: List.map ~f:create_test test_cases_constructor;
        ]
