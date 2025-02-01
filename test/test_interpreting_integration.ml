@@ -9,9 +9,11 @@ let program_triangles (x : int) =
     {|
 let rec f (x : int) : int =
   if x == 0
-  then 0
+  then
+    0
   else
     x + f (x - 1)
+  end
 end
 
 f %d
@@ -29,6 +31,7 @@ let rec f (p : int * (int * int)) : int =
       pred
     else
       f (x, (acc + 1, acc))
+    end
   end
 end
 
@@ -61,7 +64,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
            (err |> Frontend.sexp_of_frontend_error |> Sexp.to_string))
 
 let suite =
-  "Lexer-Parser-AST Executor"
+  "Interpreting Integration Tests"
   >::: List.map ~f:create_test
          [
            ("Program Triangles-a", program_triangles 0, Ok (Int 0));
@@ -83,8 +86,8 @@ type int_list =
 
 let rec sum_int_list (xs : int_list) : int =
   match xs with
-  | Nil (x : unit) -> 0
-  | Cons ((h : int), (ts : int_list)) -> h + sum_int_list ts
+  | (Nil (x : unit)) -> 0
+  | (Cons ((h : int), (ts : int_list))) -> h + sum_int_list ts
   end
 end
 
