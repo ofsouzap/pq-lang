@@ -13,6 +13,8 @@ type closure_props = {
   param : varname * vtype;
   out_type : vtype;
   body : (ast_tag, pattern_tag) Ast.typed_expr;
+  store : store;
+  recursive : [ `Recursive of varname | `NonRecursive ];
 }
 [@@deriving sexp, equal]
 
@@ -250,11 +252,17 @@ struct
         (* This uses call-by-value semantics *)
         eval_apply_to_closure ~type_ctx store e1 (fun closure ->
             eval ~type_ctx store e2 >>= fun v2 ->
-            eval ~type_ctx
-              ((* Since all functions are top-level, they don't have a store.
-              Therefore, we only need to pass them their single parameter in their store *)
-               store_set empty_store ~key:(closure.param |> fst) ~value:v2)
-              closure.body)
+            let new_store =
+              store_set closure.store ~key:(closure.param |> fst) ~value:v2
+            in
+            let new_store =
+              (* If the function is recursive, make it re-accessible in the execution of the function *)
+              match closure.recursive with
+              | `Recursive fname ->
+                  store_set new_store ~key:fname ~value:(Closure closure)
+              | `NonRecursive -> new_store
+            in
+            eval ~type_ctx new_store closure.body)
     | Match (_, e1, cs) -> (
         eval ~type_ctx store e1 >>= fun v1 ->
         let matched_c_e :
@@ -304,6 +312,10 @@ struct
                    param = defn.param;
                    out_type = defn.return_t;
                    body = plain_typed_body;
+                   store = acc;
+                   recursive =
+                     (if defn.recursive then `Recursive defn.name
+                      else `NonRecursive);
                  }))
         prog.top_level_defns
     in

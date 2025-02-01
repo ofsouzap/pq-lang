@@ -16,6 +16,11 @@ type closure_props = {
   param : varname * vtype;  (** The function's parameter's name and type *)
   out_type : vtype;  (** The output type of the function *)
   body : (ast_tag, pattern_tag) Ast.typed_expr;  (** The body of the function *)
+  store : store;  (** The store to use when executing the function *)
+  recursive : [ `Recursive of varname | `NonRecursive ];
+      (** Whether the function is recursive or not. If so, the name of the
+          function itself, that is made re-accessible when executing the
+          function *)
 }
 [@@deriving sexp, equal]
 
