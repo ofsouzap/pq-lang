@@ -1,16 +1,18 @@
 open Utils
 open Vtype
 
-(** A single constructor for a variant data type, with a name and mandatory attached data type *)
+(** A single constructor for a variant data type, with a name and mandatory
+    attached data type *)
 type variant_type_constructor = string * vtype [@@deriving sexp, equal]
 
-(** Convert a variant type constuctor definition into source code.  *)
+(** Convert a variant type constuctor definition into source code. *)
 val variant_type_constructor_to_source_code : variant_type_constructor -> string
 
 module QCheck_testing_constructors : sig
   type gen_options = {
     used_variant_type_names : StringSet.t;
     used_variant_type_constructor_names : StringSet.t;
+    allow_fun_types : bool;
     mrd : int;
   }
 
@@ -34,6 +36,7 @@ module QCheck_testing : sig
   type gen_options = {
     used_variant_type_names : StringSet.t;
     used_variant_type_constructor_names : StringSet.t;
+    allow_fun_types : bool;
     max_constructors : int;
     mrd : int;
   }

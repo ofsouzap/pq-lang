@@ -32,6 +32,7 @@ let vtype_gen type_ctx =
              | QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
+      allow_fun_types = false;
     }
 
 let test_cases_expr_typing : test list =

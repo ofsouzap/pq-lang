@@ -10,7 +10,7 @@ open Typing
 open Testing_utils
 
 let vtype_gen_no_fun (type_ctx : TestingTypeCtx.t) =
-  Vtype.QCheck_testing.gen_no_fun_types
+  Vtype.QCheck_testing.gen
     {
       variant_types =
         TestingTypeCtx.type_defns_to_list type_ctx
@@ -18,6 +18,7 @@ let vtype_gen_no_fun (type_ctx : TestingTypeCtx.t) =
              | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
+      allow_fun_types = false;
       mrd = default_max_gen_rec_depth;
     }
 
@@ -30,6 +31,7 @@ let vtype_arb_no_fun_type (type_ctx : TestingTypeCtx.t) =
              | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
         |> StringSet.of_list;
+      allow_fun_types = false;
       mrd = default_max_gen_rec_depth;
     }
 

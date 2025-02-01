@@ -130,6 +130,7 @@ functor
                     max_variant_type_constructors =
                       default_max_variant_type_constructor_count;
                     max_top_level_defns = default_max_top_level_defns_count;
+                    allow_fun_types = false;
                     ast_type = None;
                     expr_v_gen = QCheck.get_gen Tag.arb;
                     pat_v_gen = QCheck.Gen.unit;
@@ -176,6 +177,7 @@ functor
                     max_variant_type_constructors =
                       default_max_variant_type_constructor_count;
                     max_top_level_defns = default_max_top_level_defns_count;
+                    allow_fun_types = false;
                     ast_type = None;
                     expr_v_gen = QCheck.get_gen Tag1.arb;
                     pat_v_gen = QCheck.Gen.unit;

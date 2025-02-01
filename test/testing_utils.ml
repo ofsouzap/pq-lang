@@ -187,6 +187,9 @@ end = struct
                          List.map ~f:(fun (c_name, _) -> c_name) cs)
                   |> StringSet.of_list;
                 max_constructors = opts.max_constructors;
+                allow_fun_types =
+                  (* TODO - until function-typed expression generation works better *)
+                  false;
               }
           in
           let choices : this_t QCheck.Gen.t list =
@@ -327,6 +330,9 @@ end = struct
                        | VariantType (vt_name, _) -> Some vt_name
                        | QuotientType _ -> None)
                   |> StringSet.of_list;
+                allow_fun_types =
+                  (* TODO - until funtion-typed expression generation works better *)
+                  false;
               }))
       >|= List.fold ~init:empty ~f:(fun acc (x, t) -> add acc x t)
 
@@ -367,6 +373,8 @@ let unit_program_arbitrary_with_default_options =
           max_variant_type_constructors =
             default_max_variant_type_constructor_count;
           max_top_level_defns = default_max_top_level_defns_count;
+          allow_fun_types =
+            (* TODO - until function-typed expression works better *) false;
           ast_type = None;
           expr_v_gen = QCheck.Gen.unit;
           pat_v_gen = QCheck.Gen.unit;

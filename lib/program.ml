@@ -59,6 +59,7 @@ end) : sig
     max_variant_types : int;
     max_variant_type_constructors : int;
     max_top_level_defns : int;
+    allow_fun_types : bool;
     ast_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -97,6 +98,7 @@ end = struct
     max_variant_types : int;
     max_variant_type_constructors : int;
     max_top_level_defns : int;
+    allow_fun_types : bool;
     ast_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -118,8 +120,8 @@ end = struct
   }
 
   let gen_type_defns_list ~(max_variant_types : int)
-      ~(max_variant_type_constructors : int) ~(mrd : int) :
-      custom_type list QCheck.Gen.t =
+      ~(max_variant_type_constructors : int) ~(allow_fun_types : bool)
+      ~(mrd : int) : custom_type list QCheck.Gen.t =
     (* TODO - allow this to generate quotient types too *)
     let open QCheck.Gen in
     int_range 0 max_variant_types >>= fun (n : int) ->
@@ -133,6 +135,7 @@ end = struct
               used_variant_type_names = acc.variant_type_names;
               used_variant_type_constructor_names = acc.constructor_names;
               max_constructors = max_variant_type_constructors;
+              allow_fun_types;
               mrd;
             }
           >>= fun ((vt_name, cs) as vt) ->
@@ -172,12 +175,11 @@ end = struct
     >>= fun (name, param_name) ->
     (* TODO - maybe consider allowing functions to return functions.
     This is only possible when there is a previously-defined function that aids this *)
-    let non_fun_vtype_gen =
-      QCheck_utils.filter_gen
-        (Vtype.QCheck_testing.gen { variant_types = variant_type_names; mrd })
-        ~f:(function VTypeFun _ -> false | _ -> true)
+    let vtype_gen =
+      Vtype.QCheck_testing.gen
+        { variant_types = variant_type_names; allow_fun_types = false; mrd }
     in
-    pair non_fun_vtype_gen non_fun_vtype_gen >>= fun (param_t, return_t) ->
+    pair vtype_gen vtype_gen >>= fun (param_t, return_t) ->
     Ast_qcheck_testing.gen
       {
         t = Some (Ast_qcheck_testing.vtype_to_gen_vtype_unsafe return_t);
@@ -224,7 +226,7 @@ end = struct
     let open QCheck.Gen in
     gen_type_defns_list ~max_variant_types:opts.max_variant_types
       ~max_variant_type_constructors:opts.max_variant_type_constructors
-      ~mrd:opts.mrd
+      ~allow_fun_types:opts.allow_fun_types ~mrd:opts.mrd
     >>= fun custom_types ->
     gen_top_level_defns_list ~expr_v_gen:opts.expr_v_gen
       ~pat_v_gen:opts.pat_v_gen

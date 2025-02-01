@@ -46,6 +46,7 @@ module QCheck_testing : functor
     max_variant_types : int;
     max_variant_type_constructors : int;
     max_top_level_defns : int;
+    allow_fun_types : bool;
     ast_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;

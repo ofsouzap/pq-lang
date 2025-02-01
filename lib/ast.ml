@@ -361,6 +361,19 @@ end = struct
   let gen (initial_opts : gen_options) : t QCheck.Gen.t =
     let open QCheck in
     let open QCheck.Gen in
+    (* Check that none of the variant type constructors take function types *)
+    List.iter initial_opts.variant_types ~f:(fun (_, cs) ->
+        let rec vtype_contains_fun_type = function
+          | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> false
+          | VTypePair (t1, t2) ->
+              vtype_contains_fun_type t1 || vtype_contains_fun_type t2
+          | VTypeFun _ -> true
+        in
+        List.iter cs ~f:(fun (_, t) ->
+            if vtype_contains_fun_type t then
+              failwith
+                "Can't generate variant type with function type constructors"
+            else ()));
     let variant_types = initial_opts.variant_types in
     let variant_types_set =
       initial_opts.variant_types |> List.map ~f:fst |> StringSet.of_list
@@ -613,8 +626,8 @@ end = struct
     and gen_any_of_type ((d : int), (ctx : (string * vtype) list)) :
         (vtype * (TagExpr.t, TagPat.t) expr) Gen.t =
       (* TODO - once function types handled better, allow for them here *)
-      Vtype.QCheck_testing.gen_no_fun_types
-        { variant_types = variant_types_set; mrd = d }
+      Vtype.QCheck_testing.gen
+        { variant_types = variant_types_set; allow_fun_types = false; mrd = d }
       >>= fun t ->
       gen (d, ctx) t >|= fun e -> (t, e)
     in

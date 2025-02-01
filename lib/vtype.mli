@@ -17,7 +17,11 @@ type vtype =
 val vtype_to_source_code : vtype -> string
 
 module QCheck_testing : sig
-  type gen_options = { variant_types : StringSet.t; mrd : int }
+  type gen_options = {
+    variant_types : StringSet.t;
+    allow_fun_types : bool;
+    mrd : int;
+  }
 
   include
     Utils.QCheck_testing_sig
@@ -26,6 +30,4 @@ module QCheck_testing : sig
        and type print_options = unit
        and type shrink_options = unit
        and type arb_options := gen_options
-
-  val gen_no_fun_types : gen_options -> t QCheck.Gen.t
 end
