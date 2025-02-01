@@ -16,6 +16,9 @@ val default_max_variant_type_constructor_count : int
 (** A default maximum number of defined quotient types *)
 val default_max_quotient_type_count : int
 
+(** A default maximum number of top-level definitions *)
+val default_max_top_level_defns_count : int
+
 (** A default maximum recursion depth for generation *)
 val default_max_gen_rec_depth : int
 

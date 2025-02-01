@@ -189,6 +189,11 @@ module type TypeCheckerSig = functor
     'tag_p pattern ->
     ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
 
+  val type_expr :
+    checked_type_ctx * VarCtx.t ->
+    ('tag_e, 'tag_p) expr ->
+    (('tag_e, 'tag_p) typed_expr, typing_error) Result.t
+
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
 
   val type_program :
@@ -572,6 +577,13 @@ functor
 
 module SimpleTypeChecker =
   TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
+
+let type_expr ~(type_ctx : SetTypingTypeContext.t)
+    (e : ('tag_e, 'tag_p) Ast.expr) :
+    (('tag_e, 'tag_p) typed_expr, typing_error) Result.t =
+  let open Result in
+  SimpleTypeChecker.check_type_ctx type_ctx >>= fun type_ctx ->
+  SimpleTypeChecker.type_expr (type_ctx, ListTypingVarContext.empty) e
 
 let type_program (prog : ('tag_e, 'tag_p) program) :
     (('tag_e, 'tag_p) SimpleTypeChecker.typed_program, typing_error) Result.t =

@@ -32,6 +32,8 @@ module QCheck_testing : sig
        and type print_options = unit
        and type shrink_options = unit
        and type arb_options := gen_options
+
+  val gen_no_fun_types : gen_options -> t QCheck.Gen.t
 end = struct
   type t = vtype
   type gen_options = { variant_types : StringSet.t; mrd : int }
@@ -39,7 +41,7 @@ end = struct
   type shrink_options = unit
   type arb_options = gen_options
 
-  let gen =
+  let gen_aux ~(fun_type_allowed : bool) =
     let open QCheck.Gen in
     fix (fun self opts ->
         let self' = self { opts with mrd = opts.mrd - 1 } in
@@ -54,14 +56,18 @@ end = struct
                else None)
         in
         let rec_cases =
-          [
-            (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2));
-            (pair self' self' >|= fun (t1, t2) -> VTypePair (t1, t2));
-          ]
+          (if
+             (* Have a case for the function case if it is allowed *)
+             fun_type_allowed
+           then [ (pair self' self' >|= fun (t1, t2) -> VTypeFun (t1, t2)) ]
+           else [])
+          @ [ (pair self' self' >|= fun (t1, t2) -> VTypePair (t1, t2)) ]
         in
         if opts.mrd > 0 then oneof (base_cases @ rec_cases)
         else oneof base_cases)
 
+  let gen_no_fun_types = gen_aux ~fun_type_allowed:false
+  let gen = gen_aux ~fun_type_allowed:true
   let print () = vtype_to_source_code
 
   let rec shrink () =

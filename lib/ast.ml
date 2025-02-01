@@ -612,7 +612,9 @@ end = struct
             (d, ctx)
     and gen_any_of_type ((d : int), (ctx : (string * vtype) list)) :
         (vtype * (TagExpr.t, TagPat.t) expr) Gen.t =
-      Vtype.QCheck_testing.gen { variant_types = variant_types_set; mrd = d }
+      (* TODO - once function types handled better, allow for them here *)
+      Vtype.QCheck_testing.gen_no_fun_types
+        { variant_types = variant_types_set; mrd = d }
       >>= fun t ->
       gen (d, ctx) t >|= fun e -> (t, e)
     in

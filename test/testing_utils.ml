@@ -15,6 +15,7 @@ let default_max_gen_rec_depth : int = 10
 let default_max_variant_type_count : int = 5
 let default_max_variant_type_constructor_count : int = 5
 let default_max_quotient_type_count : int = 5
+let default_max_top_level_defns_count : int = 5
 
 let sexp_of_token = function
   | END -> Sexp.Atom "END"
@@ -365,6 +366,7 @@ let unit_program_arbitrary_with_default_options =
           max_variant_types = default_max_variant_type_count;
           max_variant_type_constructors =
             default_max_variant_type_constructor_count;
+          max_top_level_defns = default_max_top_level_defns_count;
           ast_type = None;
           expr_v_gen = QCheck.Gen.unit;
           pat_v_gen = QCheck.Gen.unit;
