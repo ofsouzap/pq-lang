@@ -528,7 +528,7 @@ functor
       >>= acc_to_checked_type_ctx
 
     type ('tag_e, 'tag_p) type_program_tlds_acc = {
-      defns : (vtype * 'tag_e, vtype * 'tag_p) top_level_defn list;
+      defns_rev : (vtype * 'tag_e, vtype * 'tag_p) top_level_defn list;
       defns_var_ctx : VarCtx.t;
     }
 
@@ -538,7 +538,7 @@ functor
       TypeCtx.create ~custom_types:prog.custom_types >>= fun type_ctx ->
       check_type_ctx type_ctx >>= fun type_ctx ->
       List.fold_result (* Check the top-level definitions *)
-        ~init:{ defns = []; defns_var_ctx = VarCtx.empty }
+        ~init:{ defns_rev = []; defns_var_ctx = VarCtx.empty }
         ~f:(fun acc defn ->
           (* Check the definition's name doesn't already exist *)
           if VarCtx.exists acc.defns_var_ctx defn.name then
@@ -558,14 +558,14 @@ functor
             type_expr (type_ctx, body_var_ctx) defn.body >>= fun typed_body ->
             let defn_t = VTypeFun (snd defn.param, defn.return_t) in
             {
-              defns = { defn with body = typed_body } :: acc.defns;
+              defns_rev = { defn with body = typed_body } :: acc.defns_rev;
               defns_var_ctx = VarCtx.add acc.defns_var_ctx defn.name defn_t;
             }
             |> Ok)
         prog.top_level_defns
       >>= fun tld_fold_final_acc ->
       let var_ctx = tld_fold_final_acc.defns_var_ctx in
-      let tlds = tld_fold_final_acc.defns in
+      let tlds = tld_fold_final_acc.defns_rev |> List.rev in
       type_expr (type_ctx, var_ctx) prog.e >>| fun typed_e ->
       { prog with top_level_defns = tlds; e = typed_e }
   end
