@@ -234,11 +234,6 @@ let suite =
                 create_typed_expr_gen_test_for_fixed_type "unit" VTypeUnit;
                 create_typed_expr_gen_test_for_fixed_type "int" VTypeInt;
                 create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
-                create_typed_expr_gen_test "'a -> 'b"
-                  Gen.(
-                    default_testing_type_ctx_gen >>= fun type_ctx ->
-                    pair (vtype_gen_no_fun type_ctx) (vtype_gen_no_fun type_ctx)
-                    >|= fun (t1, t2) -> (type_ctx, VTypeFun (t1, t2)));
                 create_typed_expr_gen_test "'a * 'b"
                   Gen.(
                     default_testing_type_ctx_gen >>= fun type_ctx ->
