@@ -6,6 +6,7 @@ open Pattern
 open Ast
 open Quotient_types
 open Custom_types
+open Program
 
 type typing_error =
   | UndefinedVariable of string
@@ -16,6 +17,7 @@ type typing_error =
   | ExpectedFunctionOf of vtype
   | UndefinedVariantTypeConstructor of string
   | PatternMultipleVariableDefinitions of string
+  | MultipleTopLevelNameDefinitions of string
   | DuplicateTypeNameDefinition of string
   | UndefinedTypeName of string
   | MultipleVariantTypeConstructorDefinitions of string
@@ -31,6 +33,7 @@ let equal_typing_error_variant x y =
   | ExpectedFunctionOf _, ExpectedFunctionOf _
   | UndefinedVariantTypeConstructor _, UndefinedVariantTypeConstructor _
   | PatternMultipleVariableDefinitions _, PatternMultipleVariableDefinitions _
+  | MultipleTopLevelNameDefinitions _, MultipleTopLevelNameDefinitions _
   | DuplicateTypeNameDefinition _, DuplicateTypeNameDefinition _
   | UndefinedTypeName _, UndefinedTypeName _
   | ( MultipleVariantTypeConstructorDefinitions _,
@@ -44,6 +47,7 @@ let equal_typing_error_variant x y =
   | ExpectedFunctionOf _, _
   | UndefinedVariantTypeConstructor _, _
   | PatternMultipleVariableDefinitions _, _
+  | MultipleTopLevelNameDefinitions _, _
   | DuplicateTypeNameDefinition _, _
   | UndefinedTypeName _, _
   | MultipleVariantTypeConstructorDefinitions _, _ ->
@@ -73,6 +77,8 @@ let print_typing_error = function
       sprintf "Undefined variant type constructor: %s" c_name
   | PatternMultipleVariableDefinitions xname ->
       sprintf "Variable named \"%s\" has been defined twice in a pattern" xname
+  | MultipleTopLevelNameDefinitions xname ->
+      sprintf "Multiple top-level definitions of name \"%s\"" xname
   | DuplicateTypeNameDefinition vt_name ->
       sprintf "Variant type named \"%s\" has been defined multiple times"
         vt_name
@@ -170,14 +176,11 @@ module type TypeCheckerSig = functor
 
   val checked_empty_type_ctx : checked_type_ctx
 
-  type ('tag_e, 'tag_p) typed_program_expression
+  type ('tag_e, 'tag_p) typed_program
 
-  val typed_program_expression_get_type_ctx :
-    ('tag_e, 'tag_p) typed_program_expression -> TypeCtx.t
-
-  val typed_program_expression_get_expression :
-    ('tag_e, 'tag_p) typed_program_expression ->
-    (vtype * 'tag_e, vtype * 'tag_p) Ast.expr
+  val typed_program_get_program :
+    ('tag_e, 'tag_p) typed_program ->
+    (vtype * 'tag_e, vtype * 'tag_p) Program.program
 
   val check_vtype : checked_type_ctx -> vtype -> (unit, typing_error) Result.t
 
@@ -186,12 +189,11 @@ module type TypeCheckerSig = functor
     'tag_p pattern ->
     ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
 
-  val type_expr :
-    checked_type_ctx * VarCtx.t ->
-    ('tag_e, 'tag_p) Ast.expr ->
-    (('tag_e, 'tag_p) typed_program_expression, typing_error) result
-
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
+
+  val type_program :
+    ('tag_e, 'tag_p) program ->
+    (('tag_e, 'tag_p) typed_program, typing_error) Result.t
 end
 
 module TypeChecker : TypeCheckerSig =
@@ -204,11 +206,12 @@ functor
 
     let checked_empty_type_ctx = TypeCtx.empty
 
-    type ('tag_e, 'tag_p) typed_program_expression =
-      TypeCtx.t * (vtype * 'tag_e, vtype * 'tag_p) Ast.expr
+    type ('tag_e, 'tag_p) typed_program =
+      (vtype * 'tag_e, vtype * 'tag_p) program
 
-    let typed_program_expression_get_type_ctx (ctx, _) = ctx
-    let typed_program_expression_get_expression (_, e) = e
+    let typed_program_get_program (tp : ('tag_e, 'tag_p) typed_program) :
+        (vtype * 'tag_e, vtype * 'tag_p) program =
+      tp
 
     let rec check_vtype (ctx : checked_type_ctx) :
         vtype -> (unit, typing_error) Result.t =
@@ -260,7 +263,7 @@ functor
     let type_expr :
         checked_type_ctx * VarCtx.t ->
         ('tag_e, 'tag_p) expr ->
-        (('tag_e, 'tag_p) typed_program_expression, typing_error) Result.t =
+        (('tag_e, 'tag_p) typed_expr, typing_error) Result.t =
       let open Result in
       let rec type_expr (((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) as ctx)
           (orig_e : ('tag_e, 'tag_p) expr) =
@@ -380,12 +383,6 @@ functor
             type_expr (type_ctx, VarCtx.add var_ctx xname t1) e2 >>= fun e2' ->
             let t2 = e_type e2' in
             Ok (Let ((t2, v), xname, e1', e2'))
-        | Fun (v, (xname, xtype), e') ->
-            check_vtype type_ctx xtype >>= fun () ->
-            type_expr (type_ctx, VarCtx.add var_ctx xname xtype) e'
-            >>= fun e' ->
-            let t = e_type e' in
-            Ok (Fun ((VTypeFun (xtype, t), v), (xname, xtype), e'))
         | App (v, e1, e2) -> (
             type_expr ctx e1 >>= fun e1' ->
             type_expr ctx e2 >>= fun e2' ->
@@ -396,22 +393,6 @@ functor
                 if equal_vtype t11 t2 then Ok (App ((t12, v), e1', e2'))
                 else Error (TypeMismatch (t11, t2))
             | _ -> Error (ExpectedFunctionOf t1))
-        | Fix
-            (v, ((fname, ftype1, ftype2) as fvals), ((xname, xtype) as xvals), e)
-          ->
-            check_vtype type_ctx ftype1 >>= fun () ->
-            check_vtype type_ctx ftype2 >>= fun () ->
-            check_vtype type_ctx xtype >>= fun () ->
-            let ftype = VTypeFun (ftype1, ftype2) in
-            if equal_vtype ftype1 xtype then
-              type_expr
-                ( type_ctx,
-                  VarCtx.add (VarCtx.add var_ctx fname ftype) xname xtype )
-                e
-              >>= fun e' ->
-              be_of_type ftype2 e' >>= fun _ ->
-              Ok (Fix ((ftype, v), fvals, xvals, e'))
-            else Error (TypeMismatch (ftype1, xtype))
         | Match (v, e, cs) ->
             type_expr ctx e >>= fun e' ->
             let t_in = e_type e' in
@@ -470,8 +451,7 @@ functor
                   Ok (Constructor ((VTypeCustom vt_name, v), c_name, e1'))
                 else Error (TypeMismatch (c_t, t1)))
       in
-      fun ((type_ctx, _) as ctx) orig_e ->
-        type_expr ctx orig_e >>= fun orig_e' -> Ok (type_ctx, orig_e')
+      type_expr
 
     type checking_type_ctx_acc = {
       types : StringSet.t;
@@ -493,11 +473,8 @@ functor
       >>= fun (typed_pattern, _) ->
       let pattern_t = pattern_node_val typed_pattern |> fst in
       type_expr (type_ctx, var_ctx) body_expr
-      >>= fun (body_expr_tpe : (unit, unit) typed_program_expression) ->
-      let body_expr_t : vtype =
-        typed_program_expression_get_expression body_expr_tpe
-        |> expr_node_val |> fst
-      in
+      >>= fun (typed_body : plain_typed_expr) ->
+      let body_expr_t : vtype = typed_body |> expr_node_val |> fst in
       if equal_vtype pattern_t body_expr_t then Ok ()
       else Error (EqConsBodyTypeMismatch (eqcons, pattern_t, body_expr_t))
 
@@ -549,16 +526,42 @@ functor
             >>| fun acc ->
             { acc with type_defns_list = td :: acc.type_defns_list })
       >>= acc_to_checked_type_ctx
+
+    type ('tag_e, 'tag_p) type_program_tlds_acc = {
+      defns : (vtype * 'tag_e, vtype * 'tag_p) top_level_defn list;
+      defns_var_ctx : VarCtx.t;
+    }
+
+    let type_program (prog : ('tag_e, 'tag_p) program) :
+        (('tag_e, 'tag_p) typed_program, typing_error) Result.t =
+      let open Result in
+      TypeCtx.create ~custom_types:prog.custom_types >>= fun type_ctx ->
+      check_type_ctx type_ctx >>= fun type_ctx ->
+      List.fold_result (* Check the top-level definitions *)
+        ~init:{ defns = []; defns_var_ctx = VarCtx.empty }
+        ~f:(fun acc defn ->
+          if VarCtx.exists acc.defns_var_ctx defn.name then
+            Error (MultipleTopLevelNameDefinitions defn.name)
+          else
+            type_expr (type_ctx, acc.defns_var_ctx) defn.body
+            >>= fun typed_body ->
+            let defn_t = VTypeFun (snd defn.param, defn.return_t) in
+            {
+              defns = { defn with body = typed_body } :: acc.defns;
+              defns_var_ctx = VarCtx.add acc.defns_var_ctx defn.name defn_t;
+            }
+            |> Ok)
+        prog.top_level_defns
+      >>= fun tld_fold_final_acc ->
+      let var_ctx = tld_fold_final_acc.defns_var_ctx in
+      let tlds = tld_fold_final_acc.defns in
+      type_expr (type_ctx, var_ctx) prog.e >>| fun typed_e ->
+      { prog with top_level_defns = tlds; e = typed_e }
   end
 
 module SimpleTypeChecker =
   TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 
-let type_expr ~(type_ctx : SetTypingTypeContext.t)
-    (e : ('tag_e, 'tag_p) Ast.expr) :
-    ( ('tag_e, 'tag_p) SimpleTypeChecker.typed_program_expression,
-      typing_error )
-    result =
-  let open Result in
-  SimpleTypeChecker.check_type_ctx type_ctx >>= fun type_ctx ->
-  SimpleTypeChecker.type_expr (type_ctx, ListTypingVarContext.empty) e
+let type_program (prog : ('tag_e, 'tag_p) program) :
+    (('tag_e, 'tag_p) SimpleTypeChecker.typed_program, typing_error) Result.t =
+  SimpleTypeChecker.type_program prog

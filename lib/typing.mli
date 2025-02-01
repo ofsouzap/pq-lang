@@ -3,6 +3,7 @@ open Vtype
 open Pattern
 open Quotient_types
 open Custom_types
+open Program
 
 (** Typing errors *)
 type typing_error =
@@ -26,6 +27,8 @@ type typing_error =
       (** The specified type constructor was used but hasn't been defined *)
   | PatternMultipleVariableDefinitions of string
       (** In a pattern, there are multiple definitions of some variable name *)
+  | MultipleTopLevelNameDefinitions of string
+      (** There are multiple definitions of the same top-level name *)
   | DuplicateTypeNameDefinition of string
       (** The specified type name has been defined multiple times *)
   | UndefinedTypeName of string
@@ -105,17 +108,13 @@ module type TypeCheckerSig = functor
   (** A checked version of the empty type context *)
   val checked_empty_type_ctx : checked_type_ctx
 
-  (** The type of a program's expression that has passed type checking *)
-  type ('tag_e, 'tag_p) typed_program_expression
-
-  (** Get the type context from a typed program expression *)
-  val typed_program_expression_get_type_ctx :
-    ('tag_e, 'tag_p) typed_program_expression -> TypeCtx.t
+  (** The type of a program that has passed type checking *)
+  type ('tag_e, 'tag_p) typed_program
 
   (** Get the expression from a typed program expression *)
-  val typed_program_expression_get_expression :
-    ('tag_e, 'tag_p) typed_program_expression ->
-    (vtype * 'tag_e, vtype * 'tag_p) Ast.expr
+  val typed_program_get_program :
+    ('tag_e, 'tag_p) typed_program ->
+    (vtype * 'tag_e, vtype * 'tag_p) Program.program
 
   (** Check that a vtype is valid in the given context *)
   val check_vtype : checked_type_ctx -> vtype -> (unit, typing_error) Result.t
@@ -127,15 +126,14 @@ module type TypeCheckerSig = functor
     'tag_p pattern ->
     ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
 
-  (** Type checks an expression in the given context, returning either a typed
-      expression or a typing error *)
-  val type_expr :
-    checked_type_ctx * VarCtx.t ->
-    ('tag_e, 'tag_p) Ast.expr ->
-    (('tag_e, 'tag_p) typed_program_expression, typing_error) result
-
   (** Check a type context is valid *)
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
+
+  (** Type checks a program in the given context, returning either a typed
+      program or a typing error *)
+  val type_program :
+    ('tag_e, 'tag_p) program ->
+    (('tag_e, 'tag_p) typed_program, typing_error) Result.t
 end
 
 (** Functor for creating modules providing type-checking functionality *)
@@ -147,11 +145,7 @@ module SimpleTypeChecker : sig
       TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 end
 
-(** Type an AST expression using the default context implementations with the
-    provided typing context *)
-val type_expr :
-  type_ctx:SetTypingTypeContext.t ->
-  ('tag_e, 'tag_p) Ast.expr ->
-  ( ('tag_e, 'tag_p) SimpleTypeChecker.typed_program_expression,
-    typing_error )
-  result
+(** Type program using the default context implementations *)
+val type_program :
+  ('tag_e, 'tag_p) program ->
+  (('tag_e, 'tag_p) SimpleTypeChecker.typed_program, typing_error) result
