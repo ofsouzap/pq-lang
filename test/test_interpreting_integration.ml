@@ -113,4 +113,19 @@ in
 end
 |},
              Ok Unit );
+           ( "Program using first-class functions",
+             {|
+let f (x : int) : int =
+  x + 1
+end
+
+let apply (p : ((int -> int) * int)) : int =
+  match p with
+  | ((f : int -> int), (x : int)) -> f x
+  end
+end
+
+apply (f, 5)
+|},
+             Ok (Int 6) );
          ]
