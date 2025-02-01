@@ -60,6 +60,7 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 
 %type <string * vtype> typed_name
 
+%type <plain_pattern> match_case_pattern
 %type <plain_pattern * plain_expr> match_case
 %type <(plain_pattern * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
 %type <(plain_pattern * plain_expr) Nonempty_list.t> match_cases
@@ -125,8 +126,14 @@ typed_name:
   | n = LNAME COLON t = vtype { (n, t) }
 ;
 
+match_case_pattern:
+  | LPAREN p = pattern RPAREN { p }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair ((), p1, p2) }
+  | cname = UNAME p = contained_pattern { PatConstructor ((), cname, p) }
+;
+
 match_case:
-  | p = contained_pattern ARROW e = expr { (p, e) }
+  | p = match_case_pattern ARROW e = expr { (p, e) }
 ;
 
 match_cases_no_leading_pipe:

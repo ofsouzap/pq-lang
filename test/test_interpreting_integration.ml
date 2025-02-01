@@ -86,8 +86,8 @@ type int_list =
 
 let rec sum_int_list (xs : int_list) : int =
   match xs with
-  | (Nil (x : unit)) -> 0
-  | (Cons ((h : int), (ts : int_list))) -> h + sum_int_list ts
+  | Nil (x : unit) -> 0
+  | Cons ((h : int), (ts : int_list)) -> h + sum_int_list ts
   end
 end
 
