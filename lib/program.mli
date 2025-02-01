@@ -49,6 +49,10 @@ val fmap_pattern :
   ('tag_e, 'tag_p1) program ->
   ('tag_e, 'tag_p2) program
 
+(** Get all the names used (defined or referenced) in a program. Includes
+    variable names, defined type names, variant type constructor names, etc. *)
+val existing_names : ('tag_e, 'tag_p) program -> StringSet.t
+
 (** Convert a program into source code *)
 val program_to_source_code :
   ?use_newlines:bool -> ('tag_e, 'tag_p) program -> string

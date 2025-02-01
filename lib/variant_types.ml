@@ -5,6 +5,10 @@ open Vtype
 
 type variant_type_constructor = string * vtype [@@deriving sexp, equal]
 
+let constructor_existing_names ((c_name, _) : variant_type_constructor) :
+    StringSet.t =
+  StringSet.singleton c_name
+
 let variant_type_constructor_to_source_code
     ((c_name, c_type) : variant_type_constructor) : string =
   sprintf "%s of %s" c_name (vtype_to_source_code c_type)
@@ -76,6 +80,13 @@ end
 
 type variant_type = string * variant_type_constructor list
 [@@deriving sexp, equal]
+
+let existing_names ((vt_name, vt_cs) : variant_type) : StringSet.t =
+  Set.union
+    (StringSet.singleton vt_name)
+    (List.fold ~init:StringSet.empty
+       ~f:(fun acc c -> Set.union (constructor_existing_names c) acc)
+       vt_cs)
 
 let variant_type_to_source_code ((vt_name, vt_cs) : variant_type) : string =
   sprintf "type %s = %s" vt_name

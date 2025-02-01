@@ -1,3 +1,4 @@
+open Utils
 open Varname
 open Vtype
 open Pattern
@@ -12,6 +13,9 @@ type quotient_type_eqcons = {
       (** The equality definition of the equality constructor *)
 }
 [@@deriving sexp, equal]
+
+(** Get all names used in a quotient type equality constructor *)
+val eqcons_existing_names : quotient_type_eqcons -> StringSet.t
 
 (** Convert a quotient type equality constructor definition into source code. *)
 val quotient_type_eqcons_to_source_code :
@@ -29,6 +33,9 @@ type quotient_type = {
       (** The list of equality constructors for the quotient type *)
 }
 [@@deriving sexp, equal]
+
+(** Get all names used in a quotient type definition *)
+val existing_names : quotient_type -> StringSet.t
 
 (** Convert a quotient type definition into source code. *)
 val quotient_type_to_source_code : ?use_newlines:bool -> quotient_type -> string

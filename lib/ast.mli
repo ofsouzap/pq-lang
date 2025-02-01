@@ -79,6 +79,10 @@ val fmap :
 val fmap_pattern :
   f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) expr -> ('tag_e, 'tag_p2) expr
 
+(** Get all the names used (defined or referenced) in an expression. Includes
+    variable names, variant type constructor names, etc. *)
+val existing_names : ('tag_e, 'tag_p) expr -> StringSet.t
+
 (** An expression in the language without any tagging data *)
 type plain_expr = (unit, unit) expr [@@deriving sexp, equal]
 

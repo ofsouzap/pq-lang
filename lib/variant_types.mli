@@ -5,6 +5,9 @@ open Vtype
     attached data type *)
 type variant_type_constructor = string * vtype [@@deriving sexp, equal]
 
+(** Get all names used in a variant type constructor *)
+val constructor_existing_names : variant_type_constructor -> StringSet.t
+
 (** Convert a variant type constuctor definition into source code. *)
 val variant_type_constructor_to_source_code : variant_type_constructor -> string
 
@@ -28,6 +31,9 @@ end
 (** A variant data type with a name and list of constructors *)
 type variant_type = string * variant_type_constructor list
 [@@deriving sexp, equal]
+
+(** Get all names used in a variant type definition *)
+val existing_names : variant_type -> StringSet.t
 
 (** Convert a variant type definition into source code. *)
 val variant_type_to_source_code : variant_type -> string

@@ -11,6 +11,14 @@ type quotient_type_eqcons = {
 }
 [@@deriving sexp, equal]
 
+let eqcons_existing_names (eqcons : quotient_type_eqcons) : StringSet.t =
+  let bindings_names =
+    eqcons.bindings |> List.map ~f:(fun (v, _) -> v) |> StringSet.of_list
+  in
+  let p, e = eqcons.body in
+  Set.union bindings_names
+    (Set.union (Pattern.existing_names p) (Ast.existing_names e))
+
 let quotient_type_eqcons_to_source_code ?(use_newlines : bool option)
     (eqcons : quotient_type_eqcons) : string =
   let bindings_str =
@@ -29,6 +37,16 @@ type quotient_type = {
   eqconss : quotient_type_eqcons list;
 }
 [@@deriving sexp, equal]
+
+let existing_names (qt : quotient_type) : StringSet.t =
+  let eqcons_names =
+    List.fold ~init:StringSet.empty
+      ~f:(fun acc eqcons -> Set.union acc (eqcons_existing_names eqcons))
+      qt.eqconss
+  in
+  Set.union
+    (StringSet.singleton qt.name)
+    (Set.union (StringSet.singleton qt.base_type_name) eqcons_names)
 
 let quotient_type_to_source_code ?(use_newlines : bool option)
     (qt : quotient_type) : string =

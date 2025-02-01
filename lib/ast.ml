@@ -133,6 +133,39 @@ let rec fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (e : ('tag_e, 'tag_p1) expr) :
             cs )
   | Constructor (v, name, e) -> Constructor (v, name, fmap_pattern ~f e)
 
+let rec existing_names : ('tag_e, 'tag_p) expr -> StringSet.t = function
+  | UnitLit _ | IntLit _ | BoolLit _ -> StringSet.empty
+  | Add (_, e1, e2)
+  | Subtr (_, e1, e2)
+  | Mult (_, e1, e2)
+  | BOr (_, e1, e2)
+  | BAnd (_, e1, e2)
+  | Pair (_, e1, e2)
+  | Eq (_, e1, e2)
+  | Gt (_, e1, e2)
+  | GtEq (_, e1, e2)
+  | Lt (_, e1, e2)
+  | LtEq (_, e1, e2)
+  | App (_, e1, e2) ->
+      Set.union (existing_names e1) (existing_names e2)
+  | Neg (_, e) | BNot (_, e) -> existing_names e
+  | If (_, e1, e2, e3) ->
+      Set.union (existing_names e1)
+        (Set.union (existing_names e2) (existing_names e3))
+  | Var (_, name) -> StringSet.singleton name
+  | Let (_, name, e1, e2) ->
+      Set.union (StringSet.singleton name)
+        (Set.union (existing_names e1) (existing_names e2))
+  | Match (_, e, cases) ->
+      let case_names (p, e) =
+        Set.union (Pattern.existing_names p) (existing_names e)
+      in
+      Set.union (existing_names e)
+        (Nonempty_list.fold cases ~init:StringSet.empty ~f:(fun acc case ->
+             Set.union acc (case_names case)))
+  | Constructor (_, name, e) ->
+      Set.union (StringSet.singleton name) (existing_names e)
+
 type plain_expr = (unit, unit) expr [@@deriving sexp, equal]
 
 type ('a, 'b) typed_expr = (vtype * 'a, vtype * 'b) expr

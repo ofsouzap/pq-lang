@@ -77,6 +77,20 @@ let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) program) :
     e = Ast.fmap_pattern ~f prog.e;
   }
 
+let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
+  Set.union
+    (List.fold ~init:StringSet.empty
+       ~f:(fun acc -> function
+         | VariantType vt -> Variant_types.existing_names vt |> Set.union acc
+         | QuotientType qt -> Quotient_types.existing_names qt |> Set.union acc)
+       prog.custom_types)
+    (Set.union
+       (List.fold ~init:StringSet.empty
+          ~f:(fun acc defn ->
+            Set.union (Set.add acc defn.name) (failwith "TODO - param and body"))
+          prog.top_level_defns)
+       (Ast.existing_names prog.e))
+
 let program_to_source_code ?(use_newlines : bool option)
     (prog : ('tag_e, 'tag_p) program) : string =
   let use_newlines = Option.value ~default:true use_newlines in

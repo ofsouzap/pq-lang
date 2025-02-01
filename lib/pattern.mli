@@ -25,6 +25,9 @@ val pattern_node_val : 'a pattern -> 'a
 (** Map a function onto values in a pattern *)
 val fmap : f:('a -> 'b) -> 'a pattern -> 'b pattern
 
+(** Get all names used in a pattern *)
+val existing_names : 'a pattern -> StringSet.t
+
 (** Convert a pattern to a source code representation *)
 val pattern_to_source_code : 'a pattern -> string
 
