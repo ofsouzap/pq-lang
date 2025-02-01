@@ -17,6 +17,10 @@ type ('tag_e, 'tag_p) top_level_defn = {
 
 type plain_top_level_defn = (unit, unit) top_level_defn
 
+(** Convert a program into source code *)
+val top_level_defn_to_source_code :
+  use_newlines:bool -> ('tag_e, 'tag_p) top_level_defn -> string
+
 (** A program, consisting of any number of custom type definitions, top-level
     definitions and an expression to evaluate *)
 type ('tag_e, 'tag_p) program = {

@@ -19,8 +19,24 @@ type ('tag_e, 'tag_p) top_level_defn = {
 
 type plain_top_level_defn = (unit, unit) top_level_defn
 
-(** A program, consisting of any number of custom type definitions, top-level
-    definitions and an expression to evaluate *)
+let top_level_defn_to_source_code ~(use_newlines : bool) :
+    ('tag_e, 'tag_p) top_level_defn -> string =
+  let open SourceCodeBuilder in
+  let convert (defn : ('tag_e, 'tag_p) top_level_defn) : state -> state =
+    write "let "
+    |.> (if defn.recursive then write "rec " else nothing)
+    |.> write defn.name |.> write " ("
+    |.> write (fst defn.param)
+    |.> write " : "
+    |.> write (vtype_to_source_code (snd defn.param))
+    |.> write ") : "
+    |.> write (vtype_to_source_code defn.return_t)
+    |.> write " ="
+    |.> block (write (ast_to_source_code ~use_newlines defn.body))
+    |.> write "end"
+  in
+  SourceCodeBuilder.from_converter ~converter:convert ~use_newlines
+
 type ('tag_e, 'tag_p) program = {
   custom_types : custom_type list;
   top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
@@ -32,22 +48,24 @@ type plain_program = (unit, unit) program [@@deriving sexp, equal]
 
 let program_to_source_code ?(use_newlines : bool option)
     (prog : ('tag_e, 'tag_p) program) : string =
+  let use_newlines = Option.value ~default:true use_newlines in
   let type_defns_str : string list =
     List.map
       ~f:(function
         | VariantType vt -> variant_type_to_source_code vt
-        | QuotientType qt -> quotient_type_to_source_code ?use_newlines qt)
+        | QuotientType qt -> quotient_type_to_source_code ~use_newlines qt)
       prog.custom_types
   in
-  let top_level_defns_str : string list = failwith "TODO" in
-  let e_str : string = ast_to_source_code ?use_newlines prog.e in
+  let top_level_defns_str : string list =
+    List.map
+      ~f:(top_level_defn_to_source_code ~use_newlines)
+      prog.top_level_defns
+  in
+  let e_str : string = ast_to_source_code ~use_newlines prog.e in
   let str_parts : string list =
     type_defns_str @ top_level_defns_str @ [ e_str ]
   in
-  String.concat
-    ~sep:
-      (if (equal_option equal_bool) use_newlines (Some true) then "\n" else " ")
-    str_parts
+  String.concat ~sep:(if use_newlines then "\n" else " ") str_parts
 
 module QCheck_testing (TagExpr : sig
   type t
