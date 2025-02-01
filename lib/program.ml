@@ -44,7 +44,38 @@ type ('tag_e, 'tag_p) program = {
 }
 [@@deriving sexp, equal]
 
+type ('tag_e, 'tag_p) typed_program = (vtype * 'tag_e, vtype * 'tag_p) program
+[@@deriving sexp, equal]
+
 type plain_program = (unit, unit) program [@@deriving sexp, equal]
+
+let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) program) :
+    ('tag_e2, 'tag_p) program =
+  {
+    custom_types = prog.custom_types;
+    top_level_defns =
+      List.map
+        ~f:(fun defn ->
+          { defn with body = Ast.fmap ~f defn.body; return_t = defn.return_t })
+        prog.top_level_defns;
+    e = Ast.fmap ~f prog.e;
+  }
+
+let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) program) :
+    ('tag_e, 'tag_p2) program =
+  {
+    custom_types = prog.custom_types;
+    top_level_defns =
+      List.map
+        ~f:(fun defn ->
+          {
+            defn with
+            body = Ast.fmap_pattern ~f defn.body;
+            return_t = defn.return_t;
+          })
+        prog.top_level_defns;
+    e = Ast.fmap_pattern ~f prog.e;
+  }
 
 let program_to_source_code ?(use_newlines : bool option)
     (prog : ('tag_e, 'tag_p) program) : string =

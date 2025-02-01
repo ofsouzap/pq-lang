@@ -30,8 +30,24 @@ type ('tag_e, 'tag_p) program = {
 }
 [@@deriving sexp, equal]
 
+(** A program with typing information *)
+type ('tag_e, 'tag_p) typed_program = (vtype * 'tag_e, vtype * 'tag_p) program
+[@@deriving sexp, equal]
+
 (** A program with no tagging *)
 type plain_program = (unit, unit) program [@@deriving sexp, equal]
+
+(** Map a function onto the tags of expression nodes in a program *)
+val fmap_expr :
+  f:('tag_e1 -> 'tag_e2) ->
+  ('tag_e1, 'tag_p) program ->
+  ('tag_e2, 'tag_p) program
+
+(** Map a function onto the tags of pattern nodes in a program *)
+val fmap_pattern :
+  f:('tag_p1 -> 'tag_p2) ->
+  ('tag_e, 'tag_p1) program ->
+  ('tag_e, 'tag_p2) program
 
 (** Convert a program into source code *)
 val program_to_source_code :
