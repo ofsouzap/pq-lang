@@ -66,6 +66,7 @@ functor
           (** The pattern for a case of a match construct was the trivial case
               (matching all variables, equivalent to just renaming a variable)
               unexpectedly and cannot be handled *)
+      | PairTypeNotDefinedInState of vtype * vtype
 
     let custom_special_name x =
       "PQ-"
@@ -91,6 +92,7 @@ functor
         names *)
     let generate_fresh_varname (existing_names : StringSet.t) :
         varname * StringSet.t =
+      (* TODO - have a "seed" name, so that the resulting name can look similar to the source code's variables' names *)
       let rec loop (i : int) : varname =
         let candidate = sprintf "x%d" i in
         if Set.mem existing_names candidate then loop (i + 1) else candidate
@@ -466,7 +468,7 @@ functor
         type top_level_elem = VarDecl of varname * vtype | VarDefn of var_defn
         [@@deriving sexp, equal]
 
-        module VtypePairSet = Set.Make (struct
+        module VtypePairMap = Map.Make (struct
           type t = vtype * vtype
 
           let compare ((t1_1, t1_2) : vtype * vtype)
@@ -501,15 +503,23 @@ functor
         [@@deriving sexp, equal]
 
         type t = {
-          pair_types_defined : VtypePairSet.t;
+          pair_types_defined : pair_type_info VtypePairMap.t;
+              (** A mapping from all pair types that have been defined to info
+                  about them. This used to decide which possible instantiations
+                  of the pair type to create in the initial datatype
+                  declarations. Added automatically by module *)
           special_variant_types : LispBuilder.node list;
-              (** These should be translated by: x -> "(declare-datatypes () x)"
-              *)
+              (** These should be translated by: x -> "(declare-datatypes ()
+                  x)". Created automatically in state initialization *)
           variant_types : variant_type_info list;
+              (** The custom variant types defined. Added by module user *)
           declared_consts : (string * vtype * LispBuilder.node) list;
               (** Translated by: (xname, xtype, xnode) -> (declare-const xname
-                  xtype xnode ) *)
+                  xtype xnode ). Created automatically in state initialization
+              *)
           top_level_rev : top_level_elem list;
+              (** The reversed list of top-level definitions of the program.
+                  Added by module user *)
         }
         [@@deriving sexp, equal]
 
@@ -525,7 +535,8 @@ functor
 
         let state_initial : t =
           {
-            pair_types_defined = VtypePairSet.empty;
+            pair_types_defined =
+              (VtypePairMap.empty : pair_type_info VtypePairMap.t);
             special_variant_types =
               LispBuilder.
                 [
@@ -537,8 +548,8 @@ functor
             top_level_rev = [];
           }
 
-        let state_use_pair_type ((t1 : vtype), (t2 : vtype)) (state : t) :
-            t * pair_type_info =
+        (** Once defining signatures, keep this private! *)
+        let state_add_pair_type ((t1 : vtype), (t2 : vtype)) (state : t) : t =
           let pair_type_vt_name : vtype * vtype -> string =
             (* Generates an implicitly-unique name for the instantiation of the
             pair type for the specified two parameter types *)
@@ -556,32 +567,37 @@ functor
             in
             aux
           in
-          let state =
-            (* Add the new pair type to the state if it wasn't already there *)
-            if Set.mem state.pair_types_defined (t1, t2) then state
-            else
-              {
-                state with
-                pair_types_defined = Set.add state.pair_types_defined (t1, t2);
-              }
-          in
-          let vt_name = pair_type_vt_name (t1, t2) in
-          let constructor_name =
+          let vt_name : string = pair_type_vt_name (t1, t2) in
+          let constructor_name : string =
             custom_special_name (`VariantTypeConstructor (vt_name, "pair"))
           in
-          let accessor_name side =
+          let accessor_name (side : [ `Fst | `Snd ]) : string =
             custom_special_name
               (`VariantTypeConstructorAccessor (vt_name, constructor_name))
             ^ match side with `Fst -> "-fst" | `Snd -> "-snd"
           in
-          ( state,
+          let info =
             {
               name = vt_name;
               t = (t1, t2);
               constructor_name;
               fst_accessor_name = accessor_name `Fst;
               snd_accessor_name = accessor_name `Snd;
-            } )
+            }
+          in
+          if Map.mem state.pair_types_defined (t1, t2) then state
+          else
+            {
+              state with
+              pair_types_defined =
+                Map.set state.pair_types_defined ~key:(t1, t2) ~data:info;
+            }
+
+        let state_get_pair_type_info ((t1 : vtype), (t2 : vtype)) (state : t) :
+            (pair_type_info, quotient_typing_error) Result.t =
+          match Map.find state.pair_types_defined (t1, t2) with
+          | Some info -> Ok info
+          | None -> Error (PairTypeNotDefinedInState (t1, t2))
 
         let state_use_variant_type (vt : variant_type) (state : t) :
             t * variant_type_info =
@@ -622,179 +638,264 @@ functor
           }
 
         let state_add_var_defn (defn : var_defn) (state : t) : t =
+          let rec add_pair_types_used (state : t) : vtype -> t = function
+            | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> state
+            | VTypePair (t1, t2) ->
+                state_add_pair_type (t1, t2) state |> fun state ->
+                add_pair_types_used (add_pair_types_used state t1) t2
+            | VTypeFun (t1, t2) ->
+                add_pair_types_used (add_pair_types_used state t1) t2
+          in
+          let rec search_add_pair_types_used (state : t) :
+              FlatPattern.flat_expr -> t = function
+            | UnitLit v -> add_pair_types_used state v.t
+            | IntLit (v, _) -> add_pair_types_used state v.t
+            | Add (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | Neg (v, e1) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1
+            | Subtr (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | Mult (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | BoolLit (v, _) -> add_pair_types_used state v.t
+            | BNot (v, e1) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1
+            | BOr (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | BAnd (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | Pair (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | Eq (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | Gt (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | GtEq (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | Lt (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | LtEq (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | If (v, e1, e2, e3) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2 |> fun state ->
+                search_add_pair_types_used state e3
+            | Var (v, _) -> add_pair_types_used state v.t
+            | Let (v, _, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | App (v, e1, e2) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                search_add_pair_types_used state e2
+            | Match (v, e1, cases) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1 |> fun state ->
+                Nonempty_list.fold
+                  ~f:(fun state (pat, e) ->
+                    let pat_t = FlatPattern.flat_pattern_node_val pat in
+                    add_pair_types_used state pat_t.t |> fun state ->
+                    search_add_pair_types_used state e)
+                  ~init:state cases
+            | Constructor (v, _, e1) ->
+                add_pair_types_used state v.t |> fun state ->
+                search_add_pair_types_used state e1
+          in
+          let state =
+            (* Add all used pair types to the state *)
+            search_add_pair_types_used state defn.body
+          in
           { state with top_level_rev = VarDefn defn :: state.top_level_rev }
       end
 
       module StateBuilder = struct
         let rec build_vtype (state : State.t) :
-            vtype -> State.t * LispBuilder.node =
+            vtype -> (LispBuilder.node, quotient_typing_error) Result.t =
           let open Result in
           let open LispBuilder in
           function
-          | VTypeUnit -> (state, Atom State.vt_unit_name)
-          | VTypeInt -> (state, Atom "Int")
-          | VTypeBool -> (state, Atom "Bool")
+          | VTypeUnit -> Ok (Atom State.vt_unit_name)
+          | VTypeInt -> Ok (Atom "Int")
+          | VTypeBool -> Ok (Atom "Bool")
           | VTypePair (t1, t2) ->
-              State.state_use_pair_type (t1, t2) state
-              |> fun (state, (vt_info : State.pair_type_info)) ->
-              (state, Atom vt_info.name)
+              State.state_get_pair_type_info (t1, t2) state
+              >>| fun pair_type_info -> Atom pair_type_info.name
           | VTypeFun (t1, t2) ->
-              build_vtype state t1 |> fun (state, t1_node) ->
-              build_vtype state t2 |> fun (state, t2_node) ->
-              (state, Op ("Array", [ t1_node; t2_node ]))
-          | VTypeCustom ct_name -> (state, Atom ct_name)
+              build_vtype state t1 >>= fun t1_node ->
+              build_vtype state t2 >>= fun t2_node ->
+              Ok (Op ("Array", [ t1_node; t2_node ]))
+          | VTypeCustom ct_name -> Ok (Atom ct_name)
 
         let rec build_expr (state : State.t) :
-            FlatPattern.flat_expr -> State.t * LispBuilder.node =
+            FlatPattern.flat_expr ->
+            (LispBuilder.node, quotient_typing_error) Result.t =
+          let open Result in
           let open LispBuilder in
           function
-          | UnitLit _ -> (state, Atom State.vt_unit_val)
-          | IntLit (_, n) -> (state, Atom (Int.to_string n))
-          | BoolLit (_, b) -> (state, Atom (Bool.to_string b))
-          | Var (_, name) -> (state, Atom name)
+          | UnitLit _ -> Ok (Atom State.vt_unit_val)
+          | IntLit (_, n) -> Ok (Atom (Int.to_string n))
+          | BoolLit (_, b) -> Ok (Atom (Bool.to_string b))
+          | Var (_, name) -> Ok (Atom name)
           | Add (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("+", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("+", [ node1; node2 ]))
           | Neg (_, e) ->
-              let state, node = build_expr state e in
-              (state, Op ("-", [ node ]))
+              build_expr state e >>= fun node -> Ok (Op ("-", [ node ]))
           | Subtr (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("-", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("-", [ node1; node2 ]))
           | Mult (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("*", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("*", [ node1; node2 ]))
           | BNot (_, e) ->
-              let state, node = build_expr state e in
-              (state, Op ("not", [ node ]))
+              build_expr state e >>= fun node -> Ok (Op ("not", [ node ]))
           | BOr (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("or", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("or", [ node1; node2 ]))
           | BAnd (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("and", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("and", [ node1; node2 ]))
           | Eq (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("=", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("=", [ node1; node2 ]))
           | Gt (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op (">", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op (">", [ node1; node2 ]))
           | GtEq (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op (">=", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op (">=", [ node1; node2 ]))
           | Lt (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("<", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("<", [ node1; node2 ]))
           | LtEq (_, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("<=", [ node1; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("<=", [ node1; node2 ]))
           | If (_, e1, e2, e3) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              let state, node3 = build_expr state e3 in
-              (state, Op ("ite", [ node1; node2; node3 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              build_expr state e3 >>= fun node3 ->
+              Ok (Op ("ite", [ node1; node2; node3 ]))
           | Let (_, x, e1, e2) ->
-              let state, node1 = build_expr state e1 in
-              let state, node2 = build_expr state e2 in
-              (state, Op ("let", [ List [ List [ Atom x; node1 ] ]; node2 ]))
+              build_expr state e1 >>= fun node1 ->
+              build_expr state e2 >>= fun node2 ->
+              Ok (Op ("let", [ List [ List [ Atom x; node1 ] ]; node2 ]))
           | Pair (_, e1, e2) ->
               let e1_t = (FlatPattern.flat_node_val e1).t in
               let e2_t = (FlatPattern.flat_node_val e2).t in
-              let state, pair_info =
-                State.state_use_pair_type (e1_t, e2_t) state
-              in
-              let state, e1' = build_expr state e1 in
-              let state, e2' = build_expr state e2 in
-              (state, Op (pair_info.constructor_name, [ e1'; e2' ]))
-          | App _ -> failwith "TODO - check exact type of first thingy"
+              State.state_get_pair_type_info (e1_t, e2_t) state
+              >>= fun pair_type_info ->
+              build_expr state e1 >>= fun e1' ->
+              build_expr state e2 >>| fun e2' ->
+              Op (pair_type_info.constructor_name, [ e1'; e2' ])
+          | App _ -> Ok (failwith "TODO - check exact type of first thingy")
           | Constructor (_, name, e) ->
-              let state, node = build_expr state e in
-              (state, Op (name, [ node ]))
+              build_expr state e >>= fun node -> Ok (Op (name, [ node ]))
           | Match (_, e, cases) ->
-              let state, match_node = build_expr state e in
-              let build_case state (pat, body) =
-                let state, body_node = build_expr state body in
+              build_expr state e >>= fun e_node ->
+              let build_case
+                  ( (pat : FlatPattern.flat_pattern),
+                    (body : FlatPattern.flat_expr) ) :
+                  (node, quotient_typing_error) Result.t =
+                build_expr state body >>= fun body_node ->
                 match pat with
                 | FlatPattern.FlatPatPair (_, (_, x1name, x1t), (_, x2name, x2t))
                   ->
-                    let state, pair_info =
-                      State.state_use_pair_type (x1t, x2t) state
-                    in
-                    ( state,
-                      List
-                        [
-                          Op
-                            ( pair_info.constructor_name,
-                              [ Atom x1name; Atom x2name ] );
-                          body_node;
-                        ] )
+                    State.state_get_pair_type_info (x1t, x2t) state
+                    >>| fun pair_type_info ->
+                    List
+                      [
+                        Op
+                          ( pair_type_info.constructor_name,
+                            [ Atom x1name; Atom x2name ] );
+                        body_node;
+                      ]
                 | FlatPattern.FlatPatConstructor (_, c_name, (_, x, _)) ->
-                    (state, List [ List [ Atom c_name; Atom x ]; body_node ])
+                    Ok (List [ List [ Atom c_name; Atom x ]; body_node ])
               in
-              let state, case_nodes =
-                List.fold_map ~f:build_case ~init:state
-                  (Nonempty_list.to_list cases)
-              in
-              (state, Op ("match", [ match_node; List case_nodes ]))
+              Nonempty_list.fold_result ~init:[]
+                ~f:(fun acc case ->
+                  build_case case >>| fun case_node -> case_node :: acc)
+                cases
+              >>| List.rev
+              >>| fun case_nodes -> Op ("match", e_node :: case_nodes)
 
         let build_elem (state : State.t) :
-            State.top_level_elem -> State.t * LispBuilder.node = function
+            State.top_level_elem ->
+            (LispBuilder.node, quotient_typing_error) Result.t =
+          let open Result in
+          let open LispBuilder in
+          function
           | VarDecl (xname, xtype) ->
-              let state, type_node = build_vtype state xtype in
-              ( state,
-                LispBuilder.Op
-                  ("declare-const", [ LispBuilder.Atom xname; type_node ]) )
+              build_vtype state xtype >>= fun type_node ->
+              Ok (Op ("declare-const", [ Atom xname; type_node ]))
           | VarDefn { name; kind; return_t; body } -> (
               match kind with
               | `NonRec None ->
-                  let state, type_node = build_vtype state return_t in
-                  ( state,
-                    LispBuilder.Op
-                      ("declare-const", [ LispBuilder.Atom name; type_node ]) )
+                  build_vtype state return_t >>= fun type_node ->
+                  Ok (Op ("declare-const", [ Atom name; type_node ]))
               | `NonRec (Some (param_name, param_t)) ->
-                  let state, param_type_node = build_vtype state param_t in
-                  let state, return_type_node = build_vtype state return_t in
-                  let state, body_node = build_expr state body in
-                  ( state,
-                    LispBuilder.Op
-                      ( "define-fun",
-                        [
-                          LispBuilder.Atom name;
-                          LispBuilder.List
-                            [
-                              LispBuilder.List
-                                [ LispBuilder.Atom param_name; param_type_node ];
-                            ];
-                          return_type_node;
-                          body_node;
-                        ] ) )
+                  build_vtype state param_t >>= fun param_type_node ->
+                  build_vtype state return_t >>= fun return_type_node ->
+                  build_expr state body >>= fun body_node ->
+                  Ok
+                    (Op
+                       ( "define-fun",
+                         [
+                           Atom name;
+                           List [ List [ Atom param_name; param_type_node ] ];
+                           return_type_node;
+                           body_node;
+                         ] ))
               | `Rec (param_name, param_t) ->
-                  let state, param_type_node = build_vtype state param_t in
-                  let state, return_type_node = build_vtype state return_t in
-                  let state, body_node = build_expr state body in
-                  ( state,
-                    LispBuilder.Op
-                      ( "define-fun-rec",
-                        [
-                          LispBuilder.Atom name;
-                          LispBuilder.List
-                            [
-                              LispBuilder.List
-                                [ LispBuilder.Atom param_name; param_type_node ];
-                            ];
-                          return_type_node;
-                          body_node;
-                        ] ) ))
+                  build_vtype state param_t >>= fun param_type_node ->
+                  build_vtype state return_t >>= fun return_type_node ->
+                  build_expr state body >>= fun body_node ->
+                  Ok
+                    (Op
+                       ( "define-fun-rec",
+                         [
+                           Atom name;
+                           List [ List [ Atom param_name; param_type_node ] ];
+                           return_type_node;
+                           body_node;
+                         ] )))
       end
     end
 
