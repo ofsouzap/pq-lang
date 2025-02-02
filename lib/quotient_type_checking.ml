@@ -60,8 +60,6 @@ functor
     type tag_program = (ast_tag, pattern_tag) program
 
     type quotient_typing_error =
-      | ProgramTypingError of typing_error
-          (** A standard typing error occured *)
       | UnexpectedTrivialMatchCasePatternError
           (** The pattern for a case of a match construct was the trivial case
               (matching all variables, equivalent to just renaming a variable)
@@ -548,7 +546,7 @@ functor
             top_level_rev = [];
           }
 
-        (** Once defining signatures, keep this private! *)
+        (* Once defining signatures, keep this private! *)
         let state_add_pair_type ((t1 : vtype), (t2 : vtype)) (state : t) : t =
           let pair_type_vt_name : vtype * vtype -> string =
             (* Generates an implicitly-unique name for the instantiation of the
@@ -599,37 +597,30 @@ functor
           | Some info -> Ok info
           | None -> Error (PairTypeNotDefinedInState (t1, t2))
 
-        let state_use_variant_type (vt : variant_type) (state : t) :
-            t * variant_type_info =
-          let vt_name, constructors = vt in
-          let constructor_infos : variant_type_constructor_info list =
-            List.map
-              ~f:(fun (c_name, c_t) ->
-                let name =
-                  custom_special_name
-                    (`VariantTypeConstructor (vt_name, c_name))
-                in
-                {
-                  name;
-                  accessor_name =
-                    custom_special_name
-                      (`VariantTypeConstructorAccessor (vt_name, c_name));
-                  t = c_t;
-                })
-              constructors
+        (** Add a variant type definition to the state *)
+        let state_add_variant_type ((vt_name, vt_cs) : variant_type) (state : t)
+            : t =
+          let constructor_info ((c_name, c_t) : variant_type_constructor) :
+              variant_type_constructor_info =
+            {
+              name = c_name;
+              accessor_name =
+                custom_special_name
+                  (`VariantTypeConstructorAccessor (vt_name, c_name));
+              t = c_t;
+            }
           in
-          let vt_info : variant_type_info =
-            { name = vt_name; constructors = constructor_infos }
-          in
-          let state =
-            if
-              List.mem ~equal:equal_variant_type_info state.variant_types
-                vt_info
-            then state
-            else { state with variant_types = vt_info :: state.variant_types }
-          in
-          (state, vt_info)
+          {
+            state with
+            variant_types =
+              {
+                name = vt_name;
+                constructors = List.map ~f:constructor_info vt_cs;
+              }
+              :: state.variant_types;
+          }
 
+        (** Add a variable declaration to the state *)
         let state_add_var_decl ((xname : varname), (xtype : vtype)) (state : t)
             : t =
           {
@@ -637,6 +628,7 @@ functor
             top_level_rev = VarDecl (xname, xtype) :: state.top_level_rev;
           }
 
+        (** Add a variable definition to the state *)
         let state_add_var_defn (defn : var_defn) (state : t) : t =
           let rec add_pair_types_used (state : t) : vtype -> t = function
             | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> state
@@ -971,10 +963,48 @@ functor
     let check_program (prog : tag_program) :
         (unit, quotient_typing_error) Result.t =
       let open Result in
+      let open Smt.State in
       let existing_names = Program.existing_names prog in
-      FlatPattern.of_program ~existing_names prog
-      >>= fun (existing_names, flat_prog) ->
-      TypeCtx.create ~custom_types:flat_prog.custom_types
-      |> Result.map_error ~f:(fun e -> ProgramTypingError e)
-      >>= fun type_ctx -> failwith "TODO"
+      FlatPattern.of_program ~existing_names prog >>= fun (_, flat_prog) ->
+      let state = Smt.State.state_initial in
+      let state =
+        (* Add the variant type definitions to the state *)
+        List.fold ~init:state
+          ~f:(fun state -> function
+            | VariantType vt -> state_add_variant_type vt state
+            | QuotientType _ -> state)
+          flat_prog.custom_types
+      in
+      (* Check the top-level definitions and add them to the state *)
+      List.fold_result ~init:state
+        ~f:(fun state defn ->
+          let defn_checking_state =
+            (* Create the state used whne checking the body of the function *)
+            (if defn.recursive then
+               state_add_var_defn
+                 {
+                   name = defn.name;
+                   kind = `Rec defn.param;
+                   return_t = defn.return_t;
+                   body = defn.body;
+                 }
+                 state
+             else state)
+            |> state_add_var_decl defn.param
+          in
+          (* Check the body of the TLD *)
+          check_expr defn_checking_state defn.body >>| fun () ->
+          (* Return the resulting state after defining the TLD *)
+          state_add_var_defn
+            {
+              name = defn.name;
+              kind = `NonRec None;
+              return_t = defn.return_t;
+              body = defn.body;
+            }
+            state)
+        flat_prog.top_level_defns
+      >>= fun state ->
+      (* Check the main body of the program with the accumulated state *)
+      check_expr state flat_prog.e
   end
