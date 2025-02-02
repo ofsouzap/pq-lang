@@ -511,10 +511,9 @@ functor
                   x)". Created automatically in state initialization *)
           variant_types : variant_type_info list;
               (** The custom variant types defined. Added by module user *)
-          declared_consts : (string * vtype * LispBuilder.node) list;
-              (** Translated by: (xname, xtype, xnode) -> (declare-const xname
-                  xtype xnode ). Created automatically in state initialization
-              *)
+          declared_consts : (string * vtype) list;
+              (** Translated by: (xname, xtype) -> (declare-const xname xtype ).
+                  Created automatically in state initialization *)
           top_level_rev : top_level_elem list;
               (** The reversed list of top-level definitions of the program.
                   Added by module user *)
@@ -542,7 +541,7 @@ functor
                   Op (vt_unit_name, [ Atom vt_unit_constructor_name ]);
                 ];
             variant_types = [];
-            declared_consts = [ (vt_unit_val, VTypeUnit, Atom vt_unit_name) ];
+            declared_consts = [ (vt_unit_val, VTypeUnit) ];
             top_level_rev = [];
           }
 
@@ -875,7 +874,7 @@ functor
               >>| List.rev
               >>| fun case_nodes -> Op ("match", e_node :: case_nodes)
 
-        let build_elem (state : State.t) :
+        let build_top_level_elem (state : State.t) :
             State.top_level_elem ->
             (LispBuilder.node, quotient_typing_error) Result.t =
           let open Result in
@@ -917,6 +916,73 @@ functor
                            return_type_node;
                            body_node;
                          ] )))
+
+        let build_state (state : State.t) :
+            (LispBuilder.node list, quotient_typing_error) Result.t =
+          let open Result in
+          let open LispBuilder in
+          let build_datatype_decl () : (node, quotient_typing_error) Result.t =
+            (* Pair type declarations *)
+            List.map (Map.to_alist state.pair_types_defined)
+              ~f:(fun ((t1, t2), pair_type_info) ->
+                build_vtype state t1 >>= fun t1_node ->
+                build_vtype state t2 >>| fun t2_node ->
+                Op
+                  ( pair_type_info.name,
+                    [
+                      Op
+                        ( pair_type_info.constructor_name,
+                          [
+                            Op (pair_type_info.fst_accessor_name, [ t1_node ]);
+                            Op (pair_type_info.snd_accessor_name, [ t2_node ]);
+                          ] );
+                    ] ))
+            |> Result.all
+            >>= fun (pair_type_decls : node list) ->
+            (* Special variant type declarations *)
+            List.map state.special_variant_types ~f:(fun special_variant_type ->
+                Ok special_variant_type)
+            |> Result.all
+            >>= fun (special_variant_type_decls : node list) ->
+            List.map state.variant_types ~f:(fun vt_info ->
+                (* Create the nodes for the constructors *)
+                List.map vt_info.constructors ~f:(fun c_info ->
+                    build_vtype state c_info.t >>| fun t_node ->
+                    Op (c_info.name, [ Op (c_info.accessor_name, [ t_node ]) ]))
+                |> Result.all
+                >>| fun constructor_nodes ->
+                (* Create the main variant type definition node *)
+                Op (vt_info.name, constructor_nodes))
+            |> Result.all
+            >>| fun (variant_type_decls : node list) ->
+            (* Combine all the datatype declarations into the single declare-datatypes node *)
+            let datatype_decls =
+              pair_type_decls @ special_variant_type_decls @ variant_type_decls
+            in
+            Op ("declare-datatypes", [ Unit; List datatype_decls ])
+          in
+          let build_consts_nodes () :
+              (node list, quotient_typing_error) Result.t =
+            List.fold_result ~init:[]
+              ~f:(fun acc (xname, xtype) ->
+                build_vtype state xtype >>| fun xtype_node ->
+                List [ Op ("declare-const", [ Atom xname; xtype_node ]) ] :: acc)
+              state.declared_consts
+            >>| List.rev
+          in
+          let build_top_level_nodes () :
+              (node list, quotient_typing_error) Result.t =
+            List.fold_result ~init:[]
+              ~f:(fun acc elem ->
+                build_top_level_elem state elem >>| fun elem_node ->
+                elem_node :: acc)
+              state.top_level_rev
+            >>| List.rev
+          in
+          build_datatype_decl () >>= fun (datatype_decl : node) ->
+          build_consts_nodes () >>= fun (declared_consts_nodes : node list) ->
+          build_top_level_nodes () >>| fun (top_level_nodes : node list) ->
+          (datatype_decl :: declared_consts_nodes) @ top_level_nodes
       end
     end
 
