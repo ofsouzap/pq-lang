@@ -753,7 +753,8 @@ functor
               Ok (Op ("Array", [ t1_node; t2_node ]))
           | VTypeCustom ct_name -> Ok (Atom ct_name)
 
-        let rec build_expr (state : State.t) :
+        let rec build_expr ~(local_scope_varnames : StringSet.t)
+            (state : State.t) :
             FlatPattern.flat_expr ->
             (LispBuilder.node, quotient_typing_error) Result.t =
           let open Result in
@@ -764,76 +765,102 @@ functor
           | BoolLit (_, b) -> Ok (Atom (Bool.to_string b))
           | Var (_, name) -> Ok (Atom name)
           | Add (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op ("+", [ node1; node2 ]))
           | Neg (_, e) ->
-              build_expr state e >>= fun node -> Ok (Op ("-", [ node ]))
+              build_expr ~local_scope_varnames state e >>= fun node ->
+              Ok (Op ("-", [ node ]))
           | Subtr (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op ("-", [ node1; node2 ]))
           | Mult (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op ("*", [ node1; node2 ]))
           | BNot (_, e) ->
-              build_expr state e >>= fun node -> Ok (Op ("not", [ node ]))
+              build_expr ~local_scope_varnames state e >>= fun node ->
+              Ok (Op ("not", [ node ]))
           | BOr (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op ("or", [ node1; node2 ]))
           | BAnd (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op ("and", [ node1; node2 ]))
           | Eq (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op ("=", [ node1; node2 ]))
           | Gt (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op (">", [ node1; node2 ]))
           | GtEq (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op (">=", [ node1; node2 ]))
           | Lt (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op ("<", [ node1; node2 ]))
           | LtEq (_, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
               Ok (Op ("<=", [ node1; node2 ]))
           | If (_, e1, e2, e3) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
-              build_expr state e3 >>= fun node3 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr ~local_scope_varnames state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e3 >>= fun node3 ->
               Ok (Op ("ite", [ node1; node2; node3 ]))
           | Let (_, x, e1, e2) ->
-              build_expr state e1 >>= fun node1 ->
-              build_expr state e2 >>= fun node2 ->
+              build_expr ~local_scope_varnames state e1 >>= fun node1 ->
+              build_expr
+                ~local_scope_varnames:(Set.add local_scope_varnames x)
+                state e2
+              >>= fun node2 ->
               Ok (Op ("let", [ List [ List [ Atom x; node1 ] ]; node2 ]))
           | Pair (_, e1, e2) ->
               let e1_t = (FlatPattern.flat_node_val e1).t in
               let e2_t = (FlatPattern.flat_node_val e2).t in
               State.state_get_pair_type_info (e1_t, e2_t) state
               >>= fun pair_type_info ->
-              build_expr state e1 >>= fun e1' ->
-              build_expr state e2 >>| fun e2' ->
+              build_expr ~local_scope_varnames state e1 >>= fun e1' ->
+              build_expr ~local_scope_varnames state e2 >>| fun e2' ->
               Op (pair_type_info.constructor_name, [ e1'; e2' ])
-          | App _ -> Ok (failwith "TODO - check exact type of first thingy")
+          | App (_, e1, e2) -> (
+              build_expr ~local_scope_varnames state e1 >>= fun e1_node ->
+              build_expr ~local_scope_varnames state e2 >>| fun e2_node ->
+              let default_repr : node = Op ("select", [ e1_node; e2_node ]) in
+              match e1 with
+              | Var (_, fname) ->
+                  (* This is the only case in which we need to check whether we may not need to use "select" to run the function *)
+                  if Set.mem local_scope_varnames fname then
+                    (* This is a top-level function, so we can just use the function name *)
+                    Op (fname, [ e2_node ])
+                  else
+                    (* This is a local function, so we need to use "select" *)
+                    default_repr
+              | _ -> default_repr)
           | Constructor (_, name, e) ->
-              build_expr state e >>= fun node -> Ok (Op (name, [ node ]))
+              build_expr ~local_scope_varnames state e >>= fun node ->
+              Ok (Op (name, [ node ]))
           | Match (_, e, cases) ->
-              build_expr state e >>= fun e_node ->
+              build_expr ~local_scope_varnames state e >>= fun e_node ->
               let build_case
                   ( (pat : FlatPattern.flat_pattern),
                     (body : FlatPattern.flat_expr) ) :
                   (node, quotient_typing_error) Result.t =
-                build_expr state body >>= fun body_node ->
+                build_expr
+                  ~local_scope_varnames:
+                    ((* We need to add all the bound variables of the pattern as local-scope variables *)
+                     FlatPattern.defined_vars pat
+                    |> List.fold ~init:local_scope_varnames
+                         ~f:(fun acc (xname, _) -> Set.add acc xname))
+                  state body
+                >>= fun body_node ->
                 match pat with
                 | FlatPattern.FlatPatPair (_, (_, x1name, x1t), (_, x2name, x2t))
                   ->
@@ -873,7 +900,8 @@ functor
               | `NonRec (Some (param_name, param_t)) ->
                   build_vtype state param_t >>= fun param_type_node ->
                   build_vtype state return_t >>= fun return_type_node ->
-                  build_expr state body >>= fun body_node ->
+                  build_expr ~local_scope_varnames:StringSet.empty state body
+                  >>= fun body_node ->
                   Ok
                     (Op
                        ( "define-fun",
@@ -886,7 +914,8 @@ functor
               | `Rec (param_name, param_t) ->
                   build_vtype state param_t >>= fun param_type_node ->
                   build_vtype state return_t >>= fun return_type_node ->
-                  build_expr state body >>= fun body_node ->
+                  build_expr ~local_scope_varnames:StringSet.empty state body
+                  >>= fun body_node ->
                   Ok
                     (Op
                        ( "define-fun-rec",
