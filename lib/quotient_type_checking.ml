@@ -580,7 +580,7 @@ functor
                       (List.map ~f:build_case (Nonempty_list.to_list cases));
                   ] )
 
-        let build_elem : State.elem -> LispBuilder.node = function
+        let build_elem : State.top_level_elem -> LispBuilder.node = function
           | VarDecl (xname, xtype) ->
               LispBuilder.Op
                 ( "declare-const",
@@ -624,9 +624,7 @@ functor
                         build_expr body;
                       ] ))
 
-        let build (state_rev : State.t) : LispBuilder.node list =
-          let state = List.rev state_rev in
-          List.map state ~f:build_elem
+        let build : State.t -> LispBuilder.node list = failwith "TODO"
       end
     end
 
@@ -661,7 +659,7 @@ functor
                {
                  name = xname;
                  kind = `NonRec None;
-                 return_t = e1_type;
+                 return_t = expr_vtype_to_state_vtype e1_type;
                  body = e1;
                }
                state)
