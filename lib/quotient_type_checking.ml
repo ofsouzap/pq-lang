@@ -90,11 +90,11 @@ functor
 
     (** Generate a fresh variable name, given a set of the currently-defined
         names *)
-    let generate_fresh_varname (existing_names : StringSet.t) :
-        varname * StringSet.t =
-      (* TODO - have a "seed" name, so that the resulting name can look similar to the source code's variables' names *)
+    let generate_fresh_varname ?(seed_name : string option)
+        (existing_names : StringSet.t) : varname * StringSet.t =
+      let name_base = Option.value seed_name ~default:"x" in
       let rec loop (i : int) : varname =
-        let candidate = sprintf "x%d" i in
+        let candidate = sprintf "%s%d" name_base i in
         if Set.mem existing_names candidate then loop (i + 1) else candidate
       in
       let new_name = loop 0 in
@@ -230,10 +230,10 @@ functor
                 )
             ``` *)
             let new_binding_name_1, existing_names =
-              generate_fresh_varname existing_names
+              generate_fresh_varname ~seed_name:"fst" existing_names
             in
             let new_binding_name_2, existing_names =
-              generate_fresh_varname existing_names
+              generate_fresh_varname ~seed_name:"snd" existing_names
             in
             let p1_t = (pattern_node_val p1).t in
             let p2_t = (pattern_node_val p2).t in
@@ -281,7 +281,7 @@ functor
                 )
             ``` *)
             let new_binding_name, existing_names =
-              generate_fresh_varname existing_names
+              generate_fresh_varname ~seed_name:"val" existing_names
             in
             let p1_t = (pattern_node_val p1).t in
             flatten_case_pattern ~existing_names (p1, e)
