@@ -60,6 +60,10 @@ functor
     type quotient_typing_error =
       | ProgramTypingError of typing_error
           (** A standard typing error occured *)
+      | UnexpectedTrivialMatchCasePatternError
+          (** The pattern for a case of a match construct was the trivial case
+              (matching all variables, equivalent to just renaming a variable)
+              unexpectedly and cannot be handled *)
 
     let custom_special_name x =
       "PQ-"
@@ -89,7 +93,6 @@ functor
     (** Provides functionality for flattened patterns in AST expressions *)
     module FlatPattern = struct
       type t =
-        | FlatPatName of pattern_tag * varname * vtype
         | FlatPatPair of
             pattern_tag
             * (pattern_tag * varname * vtype)
@@ -143,7 +146,6 @@ functor
       [@@deriving sexp, equal]
 
       let flat_pattern_node_val : flat_pattern -> pattern_tag = function
-        | FlatPatName (v, _, _) -> v
         | FlatPatPair (v, _, _) -> v
         | FlatPatConstructor (v, _, _) -> v
 
@@ -174,7 +176,6 @@ functor
       (** Get the list of variables and their types that this pattern introduces
           to its case expression's variable context *)
       let defined_vars : t -> (varname * vtype) list = function
-        | FlatPatName (_, x, t) -> [ (x, t) ]
         | FlatPatPair (_, (_, x1name, x1type), (_, x2name, x2type)) ->
             [ (x1name, x1type); (x2name, x2type) ]
         | FlatPatConstructor (_, _, (_, xname, xtype)) -> [ (xname, xtype) ]
@@ -190,9 +191,7 @@ functor
         let open Result in
         let outer_expr_type : vtype = (flat_node_val e).t in
         match p with
-        | PatName (v, x_name, x_t) ->
-            (* A named variable pattern *)
-            (existing_names, FlatPatName (v, x_name, x_t), e) |> Ok
+        | PatName _ -> Error UnexpectedTrivialMatchCasePatternError
         | PatPair
             ( v_pair,
               PatName (x1_v, x1_name, x1_t),
@@ -552,18 +551,10 @@ functor
           | Constructor (_, name, e) -> LispBuilder.Op (name, [ build_expr e ])
           | Match (_, e, cases) ->
               let build_case (pat, body) =
-                (* TODO - this was generated, check it *)
                 match pat with
-                | FlatPattern.FlatPatName _ ->
-                    failwith
-                      "TODO - remove this flat pattern node, it shouldn't exist"
-                | FlatPattern.FlatPatPair (_, (_, x1, _), (_, x2, _)) ->
+                | FlatPattern.FlatPatPair _ ->
                     LispBuilder.List
-                      [
-                        LispBuilder.List
-                          [ LispBuilder.Atom x1; LispBuilder.Atom x2 ];
-                        build_expr body;
-                      ]
+                      [ failwith "TODO - once pair type made"; build_expr body ]
                 | FlatPattern.FlatPatConstructor (_, c_name, (_, x, _)) ->
                     LispBuilder.List
                       [

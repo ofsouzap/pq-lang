@@ -414,6 +414,7 @@ functor
                   ((p : 'tag_p pattern), (c_e : ('tag_e, 'tag_p) expr))
                 ->
                 (* First, try type the pattern *)
+                (* TODO - don't allow the case patterns to be PatName. Check that they are compound patterns *)
                 type_pattern (type_ctx, VarCtx.empty) p
                 >>= fun (typed_p, p_ctx) ->
                 let p_t : vtype = pattern_node_val typed_p |> fst in
