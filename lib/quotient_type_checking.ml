@@ -5,6 +5,7 @@ open Variant_types
 open Varname
 open Pattern
 open Ast
+open Quotient_types
 open Custom_types
 open Program
 open Typing
@@ -986,14 +987,26 @@ functor
       end
     end
 
-    let rec check_expr (state : Smt.State.t) :
+    let perform_quotient_match_check ~(quotient_type : quotient_type)
+        ~(cases :
+           (FlatPattern.flat_pattern * FlatPattern.flat_expr) Nonempty_list.t)
+        (state : Smt.State.t) : (unit, quotient_typing_error) Result.t =
+      Nonempty_list.fold_result ~init:()
+        ~f:(fun () (case_p, case_e) ->
+          failwith
+            "TODO - find which eqconss unify with the case pattern, then \
+             continue with each")
+        cases
+
+    let rec check_expr ~(quotient_types : quotient_type list)
+        (state : Smt.State.t) :
         FlatPattern.flat_expr -> (unit, quotient_typing_error) Result.t =
       let open Result in
       let open Smt.State in
       function
       | UnitLit _ | IntLit _ | BoolLit _ | Var _ -> Ok ()
-      | Neg (_, e) -> check_expr state e
-      | BNot (_, e) -> check_expr state e
+      | Neg (_, e) -> check_expr ~quotient_types state e
+      | BNot (_, e) -> check_expr ~quotient_types state e
       | Add (_, e1, e2)
       | Subtr (_, e1, e2)
       | Mult (_, e1, e2)
@@ -1005,14 +1018,16 @@ functor
       | GtEq (_, e1, e2)
       | Lt (_, e1, e2)
       | LtEq (_, e1, e2) ->
-          check_expr state e1 >>= fun () -> check_expr state e2
+          check_expr ~quotient_types state e1 >>= fun () ->
+          check_expr ~quotient_types state e2
       | If (_, e1, e2, e3) ->
-          check_expr state e1 >>= fun () ->
-          check_expr state e2 >>= fun () -> check_expr state e3
+          check_expr ~quotient_types state e1 >>= fun () ->
+          check_expr ~quotient_types state e2 >>= fun () ->
+          check_expr ~quotient_types state e3
       | Let (_, xname, e1, e2) ->
-          check_expr state e1 >>= fun () ->
+          check_expr ~quotient_types state e1 >>= fun () ->
           let e1_type = (FlatPattern.flat_node_val e1).t in
-          check_expr
+          check_expr ~quotient_types
             (state_add_var_defn
                {
                  name = xname;
@@ -1022,9 +1037,37 @@ functor
                }
                state)
             e2
-      | App (_, e1, e2) -> check_expr state e1 >>= fun () -> check_expr state e2
-      | Match _ -> failwith "TODO"
-      | Constructor (_, _, e) -> check_expr state e
+      | App (_, e1, e2) ->
+          check_expr ~quotient_types state e1 >>= fun () ->
+          check_expr ~quotient_types state e2
+      | Match (_, e1, cases) ->
+          check_expr ~quotient_types state e1 >>= fun () ->
+          let e1_t = (FlatPattern.flat_node_val e1).t in
+          (match e1_t with
+          | VTypeCustom ct_name -> (
+              match
+                List.find quotient_types ~f:(fun qt ->
+                    equal_string qt.name ct_name)
+              with
+              | Some qt ->
+                  perform_quotient_match_check ~quotient_type:qt ~cases state
+              | None -> Ok ())
+          | _ -> Ok ())
+          >>= fun () ->
+          (* Check each case in turn *)
+          Nonempty_list.fold_result ~init:()
+            ~f:(fun () (p, e) ->
+              let state' : Smt.State.t =
+                (* Add the variables declared by the case pattern *)
+                List.fold ~init:state
+                  ~f:(fun acc (xname, xtype) ->
+                    state_add_var_decl (xname, xtype) acc)
+                  (FlatPattern.defined_vars p)
+              in
+              (* Check the case expression, with the updated state *)
+              check_expr ~quotient_types state' e)
+            cases
+      | Constructor (_, _, e) -> check_expr ~quotient_types state e
 
     let check_program (prog : tag_program) :
         (unit, quotient_typing_error) Result.t =
@@ -1032,6 +1075,11 @@ functor
       let open Smt.State in
       let existing_names = Program.existing_names prog in
       FlatPattern.of_program ~existing_names prog >>= fun (_, flat_prog) ->
+      let quotient_types : quotient_type list =
+        List.filter_map
+          ~f:(function QuotientType qt -> Some qt | _ -> None)
+          flat_prog.custom_types
+      in
       let state = Smt.State.state_initial in
       let state =
         (* Add the variant type definitions to the state *)
@@ -1059,7 +1107,7 @@ functor
             |> state_add_var_decl defn.param
           in
           (* Check the body of the TLD *)
-          check_expr defn_checking_state defn.body >>| fun () ->
+          check_expr ~quotient_types defn_checking_state defn.body >>| fun () ->
           (* Return the resulting state after defining the TLD *)
           state_add_var_defn
             {
@@ -1072,5 +1120,5 @@ functor
         flat_prog.top_level_defns
       >>= fun state ->
       (* Check the main body of the program with the accumulated state *)
-      check_expr state flat_prog.e
+      check_expr ~quotient_types state flat_prog.e
   end
