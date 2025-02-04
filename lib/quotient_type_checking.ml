@@ -55,9 +55,19 @@ functor
 
     type ast_tag = { t : vtype } [@@deriving sexp, equal]
     type pattern_tag = { t : vtype } [@@deriving sexp, equal]
-    type tag_pattern = pattern_tag Pattern.pattern
-    type tag_expr = (ast_tag, pattern_tag) expr
-    type tag_program = (ast_tag, pattern_tag) program
+    type tag_pattern = pattern_tag Pattern.pattern [@@deriving sexp, equal]
+    type tag_expr = (ast_tag, pattern_tag) expr [@@deriving sexp, equal]
+
+    type tag_quotient_type_eqcons = (ast_tag, pattern_tag) quotient_type_eqcons
+    [@@deriving sexp, equal]
+
+    type tag_quotient_type = (ast_tag, pattern_tag) quotient_type
+    [@@deriving sexp, equal]
+
+    type tag_custom_type = (ast_tag, pattern_tag) custom_type
+    [@@deriving sexp, equal]
+
+    type tag_program = (ast_tag, pattern_tag) program [@@deriving sexp, equal]
 
     type quotient_typing_error =
       | UnexpectedTrivialMatchCasePatternError
@@ -147,7 +157,7 @@ functor
       [@@deriving sexp, equal]
 
       type flat_program = {
-        custom_types : custom_type list;
+        custom_types : tag_custom_type list;
         top_level_defns : flat_top_level_defn list;
         e : flat_expr;
       }
@@ -1030,18 +1040,20 @@ functor
       end
     end
 
-    let perform_quotient_match_check ~(quotient_type : quotient_type)
+    let perform_quotient_match_check ~(quotient_type : tag_quotient_type)
         ~(cases :
            (FlatPattern.flat_pattern * FlatPattern.flat_expr) Nonempty_list.t)
         (state : Smt.State.t) : (unit, quotient_typing_error) Result.t =
+      let _ = quotient_type in
+      let _ = state in
       Nonempty_list.fold_result ~init:()
-        ~f:(fun () (case_p, case_e) ->
+        ~f:(fun () _ ->
           failwith
             "TODO - find which eqconss unify with the case pattern, then \
              continue with each")
         cases
 
-    let rec check_expr ~(quotient_types : quotient_type list)
+    let rec check_expr ~(quotient_types : tag_quotient_type list)
         (state : Smt.State.t) :
         FlatPattern.flat_expr -> (unit, quotient_typing_error) Result.t =
       let open Result in
@@ -1118,7 +1130,7 @@ functor
       let open Smt.State in
       let existing_names = Program.existing_names prog in
       FlatPattern.of_program ~existing_names prog >>= fun (_, flat_prog) ->
-      let quotient_types : quotient_type list =
+      let quotient_types : tag_quotient_type list =
         List.filter_map
           ~f:(function QuotientType qt -> Some qt | _ -> None)
           flat_prog.custom_types

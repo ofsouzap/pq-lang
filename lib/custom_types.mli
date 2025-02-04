@@ -32,4 +32,6 @@ val fmap_pattern :
   ('tag_e, 'tag_p1) custom_type ->
   ('tag_e, 'tag_p2) custom_type
 
+val to_plain_custom_type : ('tag_e, 'tag_p) custom_type -> plain_custom_type
+
 (* TODO - QCheck_testing submodule *)

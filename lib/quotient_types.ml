@@ -35,7 +35,18 @@ let eqcons_fmap_expr ~(f : 'tag_e1 -> 'tag_e2)
 let eqcons_fmap_pattern ~(f : 'tag_p1 -> 'tag_p2)
     (eqcons : ('tag_e, 'tag_p1) quotient_type_eqcons) :
     ('tag_e, 'tag_p2) quotient_type_eqcons =
-  { eqcons with body = (fst eqcons.body |> Pattern.fmap ~f, snd eqcons.body) }
+  {
+    eqcons with
+    body =
+      ( fst eqcons.body |> Pattern.fmap ~f,
+        snd eqcons.body |> Ast.fmap_pattern ~f );
+  }
+
+let eqcons_to_plain_eqcons (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) :
+    plain_quotient_type_eqcons =
+  eqcons
+  |> eqcons_fmap_expr ~f:(fun _ -> ())
+  |> eqcons_fmap_pattern ~f:(fun _ -> ())
 
 let quotient_type_eqcons_to_source_code ?(use_newlines : bool option)
     (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) : string =
@@ -79,6 +90,10 @@ let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) :
 let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) :
     ('tag_e, 'tag_p1) quotient_type -> ('tag_e, 'tag_p2) quotient_type =
  fun qt -> { qt with eqconss = List.map ~f:(eqcons_fmap_pattern ~f) qt.eqconss }
+
+let to_plain_quotient_type (qt : ('tag_e, 'tag_p) quotient_type) :
+    plain_quotient_type =
+  qt |> fmap_expr ~f:(fun _ -> ()) |> fmap_pattern ~f:(fun _ -> ())
 
 let quotient_type_to_source_code ?(use_newlines : bool option)
     (qt : ('tag_e, 'tag_p) quotient_type) : string =

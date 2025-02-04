@@ -123,10 +123,7 @@ module SetTypingTypeContext : TypingTypeContext = struct
       (t, typing_error) Result.t =
     let type_defns_map_or_err =
       custom_types
-      |> List.map ~f:(fun ct ->
-             ct
-             |> Custom_types.fmap_expr ~f:(fun _ -> ())
-             |> Custom_types.fmap_pattern ~f:(fun _ -> ()))
+      |> List.map ~f:to_plain_custom_type
       |> StringMap.of_list_with_key ~get_key:(function
            | VariantType (vt_name, _) -> vt_name
            | QuotientType qt -> qt.name)

@@ -43,10 +43,10 @@ module TestingTypeCtx : sig
   val add_variant : t -> variant_type -> t
 
   (** Add a quotient type to the type context *)
-  val add_quotient : t -> quotient_type -> t
+  val add_quotient : t -> ('tag_e, 'tag_p) quotient_type -> t
 
   (** Creates a type from a list *)
-  val from_list : custom_type list -> t
+  val from_list : ('tag_e, 'tag_p) custom_type list -> t
 
   (** If there are any defined variant types, get a generator for a random one
       of them *)

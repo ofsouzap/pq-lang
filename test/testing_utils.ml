@@ -79,9 +79,9 @@ module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
   val add_variant : t -> variant_type -> t
-  val add_quotient : t -> quotient_type -> t
-  val type_defns_to_list : t -> custom_type list
-  val from_list : custom_type list -> t
+  val add_quotient : t -> ('tag_e, 'tag_p) quotient_type -> t
+  val type_defns_to_list : t -> plain_custom_type list
+  val from_list : ('tag_e, 'tag_p) custom_type list -> t
   val variant_gen_opt : t -> variant_type QCheck.Gen.t option
   val sexp_of_t : t -> Sexp.t
 
@@ -104,13 +104,14 @@ module TestingTypeCtx : sig
 end = struct
   open Typing
 
-  type t = custom_type list
+  type t = plain_custom_type list
   type this_t = t
 
   let empty = []
 
-  let create ~(custom_types : custom_type list) : (t, typing_error) Result.t =
-    Ok custom_types
+  let create ~(custom_types : ('tag_e, 'tag_p) custom_type list) :
+      (t, typing_error) Result.t =
+    Ok (List.map ~f:to_plain_custom_type custom_types)
 
   let find_type_defn_by_name ctx td_name =
     List.find ctx ~f:(fun x_td -> equal_string (custom_type_name x_td) td_name)
@@ -129,9 +130,12 @@ end = struct
       | QuotientType _ -> None)
 
   let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
-  let add_quotient (ctx : t) (qt : quotient_type) : t = QuotientType qt :: ctx
+
+  let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) quotient_type) : t =
+    QuotientType (to_plain_quotient_type qt) :: ctx
+
   let type_defns_to_list = Fn.id
-  let from_list cts = cts
+  let from_list = List.map ~f:to_plain_custom_type
 
   let variant_gen_opt (ctx : t) : variant_type QCheck.Gen.t option =
     let open QCheck.Gen in
@@ -144,7 +148,7 @@ end = struct
     match choices with [] -> None | _ :: _ -> Some (oneof choices)
 
   let sexp_of_t : t -> Sexp.t =
-    Fn.compose (sexp_of_list sexp_of_custom_type) type_defns_to_list
+    Fn.compose (sexp_of_list sexp_of_plain_custom_type) type_defns_to_list
 
   module QCheck_testing = struct
     type t = this_t
@@ -167,7 +171,7 @@ end = struct
       fix
         (fun self
              ( (rem_variant_types, rem_quotient_types),
-               (type_ctx : custom_type list) ) ->
+               (type_ctx : plain_custom_type list) ) ->
           let variant_type_gen : variant_type QCheck.Gen.t =
             Variant_types.QCheck_testing.gen
               {
@@ -217,7 +221,8 @@ end = struct
       let print_variant_type : variant_type QCheck.Print.t =
         QCheck.Print.(pair Fn.id (list print_variant_type_constructor))
       in
-      let print_quotient_type_eqcons : quotient_type_eqcons QCheck.Print.t =
+      let print_quotient_type_eqcons : plain_quotient_type_eqcons QCheck.Print.t
+          =
         let open QCheck.Print in
         fun eqcons ->
           sprintf "{bindings=%s; body=%s}"
@@ -226,13 +231,13 @@ end = struct
                (ast_to_source_code ~use_newlines:false)
                eqcons.body)
       in
-      let print_quotient_type : quotient_type QCheck.Print.t =
+      let print_quotient_type : plain_quotient_type QCheck.Print.t =
        fun qt ->
         sprintf "{name=%s; base_type_name=%s; eqconss=%s}" qt.name
           qt.base_type_name
           ((QCheck.Print.list print_quotient_type_eqcons) qt.eqconss)
       in
-      let print_type_defn : custom_type QCheck.Print.t = function
+      let print_type_defn : plain_custom_type QCheck.Print.t = function
         | VariantType vt -> sprintf "VariantType(%s)" (print_variant_type vt)
         | QuotientType qt -> sprintf "QuotientType(%s)" (print_quotient_type qt)
       in

@@ -32,3 +32,8 @@ let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) :
     ('tag_e, 'tag_p1) custom_type -> ('tag_e, 'tag_p2) custom_type = function
   | VariantType vt -> VariantType vt
   | QuotientType qt -> QuotientType (Quotient_types.fmap_pattern ~f qt)
+
+let to_plain_custom_type : ('tag_e, 'tag_p) custom_type -> plain_custom_type =
+  function
+  | VariantType vt -> VariantType vt
+  | QuotientType qt -> QuotientType (Quotient_types.to_plain_quotient_type qt)

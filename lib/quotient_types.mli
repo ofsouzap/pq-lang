@@ -34,6 +34,9 @@ val eqcons_fmap_pattern :
   ('tag_e, 'tag_p1) quotient_type_eqcons ->
   ('tag_e, 'tag_p2) quotient_type_eqcons
 
+val eqcons_to_plain_eqcons :
+  ('tag_e, 'tag_p) quotient_type_eqcons -> plain_quotient_type_eqcons
+
 (** Convert a quotient type equality constructor definition into source code. *)
 val quotient_type_eqcons_to_source_code :
   ?use_newlines:bool -> ('tag_e, 'tag_p) quotient_type_eqcons -> string
@@ -69,6 +72,9 @@ val fmap_pattern :
   f:('tag_p1 -> 'tag_p2) ->
   ('tag_e, 'tag_p1) quotient_type ->
   ('tag_e, 'tag_p2) quotient_type
+
+val to_plain_quotient_type :
+  ('tag_e, 'tag_p) quotient_type -> plain_quotient_type
 
 (** Convert a quotient type definition into source code. *)
 val quotient_type_to_source_code :
