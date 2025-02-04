@@ -15,7 +15,10 @@ type typing_error =
       *)
   | PatternTypeMismatch of plain_pattern * vtype * vtype
       (** A pattern was expected to have the first type but had the second *)
-  | EqConsBodyTypeMismatch of quotient_type_eqcons * vtype * vtype
+  | EqConsBodyPatternNotExpectedType of plain_quotient_type_eqcons * vtype
+      (** The eqcons's body's pattern was meant to type as the given type but
+          didn't *)
+  | EqConsBodyTypeMismatch of plain_quotient_type_eqcons * vtype * vtype
       (** The body of an equivalence constructor was expected to have the first
           type but had the second *)
   | EqualOperatorTypeMistmatch of vtype * vtype
@@ -50,10 +53,11 @@ module type TypingTypeContext = sig
   val empty : t
 
   (** Creates a typing context using the provided values *)
-  val create : custom_types:custom_type list -> (t, typing_error) Result.t
+  val create :
+    custom_types:('tag_e, 'tag_p) custom_type list -> (t, typing_error) Result.t
 
   (** Looks up a type definition, by name, in the context *)
-  val find_type_defn_by_name : t -> string -> custom_type option
+  val find_type_defn_by_name : t -> string -> plain_custom_type option
 
   (** Check whether a type definition exists in the context, by name *)
   val type_defn_exists : t -> string -> bool
@@ -64,7 +68,7 @@ module type TypingTypeContext = sig
     t -> string -> (variant_type * variant_type_constructor) option
 
   (** Get a list of the variant types defined in the context *)
-  val type_defns_to_list : t -> custom_type list
+  val type_defns_to_list : t -> plain_custom_type list
 end
 
 (** Typing context of types using a simple set-based approach *)

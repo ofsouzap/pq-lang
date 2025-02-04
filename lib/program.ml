@@ -38,7 +38,7 @@ let top_level_defn_to_source_code ~(use_newlines : bool) :
   SourceCodeBuilder.from_converter ~converter:convert ~use_newlines
 
 type ('tag_e, 'tag_p) program = {
-  custom_types : custom_type list;
+  custom_types : ('tag_e, 'tag_p) custom_type list;
   top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
   e : ('tag_e, 'tag_p) expr;
 }
@@ -52,7 +52,7 @@ type plain_program = (unit, unit) program [@@deriving sexp, equal]
 let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) program) :
     ('tag_e2, 'tag_p) program =
   {
-    custom_types = prog.custom_types;
+    custom_types = List.map ~f:(Custom_types.fmap_expr ~f) prog.custom_types;
     top_level_defns =
       List.map
         ~f:(fun defn ->
@@ -64,7 +64,7 @@ let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) program) :
 let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) program) :
     ('tag_e, 'tag_p2) program =
   {
-    custom_types = prog.custom_types;
+    custom_types = List.map ~f:(Custom_types.fmap_pattern ~f) prog.custom_types;
     top_level_defns =
       List.map
         ~f:(fun defn ->
@@ -184,7 +184,7 @@ end = struct
 
   let gen_type_defns_list ~(max_variant_types : int)
       ~(max_variant_type_constructors : int) ~(allow_fun_types : bool)
-      ~(mrd : int) : custom_type list QCheck.Gen.t =
+      ~(mrd : int) : ('tag_e, 'tag_p) custom_type list QCheck.Gen.t =
     (* TODO - allow this to generate quotient types too *)
     let open QCheck.Gen in
     int_range 0 max_variant_types >>= fun (n : int) ->
@@ -322,9 +322,17 @@ end = struct
    fun prog ->
     sprintf "[type definitions: %s]\n%s"
       QCheck.Print.(
-        list
-          (fun qt -> qt |> sexp_of_custom_type |> Sexp.to_string)
-          prog.custom_types)
+        let open Ast_qcheck_testing in
+        let ct_to_string ct =
+          match print_method with
+          | NoPrint -> ""
+          | PrintSexp (sexp_of_expr_tag, sexp_of_pat_tag) ->
+              ct
+              |> sexp_of_custom_type sexp_of_expr_tag sexp_of_pat_tag
+              |> Sexp.to_string
+          | PrintExprSource -> custom_type_name ct
+        in
+        list (fun ct -> ct |> ct_to_string) prog.custom_types)
       (Ast_qcheck_testing.print print_method prog.e)
 
   let shrink (opts : shrink_options) : t QCheck.Shrink.t =

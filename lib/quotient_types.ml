@@ -5,13 +5,21 @@ open Vtype
 open Pattern
 open Ast
 
-type quotient_type_eqcons = {
+type ('tag_e, 'tag_p) quotient_type_eqcons = {
   bindings : (varname * vtype) list;
-  body : plain_pattern * plain_expr;
+  body : 'tag_p pattern * ('tag_e, 'tag_p) expr;
 }
 [@@deriving sexp, equal]
 
-let eqcons_existing_names (eqcons : quotient_type_eqcons) : StringSet.t =
+type plain_quotient_type_eqcons = (unit, unit) quotient_type_eqcons
+[@@deriving sexp, equal]
+
+type ('tag_e, 'tag_p) typed_quotient_type_eqcons =
+  (vtype * 'tag_e, vtype * 'tag_p) quotient_type_eqcons
+[@@deriving sexp, equal]
+
+let eqcons_existing_names (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) :
+    StringSet.t =
   let bindings_names =
     eqcons.bindings |> List.map ~f:(fun (v, _) -> v) |> StringSet.of_list
   in
@@ -19,8 +27,18 @@ let eqcons_existing_names (eqcons : quotient_type_eqcons) : StringSet.t =
   Set.union bindings_names
     (Set.union (Pattern.existing_names p) (Ast.existing_names e))
 
+let eqcons_fmap_expr ~(f : 'tag_e1 -> 'tag_e2)
+    (eqcons : ('tag_e1, 'tag_p) quotient_type_eqcons) :
+    ('tag_e2, 'tag_p) quotient_type_eqcons =
+  { eqcons with body = (fst eqcons.body, snd eqcons.body |> Ast.fmap ~f) }
+
+let eqcons_fmap_pattern ~(f : 'tag_p1 -> 'tag_p2)
+    (eqcons : ('tag_e, 'tag_p1) quotient_type_eqcons) :
+    ('tag_e, 'tag_p2) quotient_type_eqcons =
+  { eqcons with body = (fst eqcons.body |> Pattern.fmap ~f, snd eqcons.body) }
+
 let quotient_type_eqcons_to_source_code ?(use_newlines : bool option)
-    (eqcons : quotient_type_eqcons) : string =
+    (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) : string =
   let bindings_str =
     eqcons.bindings
     |> List.map ~f:(fun (v, vt) ->
@@ -31,14 +49,20 @@ let quotient_type_eqcons_to_source_code ?(use_newlines : bool option)
   sprintf "%s(%s) == (%s)" bindings_str (pattern_to_source_code p)
     (ast_to_source_code ?use_newlines e)
 
-type quotient_type = {
+type ('tag_e, 'tag_p) quotient_type = {
   name : string;
   base_type_name : string;
-  eqconss : quotient_type_eqcons list;
+  eqconss : ('tag_e, 'tag_p) quotient_type_eqcons list;
 }
 [@@deriving sexp, equal]
 
-let existing_names (qt : quotient_type) : StringSet.t =
+type plain_quotient_type = (unit, unit) quotient_type [@@deriving sexp, equal]
+
+type ('tag_e, 'tag_p) typed_quotient_type =
+  (vtype * 'tag_e, vtype * 'tag_p) quotient_type
+[@@deriving sexp, equal]
+
+let existing_names (qt : ('tag_e, 'tag_p) quotient_type) : StringSet.t =
   let eqcons_names =
     List.fold ~init:StringSet.empty
       ~f:(fun acc eqcons -> Set.union acc (eqcons_existing_names eqcons))
@@ -48,10 +72,18 @@ let existing_names (qt : quotient_type) : StringSet.t =
     (StringSet.singleton qt.name)
     (Set.union (StringSet.singleton qt.base_type_name) eqcons_names)
 
+let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) :
+    ('tag_e1, 'tag_p) quotient_type -> ('tag_e2, 'tag_p) quotient_type =
+ fun qt -> { qt with eqconss = List.map ~f:(eqcons_fmap_expr ~f) qt.eqconss }
+
+let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) :
+    ('tag_e, 'tag_p1) quotient_type -> ('tag_e, 'tag_p2) quotient_type =
+ fun qt -> { qt with eqconss = List.map ~f:(eqcons_fmap_pattern ~f) qt.eqconss }
+
 let quotient_type_to_source_code ?(use_newlines : bool option)
-    (qt : quotient_type) : string =
+    (qt : ('tag_e, 'tag_p) quotient_type) : string =
   let open SourceCodeBuilder in
-  let converter (qt : quotient_type) : state -> state =
+  let converter (qt : ('tag_e, 'tag_p) quotient_type) : state -> state =
     write (sprintf "qtype %s = %s" qt.name qt.base_type_name)
     |.> block
           (let blocked_converted_eqconss : (state -> state) list =
