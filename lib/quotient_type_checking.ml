@@ -3,7 +3,6 @@ open Utils
 open Vtype
 open Variant_types
 open Varname
-open Pattern
 open Ast
 open Quotient_types
 open Custom_types
@@ -56,7 +55,7 @@ functor
 
     type ast_tag = { t : vtype } [@@deriving sexp, equal]
     type pattern_tag = { t : vtype } [@@deriving sexp, equal]
-    type tag_pattern = pattern_tag pattern
+    type tag_pattern = pattern_tag Pattern.pattern
     type tag_expr = (ast_tag, pattern_tag) expr
     type tag_program = (ast_tag, pattern_tag) program
 
@@ -189,6 +188,16 @@ functor
             [ (x1name, x1type); (x2name, x2type) ]
         | FlatPatConstructor (_, _, (_, xname, xtype)) -> [ (xname, xtype) ]
 
+      (** Convert a flat pattern to a regular pattern *)
+      let to_non_flat_pattern : t -> tag_pattern =
+        let open Pattern in
+        function
+        | FlatPatPair (v, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)) ->
+            PatPair
+              (v, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
+        | FlatPatConstructor (v, c_name, (x1_v, x1_name, x1_t)) ->
+            PatConstructor (v, c_name, PatName (x1_v, x1_name, x1_t))
+
       (** Flatten a single case of a Match node so that the pattern is a flat
           pattern, and modify the case expression to perform any subsequent
           matching as needed *)
@@ -234,8 +243,8 @@ functor
             let new_binding_name_2, existing_names =
               generate_fresh_varname ~seed_name:"snd" existing_names
             in
-            let p1_t = (pattern_node_val p1).t in
-            let p2_t = (pattern_node_val p2).t in
+            let p1_t = (Pattern.pattern_node_val p1).t in
+            let p2_t = (Pattern.pattern_node_val p2).t in
             flatten_case_pattern ~existing_names (p2, e)
             >>=
             fun (existing_names, flattened_p2_case_p, flattened_p2_case_e) ->
@@ -282,7 +291,7 @@ functor
             let new_binding_name, existing_names =
               generate_fresh_varname ~seed_name:"val" existing_names
             in
-            let p1_t = (pattern_node_val p1).t in
+            let p1_t = (Pattern.pattern_node_val p1).t in
             flatten_case_pattern ~existing_names (p1, e)
             >>|
             fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
@@ -422,6 +431,40 @@ functor
               (fun existing_names e' ->
                 (existing_names, Constructor (v, name, e')))
               ~existing_names e
+
+      (** Convert a flat AST expression to a non-flat AST expression *)
+      let rec to_non_flat_expr : flat_expr -> tag_expr = function
+        | UnitLit v -> UnitLit v
+        | IntLit (v, n) -> IntLit (v, n)
+        | Add (v, e1, e2) -> Add (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | Neg (v, e) -> Neg (v, to_non_flat_expr e)
+        | Subtr (v, e1, e2) ->
+            Subtr (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | Mult (v, e1, e2) -> Mult (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | BoolLit (v, b) -> BoolLit (v, b)
+        | BNot (v, e) -> BNot (v, to_non_flat_expr e)
+        | BOr (v, e1, e2) -> BOr (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | BAnd (v, e1, e2) -> BAnd (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | Pair (v, e1, e2) -> Pair (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | Eq (v, e1, e2) -> Eq (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | Gt (v, e1, e2) -> Gt (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | GtEq (v, e1, e2) -> GtEq (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | Lt (v, e1, e2) -> Lt (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | LtEq (v, e1, e2) -> LtEq (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | If (v, e1, e2, e3) ->
+            If (v, to_non_flat_expr e1, to_non_flat_expr e2, to_non_flat_expr e3)
+        | Var (v, name) -> Var (v, name)
+        | Let (v, xname, e1, e2) ->
+            Let (v, xname, to_non_flat_expr e1, to_non_flat_expr e2)
+        | App (v, e1, e2) -> App (v, to_non_flat_expr e1, to_non_flat_expr e2)
+        | Match (v, e, cases) ->
+            Match
+              ( v,
+                to_non_flat_expr e,
+                Nonempty_list.map
+                  ~f:(fun (p, e) -> (to_non_flat_pattern p, to_non_flat_expr e))
+                  cases )
+        | Constructor (v, name, e) -> Constructor (v, name, to_non_flat_expr e)
 
       (** Convert a program to a flat program *)
       let of_program ~(existing_names : StringSet.t) (prog : tag_program) :
