@@ -103,6 +103,7 @@ module type Nonempty_list_sig = sig
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
   val rev : 'a t -> 'a t
+  val result_all : ('a, 'err) Result.t t -> ('a t, 'err) Result.t
 
   val fold_result :
     'a t -> init:'b -> f:('b -> 'a -> ('b, 'c) Result.t) -> ('b, 'c) Result.t
@@ -155,6 +156,10 @@ module Nonempty_list : Nonempty_list_sig = struct
           ~init:(singleton (head xs))
           ~f:(fun acc x -> cons x acc)
           (make (ts_h, ts_ts))
+
+  let result_all (xs : ('a, 'err) Result.t t) : ('a t, 'err) Result.t =
+    let open Result in
+    xs |> to_list |> Result.all >>| from_list_unsafe
 
   let fold_result (xs : 'a t) = List.fold_result (to_list xs)
 

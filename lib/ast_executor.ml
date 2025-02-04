@@ -6,6 +6,8 @@ open Varname
 open Pattern
 open Program
 
+(* TODO - perhaps re-make this module by just using the partial evaluator *)
+
 type ast_tag = unit [@@deriving sexp, equal]
 type pattern_tag = unit [@@deriving sexp, equal]
 

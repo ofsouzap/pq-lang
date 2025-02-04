@@ -75,6 +75,7 @@ module type Nonempty_list_sig = sig
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
   val rev : 'a t -> 'a t
+  val result_all : ('a, 'err) Result.t t -> ('a t, 'err) Result.t
 
   val fold_result :
     'a t -> init:'b -> f:('b -> 'a -> ('b, 'c) Result.t) -> ('b, 'c) Result.t
