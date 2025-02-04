@@ -362,7 +362,11 @@ end
 module TestingTypeChecker = TypeChecker (TestingTypeCtx) (TestingVarCtx)
 
 module UnitTag = struct
-  type t = unit
+  type t = unit [@@deriving sexp, equal]
+
+  let sexp_of_t = sexp_of_unit
+  let t_of_sexp = unit_of_sexp
+  let equal = equal_unit
 end
 
 module Unit_ast_qcheck_testing = Ast.QCheck_testing (UnitTag) (UnitTag)
@@ -387,3 +391,6 @@ let unit_program_arbitrary_with_default_options =
       print = Unit_ast_qcheck_testing.PrintExprSource;
       shrink = { preserve_type = false };
     }
+
+module Unit_partial_evaluator =
+  Partial_evaluation.PartialEvaluator (UnitTag) (UnitTag)

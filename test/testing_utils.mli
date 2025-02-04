@@ -108,7 +108,11 @@ module TestingTypeChecker : sig
 end
 
 module UnitTag : sig
-  type t = unit
+  type t = unit [@@deriving sexp, equal]
+
+  val sexp_of_t : t -> Sexp.t
+  val t_of_sexp : Sexp.t -> t
+  val equal : t -> t -> bool
 end
 
 module Unit_ast_qcheck_testing : sig
@@ -121,3 +125,7 @@ end
 
 val unit_program_arbitrary_with_default_options :
   Unit_program_qcheck_testing.t QCheck.arbitrary
+
+module Unit_partial_evaluator : sig
+  include module type of Partial_evaluation.PartialEvaluator (UnitTag) (UnitTag)
+end
