@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Vtype
 open Varname
 open Pattern
 open Ast
@@ -13,32 +12,30 @@ end) (TagPat : sig
   type t [@@deriving sexp, equal]
 end) : sig
   type closure = {
-    param : varname * vtype;
-    out_type : vtype;
-    body : (TagExpr.t, TagPat.t) typed_expr;
+    param : varname;
+    body : (TagExpr.t, TagPat.t) expr;
     store : store;
     recursive : [ `Recursive of varname | `NonRecursive ];
   }
   [@@deriving sexp, equal]
 
-  and store_val = ((TagExpr.t, TagPat.t) typed_expr, closure) Either.t
+  and store_val = ((TagExpr.t, TagPat.t) expr, closure) Either.t
   [@@deriving sexp, equal]
 
   and store = store_val StringMap.t [@@deriving sexp, equal]
 
-  type state = { store : store; e : (TagExpr.t, TagPat.t) typed_expr }
+  type state = { store : store; e : (TagExpr.t, TagPat.t) expr }
   [@@deriving sexp, equal]
 
   val eval :
     mrd:int ->
     state ->
-    ((TagExpr.t, TagPat.t) typed_expr, partial_evaluation_error) Result.t
+    ((TagExpr.t, TagPat.t) expr, partial_evaluation_error) Result.t
 end = struct
-  type tag_expr = (TagExpr.t, TagPat.t) typed_expr [@@deriving sexp, equal]
+  type tag_expr = (TagExpr.t, TagPat.t) expr [@@deriving sexp, equal]
 
   type closure = {
-    param : varname * vtype;
-    out_type : vtype;
+    param : varname;
     body : tag_expr;
     store : store;
     recursive : [ `Recursive of varname | `NonRecursive ];
@@ -176,8 +173,7 @@ end = struct
             | Some (Second closure) ->
                 let new_store =
                   (* Add the parameter to the store to use. Note it hasn't been evaluated yet *)
-                  Map.set closure.store ~key:(closure.param |> fst)
-                    ~data:(First e2)
+                  Map.set closure.store ~key:closure.param ~data:(First e2)
                 in
                 let new_store =
                   (* If the function is recursive, make it re-accessible in the execution of the function *)
