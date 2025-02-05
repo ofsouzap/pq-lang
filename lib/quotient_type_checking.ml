@@ -7,7 +7,6 @@ open Ast
 open Quotient_types
 open Custom_types
 open Program
-open Typing
 
 module type LispBuilderSig = sig
   (** The type of a node in the builder *)
