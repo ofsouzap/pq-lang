@@ -694,7 +694,7 @@ let test_cases_quotient_type_defn : test_case_full_prog list =
   [
     ( "Single variable binding",
       {|
-        type int_box = Int of int
+type int_box = Int of int
 
 qtype int_boxed
   = int_box
@@ -758,14 +758,14 @@ qtype int_boxed
         } );
     ( "Multiple variable bindings",
       {|
-        type tree = Leaf of int | Node of tree * tree
+          type tree = Leaf of int | Node of tree * tree
 
-qtype mobile
-  = tree
-  |/ (l : tree) -> (r : tree) => Node ((l : tree), (r : tree)) == (Node (r, l))
+  qtype mobile
+    = tree
+    |/ (l : tree) -> (r : tree) => Node ((l : tree), (r : tree)) == (Node (r, l))
 
-1
-|},
+  1
+  |},
       [
         TYPE;
         LNAME "tree";
@@ -854,6 +854,124 @@ qtype mobile
                               ( (),
                                 "Node",
                                 Pair ((), Var ((), "r"), Var ((), "l")) ) );
+                      };
+                    ];
+                };
+            ];
+          top_level_defns = [];
+          e = IntLit ((), 1);
+        } );
+    ( "Multiple eqconss",
+      {|
+type my_t = Int of int | Pair of my_t * my_t
+
+qtype my_qt
+  = my_t
+  |/ (x : int) => Int (x : int) == (x)
+  |/ (x : int) => Pair (Int (x : int), Int (x : int)) == (x)
+
+1
+|},
+      [
+        TYPE;
+        LNAME "my_t";
+        ASSIGN;
+        UNAME "Int";
+        OF;
+        INT;
+        PIPE;
+        UNAME "Pair";
+        OF;
+        LNAME "my_t";
+        STAR;
+        LNAME "my_t";
+        QTYPE;
+        LNAME "my_qt";
+        ASSIGN;
+        LNAME "my_t";
+        QUOTIENT;
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        BIG_ARROW;
+        UNAME "Int";
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        EQUATE;
+        LPAREN;
+        LNAME "x";
+        RPAREN;
+        QUOTIENT;
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        BIG_ARROW;
+        UNAME "Pair";
+        LPAREN;
+        UNAME "Int";
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        COMMA;
+        UNAME "Int";
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        RPAREN;
+        EQUATE;
+        LPAREN;
+        LNAME "x";
+        RPAREN;
+        INTLIT 1;
+      ],
+      Ok
+        {
+          custom_types =
+            [
+              VariantType
+                ( "my_t",
+                  [
+                    ("Int", VTypeInt);
+                    ("Pair", VTypePair (VTypeCustom "my_t", VTypeCustom "my_t"));
+                  ] );
+              QuotientType
+                {
+                  name = "my_qt";
+                  base_type_name = "my_t";
+                  eqconss =
+                    [
+                      {
+                        bindings = [ ("x", VTypeInt) ];
+                        body =
+                          ( PatConstructor
+                              ((), "Int", PatName ((), "x", VTypeInt)),
+                            Var ((), "x") );
+                      };
+                      {
+                        bindings = [ ("x", VTypeInt) ];
+                        body =
+                          ( PatConstructor
+                              ( (),
+                                "Pair",
+                                PatPair
+                                  ( (),
+                                    PatConstructor
+                                      ((), "Int", PatName ((), "x", VTypeInt)),
+                                    PatConstructor
+                                      ((), "Int", PatName ((), "x", VTypeInt))
+                                  ) ),
+                            Var ((), "x") );
                       };
                     ];
                 };

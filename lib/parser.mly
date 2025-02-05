@@ -192,11 +192,11 @@ quotient_type_eqcons:
 
 quotient_type_definition_eqconss:
   | QUOTIENT eqcons = quotient_type_eqcons { [eqcons] }
-  | QUOTIENT eqcons = quotient_type_eqcons QUOTIENT eqconss_tail = quotient_type_definition_eqconss { eqcons :: eqconss_tail }
+  | QUOTIENT eqcons = quotient_type_eqcons eqconss_tail = quotient_type_definition_eqconss { eqcons :: eqconss_tail }
 ;
 
 quotient_type_definition:
-  | QTYPE name = LNAME ASSIGN vt_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name = vt_name; eqconss=eqconss } }
+  | QTYPE name = LNAME ASSIGN base_type_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name; eqconss=eqconss } }
 ;
 
 top_level_defn_param:
