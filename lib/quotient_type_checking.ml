@@ -75,6 +75,20 @@ functor
               (matching all variables, equivalent to just renaming a variable)
               unexpectedly and cannot be handled *)
       | PairTypeNotDefinedInState of vtype * vtype
+      | PartialEvaluationError of Partial_evaluation.partial_evaluation_error
+
+    module TagAst = struct
+      type t = ast_tag [@@deriving sexp, equal]
+    end
+
+    module TagPattern = struct
+      type t = pattern_tag [@@deriving sexp, equal]
+    end
+
+    module PartialEvaluator =
+      Partial_evaluation.PartialEvaluator (TagAst) (TagPattern)
+
+    let partial_evaluation_default_mrd : int = 100
 
     let custom_special_name x =
       "PQ-"
@@ -778,6 +792,34 @@ functor
             search_add_pair_types_used state defn.body
           in
           { state with top_level_rev = VarDefn defn :: state.top_level_rev }
+
+        let to_partial_evaluator_store (state : t) : PartialEvaluator.store =
+          List.fold
+            ~init:(StringMap.empty : PartialEvaluator.store)
+            ~f:(fun acc -> function
+              | VarDecl _ -> acc
+              | VarDefn defn ->
+                  let defn_body = defn.body |> FlatPattern.to_non_flat_expr in
+                  let create_closure ~(recursive : bool) (param_name : string) :
+                      PartialEvaluator.closure =
+                    {
+                      param = param_name;
+                      body = defn_body;
+                      store = StringMap.empty;
+                      recursive =
+                        (if recursive then `Recursive defn.name
+                         else `NonRecursive);
+                    }
+                  in
+                  Map.set acc ~key:defn.name
+                    ~data:
+                      (match defn.kind with
+                      | `NonRec None -> First defn_body
+                      | `NonRec (Some (param_name, _)) ->
+                          Second (create_closure ~recursive:false param_name)
+                      | `Rec (param_name, _) ->
+                          Second (create_closure ~recursive:true param_name)))
+            state.top_level_rev
       end
 
       module StateBuilder = struct
@@ -1040,17 +1082,82 @@ functor
       end
     end
 
-    let perform_quotient_match_check ~(quotient_type : tag_quotient_type)
-        ~(cases :
-           (FlatPattern.flat_pattern * FlatPattern.flat_expr) Nonempty_list.t)
+    let find_matching_eqconss (p : tag_pattern)
+        (eqconss : tag_quotient_type_eqcons list) :
+        (pattern_tag Pattern_unification.unifier * tag_quotient_type_eqcons)
+        list =
+      List.filter_map eqconss ~f:(fun eqcons ->
+          Pattern_unification.find_unifier ~from_pattern:p
+            ~to_pattern:(fst eqcons.body)
+          |> function
+          | Error () -> None
+          | Ok unifier -> Some (unifier, eqcons))
+
+    let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
+        ~(quotient_type : tag_quotient_type) ~(match_node_v : ast_tag)
+        ~(cases : (tag_pattern * tag_expr) Nonempty_list.t)
         (state : Smt.State.t) : (unit, quotient_typing_error) Result.t =
-      let _ = quotient_type in
-      let _ = state in
+      let open Result in
+      let partial_evaluation_mrd =
+        Option.value ~default:partial_evaluation_default_mrd
+          partial_evaluation_mrd
+      in
+      let reform_match_with_arg (e1 : tag_expr) : tag_expr =
+        Match (match_node_v, e1, cases)
+      in
       Nonempty_list.fold_result ~init:()
-        ~f:(fun () _ ->
-          failwith
-            "TODO - find which eqconss unify with the case pattern, then \
-             continue with each")
+        ~f:(fun () (case_p, case_e) ->
+          List.map (find_matching_eqconss case_p quotient_type.eqconss)
+            ~f:(fun (unifier, eqcons) ->
+              let state =
+                (* TODO - need to consider the case where an eqcons binding name overlaps with a scoped variable name.
+                Best to pass existing_names into this func to get a fresh name *)
+                (* Add the first eqcons' bindings to the state *)
+                List.fold ~init:state
+                  ~f:(fun state (xname, xtype) ->
+                    Smt.State.state_add_var_decl (xname, xtype) state)
+                  eqcons.bindings
+              in
+              ((* Considering the LHS of the eqcons body *)
+               let l =
+                 Pattern_unification.apply_to_expr
+                   ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
+                   ~unifier case_e
+               in
+               PartialEvaluator.eval ~mrd:partial_evaluation_mrd
+                 { store = Smt.State.to_partial_evaluator_store state; e = l })
+              |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
+              >>= fun l' ->
+              ((* Considering the RHS of the eqcons body *)
+               let r =
+                 reform_match_with_arg
+                   Pattern_unification.(
+                     apply_to_pattern ~unifier (fst eqcons.body)
+                     |> pattern_to_expr ~convert_tag:(fun pat_tag ->
+                            ({ t = pat_tag.t } : ast_tag)))
+               in
+               PartialEvaluator.eval ~mrd:partial_evaluation_mrd
+                 { store = Smt.State.to_partial_evaluator_store state; e = r })
+              |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
+              >>| fun r' ->
+              let l'_rewrites =
+                failwith
+                  "TODO - find possible rewrites of l' for ANY of the quotient \
+                   types that l' types as"
+              in
+              let r'_rewrites =
+                failwith
+                  "TODO - find possible rewrites of r' for ANY of the quotient \
+                   types that r' types as"
+              in
+              (failwith
+                 "TODO - form a disjunction condition that any of (use list \
+                  monad bind) the l' rewrites equals any of (use list monad \
+                  bind) the r' rewrites, then find validity (unsatisfiability \
+                  of negation) with SMT solver"
+                : unit))
+          |> Result.all
+          >>| fun _ -> ())
         cases
 
     let rec check_expr ~(quotient_types : tag_quotient_type list)
@@ -1095,7 +1202,7 @@ functor
       | App (_, e1, e2) ->
           check_expr ~quotient_types state e1 >>= fun () ->
           check_expr ~quotient_types state e2
-      | Match (_, e1, cases) ->
+      | Match (v, e1, cases) ->
           check_expr ~quotient_types state e1 >>= fun () ->
           let e1_t = (FlatPattern.flat_node_val e1).t in
           (match e1_t with
@@ -1105,7 +1212,15 @@ functor
                     equal_string qt.name ct_name)
               with
               | Some qt ->
-                  perform_quotient_match_check ~quotient_type:qt ~cases state
+                  let non_flat_cases =
+                    Nonempty_list.map
+                      ~f:(fun (flat_p, flat_e) ->
+                        FlatPattern.
+                          (to_non_flat_pattern flat_p, to_non_flat_expr flat_e))
+                      cases
+                  in
+                  perform_quotient_match_check ~quotient_type:qt ~match_node_v:v
+                    ~cases:non_flat_cases state
               | None -> Ok ())
           | _ -> Ok ())
           >>= fun () ->

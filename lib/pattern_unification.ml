@@ -4,8 +4,8 @@ open Pattern
 
 type 'tag_p unifier = 'tag_p pattern StringMap.t [@@deriving sexp, equal]
 
-let create ~(from_pattern : 'tag_p pattern) ~(to_pattern : 'tag_p pattern) :
-    ('tag_p unifier, unit) Result.t =
+let find_unifier ~(from_pattern : 'tag_p pattern) ~(to_pattern : 'tag_p pattern)
+    : ('tag_p unifier, unit) Result.t =
   let open Result in
   let open Pattern in
   let rec aux (acc : 'tag_p unifier) :
