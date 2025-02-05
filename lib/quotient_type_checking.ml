@@ -70,6 +70,11 @@ functor
     type tag_program = (ast_tag, pattern_tag) program [@@deriving sexp, equal]
 
     type quotient_typing_error =
+      | QuotientConstraintCheckFailed
+          (** A quotient equality constructor is violated within the code *)
+      | SmtUnknownResult
+          (** The SMT solver was unable to determine the validity of some of the
+              input conditions *)
       | UnexpectedTrivialMatchCasePatternError
           (** The pattern for a case of a match construct was the trivial case
               (matching all variables, equivalent to just renaming a variable)
@@ -831,7 +836,7 @@ functor
         type t =
           | Not of t
           | Eq of FlatPattern.flat_expr * FlatPattern.flat_expr
-          | Or of t Nonempty_list.t
+          | Or of t list
 
         type assertion = t
 
@@ -1115,8 +1120,8 @@ functor
                 build_expr ~local_scope_varnames:StringSet.empty state e2
                 >>| fun e2_node -> Op ("=", [ e1_node; e2_node ])
             | Or xs ->
-                List.map ~f:aux (Nonempty_list.to_list xs) |> Result.all
-                >>| fun nodes -> Op ("or", nodes)
+                List.map ~f:aux xs |> Result.all >>| fun nodes ->
+                Op ("or", nodes)
           in
           fun assertion ->
             aux assertion >>| fun assertion_node ->
@@ -1270,17 +1275,38 @@ functor
                 |> fun (existing_names, rewrites) ->
                 (existing_names, r :: rewrites)
               in
-              let l_r_combinations =
-                List.(
-                  l_rewrites >>= fun l ->
-                  r_rewrites >>| fun r -> (l, r))
+              (* Flatten the l rewrite expressions *)
+              List.fold_result ~init:(existing_names, [])
+                ~f:(fun (existing_names, acc) e ->
+                  FlatPattern.of_ast ~existing_names e
+                  >>| fun (existing_names, flat_e) ->
+                  (existing_names, flat_e :: acc))
+                l_rewrites
+              >>= fun (existing_names, flat_l_rewrites) ->
+              (* Flatten the r rewrite expressions *)
+              List.fold_result ~init:(existing_names, [])
+                ~f:(fun (existing_names, acc) e ->
+                  FlatPattern.of_ast ~existing_names e
+                  >>| fun (existing_names, flat_e) ->
+                  (existing_names, flat_e :: acc))
+                r_rewrites
+              >>= fun (existing_names, flat_r_rewrites) ->
+              (* Form the main assertion of the SMT check *)
+              let assertion : Smt.Assertion.t =
+                let open Smt.Assertion in
+                (* Note that I use the negation as we are looking or validity, not satisifability:
+                the condition must be necessarily true, so we check that the negation is unsatisfiable *)
+                Not
+                  (Or
+                     (let open List in
+                      flat_l_rewrites >>= fun l ->
+                      flat_r_rewrites >>| fun r -> Eq (l, r)))
               in
-              let _ =
-                failwith
-                  "TODO - form disjunction of l_r_combinations, mapping each \
-                   pair to an equality and do an SMT solve"
-              in
-              Ok existing_names))
+              Smt.create_formula state [ assertion ] >>= fun formula ->
+              match Smt.check_satisfiability formula with
+              | `Unsat -> Ok existing_names
+              | `Sat -> Error QuotientConstraintCheckFailed
+              | `Unknown -> Error SmtUnknownResult))
 
     let rec check_expr ~(existing_names : StringSet.t)
         ~(quotient_types : tag_quotient_type list) (state : Smt.State.t) :
