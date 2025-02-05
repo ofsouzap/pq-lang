@@ -1,5 +1,6 @@
 open Core
 open Utils
+open Varname
 open Pattern
 
 type 'tag_p unifier = 'tag_p pattern StringMap.t [@@deriving sexp, equal]
@@ -21,6 +22,10 @@ let find_unifier ~(from_pattern : 'tag_p pattern) ~(to_pattern : 'tag_p pattern)
     | PatConstructor _, _ -> Error ()
   in
   aux StringMap.empty (from_pattern, to_pattern)
+
+let rec rename_var_in_body ~(old_name : varname) ~(new_name : varname)
+    (unifier : 'tag_p unifier) : 'tag_p unifier =
+  Map.map unifier ~f:(Pattern.rename_var ~old_name ~new_name)
 
 let rec apply_to_pattern ~(unifier : 'tag_p unifier) :
     'tag_p pattern -> 'tag_p pattern = function

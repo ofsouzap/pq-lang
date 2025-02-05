@@ -25,6 +25,10 @@ val pattern_node_val : 'a pattern -> 'a
 (** Map a function onto values in a pattern *)
 val fmap : f:('a -> 'b) -> 'a pattern -> 'b pattern
 
+(** Rename a variable in a pattern *)
+val rename_var :
+  old_name:varname -> new_name:varname -> 'a pattern -> 'a pattern
+
 (** Get all names used in a pattern *)
 val existing_names : 'a pattern -> StringSet.t
 

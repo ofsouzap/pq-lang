@@ -1094,9 +1094,10 @@ functor
           | Ok unifier -> Some (unifier, eqcons))
 
     let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
-        ~(quotient_type : tag_quotient_type) ~(match_node_v : ast_tag)
+        ~(existing_names : StringSet.t) ~(quotient_type : tag_quotient_type)
+        ~(match_node_v : ast_tag)
         ~(cases : (tag_pattern * tag_expr) Nonempty_list.t)
-        (state : Smt.State.t) : (unit, quotient_typing_error) Result.t =
+        (state : Smt.State.t) : (StringSet.t, quotient_typing_error) Result.t =
       let open Result in
       let partial_evaluation_mrd =
         Option.value ~default:partial_evaluation_default_mrd
@@ -1105,13 +1106,23 @@ functor
       let reform_match_with_arg (e1 : tag_expr) : tag_expr =
         Match (match_node_v, e1, cases)
       in
-      Nonempty_list.fold_result ~init:()
-        ~f:(fun () (case_p, case_e) ->
-          List.map (find_matching_eqconss case_p quotient_type.eqconss)
-            ~f:(fun (unifier, eqcons) ->
+      Nonempty_list.fold_result ~init:existing_names
+        ~f:(fun existing_names (case_p, case_e) ->
+          List.fold_result ~init:existing_names
+            (find_matching_eqconss case_p quotient_type.eqconss)
+            ~f:(fun existing_names (unifier, eqcons) ->
+              let existing_names, unifier =
+                List.fold ~init:(existing_names, unifier)
+                  ~f:(fun (existing_names, unifier) (xname, _) ->
+                    let xname', existing_names =
+                      generate_fresh_varname ~seed_name:xname existing_names
+                    in
+                    ( Set.add existing_names xname',
+                      Pattern_unification.rename_var_in_body ~old_name:xname
+                        ~new_name:xname' unifier ))
+                  eqcons.bindings
+              in
               let state =
-                (* TODO - need to consider the case where an eqcons binding name overlaps with a scoped variable name.
-                Best to pass existing_names into this func to get a fresh name *)
                 (* Add the first eqcons' bindings to the state *)
                 List.fold ~init:state
                   ~f:(fun state (xname, xtype) ->
@@ -1129,13 +1140,7 @@ functor
               |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
               >>= fun l' ->
               ((* Considering the RHS of the eqcons body *)
-               let r =
-                 reform_match_with_arg
-                   Pattern_unification.(
-                     apply_to_pattern ~unifier (fst eqcons.body)
-                     |> pattern_to_expr ~convert_tag:(fun pat_tag ->
-                            ({ t = pat_tag.t } : ast_tag)))
-               in
+               let r = reform_match_with_arg (snd eqcons.body) in
                PartialEvaluator.eval ~mrd:partial_evaluation_mrd
                  { store = Smt.State.to_partial_evaluator_store state; e = r })
               |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
@@ -1150,25 +1155,26 @@ functor
                   "TODO - find possible rewrites of r' for ANY of the quotient \
                    types that r' types as"
               in
-              (failwith
-                 "TODO - form a disjunction condition that any of (use list \
-                  monad bind) the l' rewrites equals any of (use list monad \
-                  bind) the r' rewrites, then find validity (unsatisfiability \
-                  of negation) with SMT solver"
-                : unit))
-          |> Result.all
-          >>| fun _ -> ())
+              let _ =
+                failwith
+                  "TODO - form a disjunction condition that any of (use list \
+                   monad bind) the l' rewrites equals any of (use list monad \
+                   bind) the r' rewrites, then find validity (unsatisfiability \
+                   of negation) with SMT solver"
+              in
+              existing_names)
+          |> fun _ -> failwith "TODO")
         cases
 
-    let rec check_expr ~(quotient_types : tag_quotient_type list)
-        (state : Smt.State.t) :
-        FlatPattern.flat_expr -> (unit, quotient_typing_error) Result.t =
+    let rec check_expr ~(existing_names : StringSet.t)
+        ~(quotient_types : tag_quotient_type list) (state : Smt.State.t) :
+        FlatPattern.flat_expr -> (StringSet.t, quotient_typing_error) Result.t =
       let open Result in
       let open Smt.State in
       function
-      | UnitLit _ | IntLit _ | BoolLit _ | Var _ -> Ok ()
-      | Neg (_, e) -> check_expr ~quotient_types state e
-      | BNot (_, e) -> check_expr ~quotient_types state e
+      | UnitLit _ | IntLit _ | BoolLit _ | Var _ -> Ok existing_names
+      | Neg (_, e) -> check_expr ~existing_names ~quotient_types state e
+      | BNot (_, e) -> check_expr ~existing_names ~quotient_types state e
       | Add (_, e1, e2)
       | Subtr (_, e1, e2)
       | Mult (_, e1, e2)
@@ -1180,16 +1186,20 @@ functor
       | GtEq (_, e1, e2)
       | Lt (_, e1, e2)
       | LtEq (_, e1, e2) ->
-          check_expr ~quotient_types state e1 >>= fun () ->
-          check_expr ~quotient_types state e2
+          check_expr ~existing_names ~quotient_types state e1
+          >>= fun existing_names ->
+          check_expr ~existing_names ~quotient_types state e2
       | If (_, e1, e2, e3) ->
-          check_expr ~quotient_types state e1 >>= fun () ->
-          check_expr ~quotient_types state e2 >>= fun () ->
-          check_expr ~quotient_types state e3
+          check_expr ~existing_names ~quotient_types state e1
+          >>= fun existing_names ->
+          check_expr ~existing_names ~quotient_types state e2
+          >>= fun existing_names ->
+          check_expr ~existing_names ~quotient_types state e3
       | Let (_, xname, e1, e2) ->
-          check_expr ~quotient_types state e1 >>= fun () ->
+          check_expr ~existing_names ~quotient_types state e1
+          >>= fun existing_names ->
           let e1_type = (FlatPattern.flat_node_val e1).t in
-          check_expr ~quotient_types
+          check_expr ~existing_names ~quotient_types
             (state_add_var_defn
                {
                  name = xname;
@@ -1200,10 +1210,12 @@ functor
                state)
             e2
       | App (_, e1, e2) ->
-          check_expr ~quotient_types state e1 >>= fun () ->
-          check_expr ~quotient_types state e2
+          check_expr ~existing_names ~quotient_types state e1
+          >>= fun existing_names ->
+          check_expr ~existing_names ~quotient_types state e2
       | Match (v, e1, cases) ->
-          check_expr ~quotient_types state e1 >>= fun () ->
+          check_expr ~existing_names ~quotient_types state e1
+          >>= fun existing_names ->
           let e1_t = (FlatPattern.flat_node_val e1).t in
           (match e1_t with
           | VTypeCustom ct_name -> (
@@ -1219,14 +1231,14 @@ functor
                           (to_non_flat_pattern flat_p, to_non_flat_expr flat_e))
                       cases
                   in
-                  perform_quotient_match_check ~quotient_type:qt ~match_node_v:v
-                    ~cases:non_flat_cases state
-              | None -> Ok ())
-          | _ -> Ok ())
-          >>= fun () ->
+                  perform_quotient_match_check ~existing_names ~quotient_type:qt
+                    ~match_node_v:v ~cases:non_flat_cases state
+              | None -> Ok existing_names)
+          | _ -> Ok existing_names)
+          >>= fun existing_names ->
           (* Check each case in turn *)
-          Nonempty_list.fold_result ~init:()
-            ~f:(fun () (p, e) ->
+          Nonempty_list.fold_result ~init:existing_names
+            ~f:(fun existing_names (p, e) ->
               let state' : Smt.State.t =
                 (* Add the variables declared by the case pattern *)
                 List.fold ~init:state
@@ -1235,16 +1247,18 @@ functor
                   (FlatPattern.defined_vars p)
               in
               (* Check the case expression, with the updated state *)
-              check_expr ~quotient_types state' e)
+              check_expr ~existing_names ~quotient_types state' e)
             cases
-      | Constructor (_, _, e) -> check_expr ~quotient_types state e
+      | Constructor (_, _, e) ->
+          check_expr ~existing_names ~quotient_types state e
 
     let check_program (prog : tag_program) :
-        (unit, quotient_typing_error) Result.t =
+        (StringSet.t, quotient_typing_error) Result.t =
       let open Result in
       let open Smt.State in
       let existing_names = Program.existing_names prog in
-      FlatPattern.of_program ~existing_names prog >>= fun (_, flat_prog) ->
+      FlatPattern.of_program ~existing_names prog
+      >>= fun (existing_names, flat_prog) ->
       let quotient_types : tag_quotient_type list =
         List.filter_map
           ~f:(function QuotientType qt -> Some qt | _ -> None)
@@ -1260,8 +1274,8 @@ functor
           flat_prog.custom_types
       in
       (* Check the top-level definitions and add them to the state *)
-      List.fold_result ~init:state
-        ~f:(fun state defn ->
+      List.fold_result ~init:(existing_names, state)
+        ~f:(fun (existing_names, state) defn ->
           let defn_checking_state =
             (* Create the state used whne checking the body of the function *)
             (if defn.recursive then
@@ -1277,18 +1291,21 @@ functor
             |> state_add_var_decl defn.param
           in
           (* Check the body of the TLD *)
-          check_expr ~quotient_types defn_checking_state defn.body >>| fun () ->
+          check_expr ~existing_names ~quotient_types defn_checking_state
+            defn.body
+          >>| fun existing_names ->
           (* Return the resulting state after defining the TLD *)
-          state_add_var_defn
-            {
-              name = defn.name;
-              kind = `NonRec None;
-              return_t = defn.return_t;
-              body = defn.body;
-            }
-            state)
+          ( existing_names,
+            state_add_var_defn
+              {
+                name = defn.name;
+                kind = `NonRec None;
+                return_t = defn.return_t;
+                body = defn.body;
+              }
+              state ))
         flat_prog.top_level_defns
-      >>= fun state ->
+      >>= fun (existing_names, state) ->
       (* Check the main body of the program with the accumulated state *)
-      check_expr ~quotient_types state flat_prog.e
+      check_expr ~existing_names ~quotient_types state flat_prog.e
   end

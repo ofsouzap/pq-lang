@@ -3,6 +3,7 @@
 
 open Core
 open Utils
+open Varname
 open Pattern
 
 type 'tag_p unifier = 'tag_p pattern StringMap.t [@@deriving sexp, equal]
@@ -13,6 +14,11 @@ val find_unifier :
   from_pattern:'tag_p pattern ->
   to_pattern:'tag_p pattern ->
   ('tag_p unifier, unit) Result.t
+
+(** Rename a variable in the body of a unifier's substitutions. This doesn't
+    affect the names that are substituted *)
+val rename_var_in_body :
+  old_name:varname -> new_name:varname -> 'tag_p unifier -> 'tag_p unifier
 
 (** Apply a unifier to a pattern *)
 val apply_to_pattern :

@@ -29,6 +29,16 @@ let rec fmap ~(f : 'a -> 'b) : 'a pattern -> 'b pattern = function
   | PatPair (v, p1, p2) -> PatPair (f v, fmap ~f p1, fmap ~f p2)
   | PatConstructor (v, cname, p) -> PatConstructor (f v, cname, fmap ~f p)
 
+let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
+  | PatName (v, xname, xtype) ->
+      PatName
+        (v, (if equal_string xname old_name then new_name else xname), xtype)
+  | PatPair (v, p1, p2) ->
+      PatPair
+        (v, rename_var ~old_name ~new_name p1, rename_var ~old_name ~new_name p2)
+  | PatConstructor (v, cname, p) ->
+      PatConstructor (v, cname, rename_var ~old_name ~new_name p)
+
 let rec existing_names : 'a pattern -> StringSet.t = function
   | PatName (_, xname, _) -> StringSet.singleton xname
   | PatPair (_, p1, p2) -> Set.union (existing_names p1) (existing_names p2)
