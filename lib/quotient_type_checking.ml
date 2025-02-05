@@ -1082,6 +1082,21 @@ functor
       end
     end
 
+    let use_fresh_names_for_eqcons_unifier ~(existing_names : StringSet.t)
+        ( (eqcons : tag_quotient_type_eqcons),
+          (unifier : pattern_tag Pattern_unification.unifier) ) :
+        StringSet.t * pattern_tag Pattern_unification.unifier =
+      let bindings = eqcons.bindings in
+      List.fold ~init:(existing_names, unifier)
+        ~f:(fun (existing_names, unifier) (xname, _) ->
+          let xname', existing_names =
+            generate_fresh_varname ~seed_name:xname existing_names
+          in
+          ( Set.add existing_names xname',
+            Pattern_unification.rename_var_in_body ~old_name:xname
+              ~new_name:xname' unifier ))
+        bindings
+
     let find_matching_eqconss
         (x : [ `Pattern of tag_pattern | `Expr of tag_expr ])
         (eqconss : tag_quotient_type_eqcons list) :
@@ -1102,24 +1117,25 @@ functor
           | Error () -> None
           | Ok unifier -> Some (unifier, eqcons))
 
-    let find_all_possible_quotient_rewrites
+    let find_all_possible_quotient_rewrites ~(existing_names : StringSet.t)
         ~(all_quotient_types : tag_quotient_type list) (e : tag_expr) :
-        tag_expr list =
-      List.fold ~init:[]
-        ~f:(fun acc qt ->
+        StringSet.t * tag_expr list =
+      List.fold all_quotient_types ~init:(existing_names, [])
+        ~f:(fun (existing_names, acc) qt ->
           let unifiers =
             (* Find all possible unifiers *)
             List.map ~f:fst (find_matching_eqconss (`Expr e) qt.eqconss)
           in
-          List.fold ~init:acc
-            ~f:(fun acc unifier ->
-              (* For each unifier found, apply to input expression and add to accumulated output *)
-              Pattern_unification.apply_to_expr
-                ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
-                ~unifier e
-              :: acc)
+          List.fold ~init:(existing_names, acc)
+            ~f:(fun (existing_names, acc) unifier ->
+              (* For each unifier found, apply to input expression and add to accumulated output.
+              Also have to perform renaming for the bindings *)
+              ( existing_names,
+                Pattern_unification.apply_to_expr
+                  ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
+                  ~unifier e
+                :: acc ))
             unifiers)
-        all_quotient_types
 
     let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
         ~(existing_names : StringSet.t)
@@ -1135,21 +1151,16 @@ functor
       let reform_match_with_arg (e1 : tag_expr) : tag_expr =
         Match (match_node_v, e1, cases)
       in
-      Nonempty_list.fold_result ~init:existing_names
+      Nonempty_list.fold_result cases ~init:existing_names
         ~f:(fun existing_names (case_p, case_e) ->
+          (* Iterating through each case of the match *)
           List.fold_result ~init:existing_names
             (find_matching_eqconss (`Pattern case_p) quotient_type.eqconss)
             ~f:(fun existing_names (unifier, eqcons) ->
+              (* Iterating through matching eqconss of the case *)
               let existing_names, unifier =
-                List.fold ~init:(existing_names, unifier)
-                  ~f:(fun (existing_names, unifier) (xname, _) ->
-                    let xname', existing_names =
-                      generate_fresh_varname ~seed_name:xname existing_names
-                    in
-                    ( Set.add existing_names xname',
-                      Pattern_unification.rename_var_in_body ~old_name:xname
-                        ~new_name:xname' unifier ))
-                  eqcons.bindings
+                use_fresh_names_for_eqcons_unifier ~existing_names
+                  (eqcons, unifier)
               in
               let state =
                 (* Add the first eqcons' bindings to the state *)
@@ -1177,14 +1188,20 @@ functor
                   e = reform_match_with_arg (snd eqcons.body);
                 }
               |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
-              >>| fun r ->
-              let l_rewrites : tag_expr list =
+              >>= fun r ->
+              let existing_names, l_rewrites =
                 (* All possible writings of l, including the original *)
-                l :: find_all_possible_quotient_rewrites ~all_quotient_types l
+                find_all_possible_quotient_rewrites ~existing_names
+                  ~all_quotient_types l
+                |> fun (existing_names, rewrites) ->
+                (existing_names, l :: rewrites)
               in
-              let r_rewrites : tag_expr list =
+              let existing_names, r_rewrites =
                 (* All possible writings of r, including the original *)
-                r :: find_all_possible_quotient_rewrites ~all_quotient_types r
+                find_all_possible_quotient_rewrites ~existing_names
+                  ~all_quotient_types r
+                |> fun (existing_names, rewrites) ->
+                (existing_names, r :: rewrites)
               in
               let l_r_combinations =
                 List.(
@@ -1196,9 +1213,7 @@ functor
                   "TODO - form disjunction of l_r_combinations, mapping each \
                    pair to an equality and do an SMT solve"
               in
-              existing_names)
-          |> fun _ -> failwith "TODO")
-        cases
+              Ok existing_names))
 
     let rec check_expr ~(existing_names : StringSet.t)
         ~(quotient_types : tag_quotient_type list) (state : Smt.State.t) :
