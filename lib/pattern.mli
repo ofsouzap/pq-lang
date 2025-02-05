@@ -28,6 +28,10 @@ val fmap : f:('a -> 'b) -> 'a pattern -> 'b pattern
 (** Get all names used in a pattern *)
 val existing_names : 'a pattern -> StringSet.t
 
+(** Get the list of variables and their types that this pattern introduces to
+    its case expression's variable context *)
+val defined_vars : 'a pattern -> (varname * vtype) list
+
 (** Convert a pattern to a source code representation *)
 val pattern_to_source_code : 'a pattern -> string
 

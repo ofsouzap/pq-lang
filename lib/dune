@@ -9,6 +9,7 @@
   varname
   pattern
   ast
+  pattern_unification
   quotient_types
   custom_types
   program

@@ -35,6 +35,11 @@ let rec existing_names : 'a pattern -> StringSet.t = function
   | PatConstructor (_, c_name, p) ->
       Set.union (StringSet.singleton c_name) (existing_names p)
 
+let rec defined_vars : 'a pattern -> (varname * vtype) list = function
+  | PatName (_, xname, xtype) -> [ (xname, xtype) ]
+  | PatPair (_, p1, p2) -> defined_vars p1 @ defined_vars p2
+  | PatConstructor (_, _, p) -> defined_vars p
+
 let rec pattern_to_source_code = function
   | PatName (_, xname, t) -> sprintf "%s : (%s)" xname (vtype_to_source_code t)
   | PatPair (_, p1, p2) ->
