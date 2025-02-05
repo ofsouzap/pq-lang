@@ -9,19 +9,19 @@ open Partial_evaluation
 open Testing_utils
 
 let evaluation_tests =
+  let open Unit_partial_evaluator in
   let create_test
       ( (name : string),
-        (store : (varname * plain_expr) list),
+        (store : (varname * (plain_expr, closure) Either.t) list),
         (inp : plain_expr),
         (exp : plain_expr) ) =
     name >:: fun _ ->
     let open Result in
-    let open Unit_partial_evaluator in
     eval ~mrd:100
       {
         store =
           List.fold store ~init:StringMap.empty ~f:(fun acc (name, value) ->
-              Map.set acc ~key:name ~data:(Either.First value));
+              Map.set acc ~key:name ~data:value);
         e = inp;
       }
     |> function
@@ -41,7 +41,11 @@ let evaluation_tests =
         [],
         Add ((), IntLit ((), 2), IntLit ((), 3)),
         IntLit ((), 5) );
-      ( "Add with variable",
+      ( "Add with defined variable",
+        [ ("x", First (IntLit ((), 1))) ],
+        Add ((), Var ((), "x"), IntLit ((), 1)),
+        IntLit ((), 2) );
+      ( "Add with undefined variable",
         [],
         Add ((), Var ((), "x"), IntLit ((), 1)),
         Add ((), Var ((), "x"), IntLit ((), 1)) );
@@ -106,7 +110,7 @@ let evaluation_tests =
         If ((), Var ((), "x"), IntLit ((), 1), IntLit ((), 2)) );
       (* Variables and functions *)
       ( "Variable known value",
-        [ ("x", IntLit ((), 42)) ],
+        [ ("x", First (IntLit ((), 42))) ],
         Var ((), "x"),
         IntLit ((), 42) );
       ("Variable unknown", [], Var ((), "x"), Var ((), "x"));
@@ -118,13 +122,47 @@ let evaluation_tests =
         [],
         App ((), Var ((), "f"), IntLit ((), 1)),
         App ((), Var ((), "f"), IntLit ((), 1)) );
+      ( "App non-recursive function",
+        [
+          ( "f",
+            Second
+              {
+                param = "x";
+                body = Add ((), Var ((), "x"), IntLit ((), 1));
+                store = StringMap.empty;
+                recursive = `NonRecursive;
+              } );
+        ],
+        App ((), Var ((), "f"), IntLit ((), 2)),
+        IntLit ((), 3) );
+      ( "App recursive function (terminating)",
+        [
+          ( "f",
+            Second
+              {
+                param = "x";
+                body =
+                  If
+                    ( (),
+                      Eq ((), Var ((), "x"), IntLit ((), 0)),
+                      IntLit ((), 0),
+                      App
+                        ( (),
+                          Var ((), "f"),
+                          Subtr ((), Var ((), "x"), IntLit ((), 1)) ) );
+                store = StringMap.empty;
+                recursive = `Recursive "f";
+              } );
+        ],
+        App ((), Var ((), "f"), IntLit ((), 5)),
+        IntLit ((), 0) );
       (* Variant types *)
       ( "Constructor simple",
         [],
         Constructor ((), "Some", IntLit ((), 1)),
         Constructor ((), "Some", IntLit ((), 1)) );
       ( "Match simple",
-        [ ("x", Constructor ((), "Some", IntLit ((), 1))) ],
+        [ ("x", First (Constructor ((), "Some", IntLit ((), 1)))) ],
         Match
           ( (),
             Var ((), "x"),

@@ -80,7 +80,7 @@ end = struct
       | Add (v, e1, e2) -> (
           eval e1 >>= fun e1' ->
           eval e2 >>| fun e2' ->
-          match (e1, e2) with
+          match (e1', e2') with
           | IntLit (_, x1), IntLit (_, x2) -> IntLit (v, x1 + x2)
           | _ -> Add (v, e1', e2'))
       | Neg (v, e1) -> (
@@ -166,16 +166,16 @@ end = struct
           eval e1 >>= fun e1' ->
           eval ~new_store:(Map.set store ~key:xname ~data:(First e1')) e2
       | App (v, e1, e2) -> (
-          eval e1
-          >>=
-          let get_default_result () = eval e2 >>| fun e2' -> App (v, e1, e2') in
-          function
+          eval e1 >>= fun e1' ->
+          eval e2 >>= fun e2' ->
+          let get_default_result () = Ok (App (v, e1', e2')) in
+          match e1' with
           | Var (_, xname) -> (
               match Map.find store xname with
               | Some (Second closure) ->
                   let new_store =
-                    (* Add the parameter to the store to use. Note it hasn't been evaluated yet *)
-                    Map.set closure.store ~key:closure.param ~data:(First e2)
+                    (* Add the parameter to the store to use *)
+                    Map.set closure.store ~key:closure.param ~data:(First e2')
                   in
                   let new_store =
                     (* If the function is recursive, make it re-accessible in the execution of the function *)
