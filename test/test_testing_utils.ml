@@ -66,7 +66,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
             | None -> "None"
             | Some (type_ctx, e, e_shrunk) ->
                 sprintf "[type ctx: %s]\n\ne = %s\n\ne_shrunk = %s"
-                  (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
+                  (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string_hum)
                   (ast_to_source_code ~use_newlines:true e)
                   (ast_to_source_code ~use_newlines:true e_shrunk))
           ~shrink:
@@ -107,10 +107,10 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                              (vtype_to_source_code e_shrunk_type)
                      | Error err ->
                          Test.fail_reportf "Typing error for shrunk e: %s"
-                           (err |> sexp_of_typing_error |> Sexp.to_string))
+                           (err |> sexp_of_typing_error |> Sexp.to_string_hum))
                  | Error err ->
                      Test.fail_reportf "Typing error for original e: %s"
-                       (err |> sexp_of_typing_error |> Sexp.to_string)))))
+                       (err |> sexp_of_typing_error |> Sexp.to_string_hum)))))
 
 let create_typed_expr_gen_test (name : string)
     (types_gen : (TestingTypeCtx.t * vtype) Gen.t) : test =
@@ -139,7 +139,7 @@ let create_typed_expr_gen_test (name : string)
         QCheck.make
           ~print:(fun (type_ctx, (t, e)) ->
             sprintf "[type ctx: %s]\n[type: %s]\n%s"
-              (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
+              (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string_hum)
               (vtype_to_source_code t)
               (ast_to_source_code ~use_newlines:true e))
           ~shrink:

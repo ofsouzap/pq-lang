@@ -329,7 +329,7 @@ end = struct
           | PrintSexp (sexp_of_expr_tag, sexp_of_pat_tag) ->
               ct
               |> sexp_of_custom_type sexp_of_expr_tag sexp_of_pat_tag
-              |> Sexp.to_string
+              |> Sexp.to_string_hum
           | PrintExprSource -> custom_type_name ct
         in
         list (fun ct -> ct |> ct_to_string) prog.custom_types)

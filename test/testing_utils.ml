@@ -63,7 +63,7 @@ let sexp_of_token = function
 
 let token_printer tokens =
   String.concat ~sep:", "
-    (List.map ~f:(Fn.compose Sexp.to_string sexp_of_token) tokens)
+    (List.map ~f:(Fn.compose Sexp.to_string_hum sexp_of_token) tokens)
 
 let override_equal_exec_err (a : exec_err) (b : exec_err) : bool =
   match (a, b) with

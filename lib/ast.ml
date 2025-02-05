@@ -338,7 +338,7 @@ end = struct
     function
     | NoPrint -> None
     | PrintSexp (f_e, f_p) ->
-        Some (fun e -> sexp_of_expr f_e f_p e |> Sexp.to_string)
+        Some (fun e -> sexp_of_expr f_e f_p e |> Sexp.to_string_hum)
     | PrintExprSource -> Some (ast_to_source_code ~use_newlines:true)
 
   let get_ast_printer (p : ast_print_method) (e : (TagExpr.t, TagPat.t) expr) :

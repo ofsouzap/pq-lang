@@ -92,7 +92,7 @@ type exec_err =
 type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
 
 let show_exec_res = function
-  | Ok v -> sexp_of_value v |> Sexp.to_string
+  | Ok v -> sexp_of_value v |> Sexp.to_string_hum
   | Error e -> (
       match e with
       | TypeContextCreationError terr ->

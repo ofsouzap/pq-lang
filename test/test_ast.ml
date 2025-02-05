@@ -91,7 +91,7 @@ let test_cases_to_source_code_inv =
                  prog.e)
       | Error err ->
           Test.fail_reportf "Got frontend error: %s"
-            (err |> sexp_of_frontend_error |> Sexp.to_string))
+            (err |> sexp_of_frontend_error |> Sexp.to_string_hum))
 
 let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
     (type_eq : 'a -> 'a -> bool) =

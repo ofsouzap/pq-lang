@@ -61,7 +61,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
   | Error err ->
       failwith
         (sprintf "Error in frontend: %s"
-           (err |> Frontend.sexp_of_frontend_error |> Sexp.to_string))
+           (err |> Frontend.sexp_of_frontend_error |> Sexp.to_string_hum))
 
 let suite =
   "Interpreting Integration Tests"
