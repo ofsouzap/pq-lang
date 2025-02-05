@@ -106,13 +106,16 @@ let quotient_type_to_source_code ?(use_newlines : bool option)
   let converter (qt : ('tag_e, 'tag_p) quotient_type) : state -> state =
     write (sprintf "qtype %s = %s" qt.name qt.base_type_name)
     |.> block
-          (let blocked_converted_eqconss : (state -> state) list =
+          (let converted_eqconss : (state -> state) list =
              List.map
                ~f:
                  (quotient_type_eqcons_to_source_code ?use_newlines
                  |.> (fun (s : string) -> "|/ " ^ s)
                  |.> write)
                qt.eqconss
+           in
+           let blocked_converted_eqconss : (state -> state) list =
+             List.map ~f:block converted_eqconss
            in
            let eqconss_converter : state -> state =
              List.fold ~init:Fn.id ~f:( |.> ) blocked_converted_eqconss
