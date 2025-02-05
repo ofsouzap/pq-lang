@@ -11,6 +11,8 @@ type ('tag_e, 'tag_p) quotient_type_eqcons = {
           constructor *)
   body : 'tag_p pattern * ('tag_e, 'tag_p) expr;
       (** The equality definition of the equality constructor *)
+      (* TODO - instead of having "body" which is the pattern and the expression,
+      have something like body_pattern and body_expr, to make it nicer to use *)
 }
 [@@deriving sexp, equal]
 

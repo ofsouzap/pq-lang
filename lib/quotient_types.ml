@@ -50,11 +50,16 @@ let eqcons_to_plain_eqcons (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) :
 
 let quotient_type_eqcons_to_source_code ?(use_newlines : bool option)
     (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) : string =
-  let bindings_str =
-    eqcons.bindings
-    |> List.map ~f:(fun (v, vt) ->
-           sprintf "(%s : %s)" v (vtype_to_source_code vt))
-    |> String.concat ~sep:" -> " |> String.append " -> "
+  let bindings_str : string =
+    match eqcons.bindings with
+    | [] -> "()"
+    | h :: ts ->
+        Nonempty_list.(
+          map
+            ~f:(fun (v, vt) -> sprintf "(%s : %s)" v (vtype_to_source_code vt))
+            (make (h, ts)))
+        |> Nonempty_list.to_list |> String.concat ~sep:" -> "
+        |> fun str -> String.append str " => "
   in
   let p, e = eqcons.body in
   sprintf "%s(%s) == (%s)" bindings_str (pattern_to_source_code p)
