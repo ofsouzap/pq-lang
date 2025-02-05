@@ -1082,13 +1082,22 @@ functor
       end
     end
 
-    let find_matching_eqconss (p : tag_pattern)
+    let find_matching_eqconss
+        (x : [ `Pattern of tag_pattern | `Expr of tag_expr ])
         (eqconss : tag_quotient_type_eqcons list) :
         (pattern_tag Pattern_unification.unifier * tag_quotient_type_eqcons)
         list =
       List.filter_map eqconss ~f:(fun eqcons ->
-          Pattern_unification.find_unifier ~from_pattern:p
-            ~to_pattern:(fst eqcons.body)
+          (match x with
+          | `Pattern p ->
+              Pattern_unification.find_unifier ~from_pattern:p
+                ~to_pattern:(fst eqcons.body)
+          | `Expr e ->
+              Pattern_unification.find_expr_unifier
+                ~convert_tag:(fun (e_tag : ast_tag) ->
+                  ({ t = e_tag.t } : pattern_tag))
+                ~get_type:(fun e -> (expr_node_val e).t)
+                ~from_expr:e ~to_pattern:(fst eqcons.body))
           |> function
           | Error () -> None
           | Ok unifier -> Some (unifier, eqcons))
@@ -1097,7 +1106,19 @@ functor
         ~(all_quotient_types : tag_quotient_type list) (e : tag_expr) :
         tag_expr list =
       List.fold ~init:[]
-        ~f:(fun acc qt -> failwith "TODO - need to unify e with the eqconss")
+        ~f:(fun acc qt ->
+          let unifiers =
+            (* Find all possible unifiers *)
+            List.map ~f:fst (find_matching_eqconss (`Expr e) qt.eqconss)
+          in
+          List.fold ~init:acc
+            ~f:(fun acc unifier ->
+              (* For each unifier found, apply to input expression and add to accumulated output *)
+              Pattern_unification.apply_to_expr
+                ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
+                ~unifier e
+              :: acc)
+            unifiers)
         all_quotient_types
 
     let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
@@ -1117,7 +1138,7 @@ functor
       Nonempty_list.fold_result ~init:existing_names
         ~f:(fun existing_names (case_p, case_e) ->
           List.fold_result ~init:existing_names
-            (find_matching_eqconss case_p quotient_type.eqconss)
+            (find_matching_eqconss (`Pattern case_p) quotient_type.eqconss)
             ~f:(fun existing_names (unifier, eqcons) ->
               let existing_names, unifier =
                 List.fold ~init:(existing_names, unifier)
