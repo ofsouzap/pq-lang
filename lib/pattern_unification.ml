@@ -1,5 +1,6 @@
 open Core
 open Utils
+open Vtype
 open Varname
 open Pattern
 
@@ -23,7 +24,30 @@ let find_unifier ~(from_pattern : 'tag_p pattern) ~(to_pattern : 'tag_p pattern)
   in
   aux StringMap.empty (from_pattern, to_pattern)
 
-let rec rename_var_in_body ~(old_name : varname) ~(new_name : varname)
+let rec expr_to_pattern ~(convert_tag : 'tag_e -> 'tag_p)
+    ~(get_type : ('tag_e, 'tag_p) Ast.expr -> vtype) :
+    ('tag_e, 'tag_p) Ast.expr -> ('tag_p pattern, unit) Result.t =
+  let open Result in
+  function
+  | Var (v, xname) as e -> Ok (PatName (convert_tag v, xname, get_type e))
+  | Pair (v, e1, e2) ->
+      expr_to_pattern ~convert_tag ~get_type e1 >>= fun p1 ->
+      expr_to_pattern ~convert_tag ~get_type e2 >>= fun p2 ->
+      Ok (PatPair (convert_tag v, p1, p2))
+  | Constructor (v, cname, e) ->
+      expr_to_pattern ~convert_tag ~get_type e >>= fun p ->
+      Ok (PatConstructor (convert_tag v, cname, p))
+  | _ -> Error ()
+
+let find_expr_unifier ~(convert_tag : 'tag_e -> 'tag_p)
+    ~(get_type : ('tag_e, 'tag_p) Ast.expr -> vtype)
+    ~(from_expr : ('tag_e, 'tag_p) Ast.expr) ~(to_pattern : 'tag_p pattern) :
+    ('tag_p unifier, unit) Result.t =
+  let open Result in
+  expr_to_pattern ~convert_tag ~get_type from_expr >>= fun from_pattern ->
+  find_unifier ~from_pattern ~to_pattern
+
+let rename_var_in_body ~(old_name : varname) ~(new_name : varname)
     (unifier : 'tag_p unifier) : 'tag_p unifier =
   Map.map unifier ~f:(Pattern.rename_var ~old_name ~new_name)
 

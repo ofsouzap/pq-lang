@@ -3,6 +3,7 @@
 
 open Core
 open Utils
+open Vtype
 open Varname
 open Pattern
 
@@ -12,6 +13,17 @@ type 'tag_p unifier = 'tag_p pattern StringMap.t [@@deriving sexp, equal]
     is possible *)
 val find_unifier :
   from_pattern:'tag_p pattern ->
+  to_pattern:'tag_p pattern ->
+  ('tag_p unifier, unit) Result.t
+
+(** Create a unifier from a given expression to a given pattern, if one is
+    possible. Will only allow unifying where the expression looks like a pattern
+    (ie. without literals, using mostly pairing, constructors, and variable
+    names) *)
+val find_expr_unifier :
+  convert_tag:('tag_e -> 'tag_p) ->
+  get_type:(('tag_e, 'tag_p) Ast.expr -> vtype) ->
+  from_expr:('tag_e, 'tag_p) Ast.expr ->
   to_pattern:'tag_p pattern ->
   ('tag_p unifier, unit) Result.t
 
