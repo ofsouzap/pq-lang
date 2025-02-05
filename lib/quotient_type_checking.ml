@@ -1093,9 +1093,17 @@ functor
           | Error () -> None
           | Ok unifier -> Some (unifier, eqcons))
 
+    let find_all_possible_quotient_rewrites
+        ~(all_quotient_types : tag_quotient_type list) (e : tag_expr) :
+        tag_expr list =
+      List.fold ~init:[]
+        ~f:(fun acc qt -> failwith "TODO - need to unify e with the eqconss")
+        all_quotient_types
+
     let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
-        ~(existing_names : StringSet.t) ~(quotient_type : tag_quotient_type)
-        ~(match_node_v : ast_tag)
+        ~(existing_names : StringSet.t)
+        ~(all_quotient_types : tag_quotient_type list)
+        ~(quotient_type : tag_quotient_type) ~(match_node_v : ast_tag)
         ~(cases : (tag_pattern * tag_expr) Nonempty_list.t)
         (state : Smt.State.t) : (StringSet.t, quotient_typing_error) Result.t =
       let open Result in
@@ -1129,38 +1137,43 @@ functor
                     Smt.State.state_add_var_decl (xname, xtype) state)
                   eqcons.bindings
               in
-              ((* Considering the LHS of the eqcons body *)
-               let l =
-                 Pattern_unification.apply_to_expr
-                   ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
-                   ~unifier case_e
-               in
-               PartialEvaluator.eval ~mrd:partial_evaluation_mrd
-                 { store = Smt.State.to_partial_evaluator_store state; e = l })
+              (* Considering the LHS of the eqcons body *)
+              PartialEvaluator.eval ~mrd:partial_evaluation_mrd
+                {
+                  store = Smt.State.to_partial_evaluator_store state;
+                  e =
+                    Pattern_unification.apply_to_expr
+                      ~convert_tag:(fun pat_tag ->
+                        ({ t = pat_tag.t } : ast_tag))
+                      ~unifier case_e;
+                }
               |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
-              >>= fun l' ->
-              ((* Considering the RHS of the eqcons body *)
-               let r = reform_match_with_arg (snd eqcons.body) in
-               PartialEvaluator.eval ~mrd:partial_evaluation_mrd
-                 { store = Smt.State.to_partial_evaluator_store state; e = r })
+              >>= fun l ->
+              (* Considering the RHS of the eqcons body *)
+              PartialEvaluator.eval ~mrd:partial_evaluation_mrd
+                {
+                  store = Smt.State.to_partial_evaluator_store state;
+                  e = reform_match_with_arg (snd eqcons.body);
+                }
               |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
-              >>| fun r' ->
-              let l'_rewrites =
-                failwith
-                  "TODO - find possible rewrites of l' for ANY of the quotient \
-                   types that l' types as"
+              >>| fun r ->
+              let l_rewrites : tag_expr list =
+                (* All possible writings of l, including the original *)
+                l :: find_all_possible_quotient_rewrites ~all_quotient_types l
               in
-              let r'_rewrites =
-                failwith
-                  "TODO - find possible rewrites of r' for ANY of the quotient \
-                   types that r' types as"
+              let r_rewrites : tag_expr list =
+                (* All possible writings of r, including the original *)
+                r :: find_all_possible_quotient_rewrites ~all_quotient_types r
+              in
+              let l_r_combinations =
+                List.(
+                  l_rewrites >>= fun l ->
+                  r_rewrites >>| fun r -> (l, r))
               in
               let _ =
                 failwith
-                  "TODO - form a disjunction condition that any of (use list \
-                   monad bind) the l' rewrites equals any of (use list monad \
-                   bind) the r' rewrites, then find validity (unsatisfiability \
-                   of negation) with SMT solver"
+                  "TODO - form disjunction of l_r_combinations, mapping each \
+                   pair to an equality and do an SMT solve"
               in
               existing_names)
           |> fun _ -> failwith "TODO")
@@ -1231,7 +1244,8 @@ functor
                           (to_non_flat_pattern flat_p, to_non_flat_expr flat_e))
                       cases
                   in
-                  perform_quotient_match_check ~existing_names ~quotient_type:qt
+                  perform_quotient_match_check ~existing_names
+                    ~all_quotient_types:quotient_types ~quotient_type:qt
                     ~match_node_v:v ~cases:non_flat_cases state
               | None -> Ok existing_names)
           | _ -> Ok existing_names)
