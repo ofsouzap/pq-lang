@@ -18,4 +18,4 @@
 (package
  (name pq_lang)
  (synopsis "ML-like language with quotient types")
- (depends ocaml dune core menhir ounit2 qcheck))
+ (depends ocaml dune core menhir z3 ounit2 qcheck))

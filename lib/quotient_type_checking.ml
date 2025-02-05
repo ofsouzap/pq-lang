@@ -520,7 +520,10 @@ functor
           } )
     end
 
+    (** Provides integration with the SMT solver *)
     module Smt = struct
+      (** Provides a representation of a state that can be built into input for
+          the solver *)
       module State = struct
         type var_defn = {
           name : varname;
@@ -587,6 +590,8 @@ functor
                   Added by module user *)
         }
         [@@deriving sexp, equal]
+
+        type state = t
 
         let vt_unit_name : string = custom_special_name (`VariantType "unit")
 
@@ -822,18 +827,34 @@ functor
             state.top_level_rev
       end
 
-      module StateBuilder = struct
+      module Assertion = struct
+        type t =
+          | Not of t
+          | Eq of FlatPattern.flat_expr * FlatPattern.flat_expr
+          | Or of t Nonempty_list.t
+
+        type assertion = t
+
+        module Builder = struct end
+      end
+
+      (** Provides building of components of an SMT formula into input for the
+          solver *)
+      module Builder = struct
+        open State
+        open Assertion
+
         let rec build_vtype (state : State.t) :
             vtype -> (LispBuilder.node, quotient_typing_error) Result.t =
           let open Result in
           let open LispBuilder in
           function
-          | VTypeUnit -> Ok (Atom State.vt_unit_name)
+          | VTypeUnit -> Ok (Atom vt_unit_name)
           | VTypeInt -> Ok (Atom "Int")
           | VTypeBool -> Ok (Atom "Bool")
           | VTypePair (t1, t2) ->
-              State.state_get_pair_type_info (t1, t2) state
-              >>| fun pair_type_info -> Atom pair_type_info.name
+              state_get_pair_type_info (t1, t2) state >>| fun pair_type_info ->
+              Atom pair_type_info.name
           | VTypeFun (t1, t2) ->
               build_vtype state t1 >>= fun t1_node ->
               build_vtype state t2 >>= fun t2_node ->
@@ -847,7 +868,7 @@ functor
           let open Result in
           let open LispBuilder in
           function
-          | UnitLit _ -> Ok (Atom State.vt_unit_val)
+          | UnitLit _ -> Ok (Atom vt_unit_val)
           | IntLit (_, n) -> Ok (Atom (Int.to_string n))
           | BoolLit (_, b) -> Ok (Atom (Bool.to_string b))
           | Var (_, name) -> Ok (Atom name)
@@ -912,7 +933,7 @@ functor
           | Pair (_, e1, e2) ->
               let e1_t = (FlatPattern.flat_node_val e1).t in
               let e2_t = (FlatPattern.flat_node_val e2).t in
-              State.state_get_pair_type_info (e1_t, e2_t) state
+              state_get_pair_type_info (e1_t, e2_t) state
               >>= fun pair_type_info ->
               build_expr ~local_scope_varnames state e1 >>= fun e1' ->
               build_expr ~local_scope_varnames state e2 >>| fun e2' ->
@@ -951,7 +972,7 @@ functor
                 match pat with
                 | FlatPattern.FlatPatPair (_, (_, x1name, x1t), (_, x2name, x2t))
                   ->
-                    State.state_get_pair_type_info (x1t, x2t) state
+                    state_get_pair_type_info (x1t, x2t) state
                     >>| fun pair_type_info ->
                     List
                       [
@@ -971,8 +992,8 @@ functor
               >>| fun case_nodes -> Op ("match", e_node :: case_nodes)
 
         let build_top_level_elem (state : State.t) :
-            State.top_level_elem ->
-            (LispBuilder.node, quotient_typing_error) Result.t =
+            top_level_elem -> (LispBuilder.node, quotient_typing_error) Result.t
+            =
           let open Result in
           let open LispBuilder in
           function
@@ -1079,7 +1100,53 @@ functor
           build_consts_nodes () >>= fun (declared_consts_nodes : node list) ->
           build_top_level_nodes () >>| fun (top_level_nodes : node list) ->
           (datatype_decl :: declared_consts_nodes) @ top_level_nodes
+
+        let build_assertion ~(state : State.t) :
+            assertion -> (LispBuilder.node, quotient_typing_error) Result.t =
+          let open Result in
+          let open LispBuilder in
+          let rec aux :
+              assertion -> (LispBuilder.node, quotient_typing_error) Result.t =
+            function
+            | Not x -> aux x >>| fun x_node -> Op ("not", [ x_node ])
+            | Eq (e1, e2) ->
+                build_expr ~local_scope_varnames:StringSet.empty state e1
+                >>= fun e1_node ->
+                build_expr ~local_scope_varnames:StringSet.empty state e2
+                >>| fun e2_node -> Op ("=", [ e1_node; e2_node ])
+            | Or xs ->
+                List.map ~f:aux (Nonempty_list.to_list xs) |> Result.all
+                >>| fun nodes -> Op ("or", nodes)
+          in
+          fun assertion ->
+            aux assertion >>| fun assertion_node ->
+            Op ("assert", [ assertion_node ])
       end
+
+      type formula = LispBuilder.node list
+
+      let create_formula (state : State.t) (assertions : Assertion.t list) :
+          (formula, quotient_typing_error) Result.t =
+        let open Result in
+        Builder.build_state state >>= fun state_nodes ->
+        List.map assertions ~f:(Builder.build_assertion ~state) |> Result.all
+        >>| fun assertions_nodes -> state_nodes @ assertions_nodes
+
+      (** Check the satisifability of a given formula *)
+      let check_satisfiability (formula : formula) : [ `Sat | `Unsat | `Unknown ]
+          =
+        let smtlib_string = LispBuilder.build ~use_newlines:true formula in
+        let ctx = Z3.mk_context [ ("model", "false") ] in
+        let ast_vec =
+          Z3.SMT.parse_smtlib2_string ctx smtlib_string [] [] [] []
+        in
+        let solver = Z3.Solver.mk_solver ctx None in
+        (* Add the parsed formula into the solver *)
+        Z3.Solver.add solver (Z3.AST.ASTVector.to_expr_list ast_vec);
+        match Z3.Solver.check solver [] with
+        | Z3.Solver.SATISFIABLE -> `Sat
+        | Z3.Solver.UNSATISFIABLE -> `Unsat
+        | Z3.Solver.UNKNOWN -> `Unknown
     end
 
     let use_fresh_names_for_eqcons_unifier ~(existing_names : StringSet.t)
