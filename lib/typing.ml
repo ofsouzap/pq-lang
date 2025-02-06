@@ -466,7 +466,7 @@ functor
               >>= fun (typed_p, p_ctx) ->
               let p_t : vtype = pattern_node_val typed_p |> fst in
               (* Check the pattern's type *)
-              TypeCtx.compatible_types type_ctx ~exp:p_t ~actual:t_in
+              TypeCtx.compatible_types type_ctx ~exp:t_in ~actual:p_t
               >>= fun pattern_type_compat ->
               if pattern_type_compat then
                 let case_ctx = VarCtx.append var_ctx p_ctx in
