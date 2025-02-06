@@ -466,7 +466,7 @@ functor
               >>= fun (typed_p, p_ctx) ->
               let p_t : vtype = pattern_node_val typed_p |> fst in
               (* Check the pattern's type *)
-              TypeCtx.compatible_types type_ctx ~exp:t_in ~actual:p_t
+              TypeCtx.compatible_types type_ctx ~exp:p_t ~actual:t_in
               >>= fun pattern_type_compat ->
               if pattern_type_compat then
                 let case_ctx = VarCtx.append var_ctx p_ctx in
@@ -600,14 +600,14 @@ functor
           Error
             (EqConsBodyPatternNotExpectedType (get_plain_eqcons (), pattern_t)))
       >>= fun () ->
-      (* Check the body's pattern has the correct type *)
-      TypeCtx.compatible_types type_ctx ~exp:(VTypeCustom quotient_type_name)
-        ~actual:pattern_t
+      (* Check the body's pattern has the correct type. Note that the function is used in the opposite direction to normal, for this check *)
+      TypeCtx.compatible_types type_ctx ~exp:pattern_t
+        ~actual:(VTypeCustom quotient_type_name)
       >>= fun pattern_type_compat ->
       if pattern_type_compat then
         (* Check the body's expression has the correct type *)
-        TypeCtx.compatible_types type_ctx ~exp:(VTypeCustom quotient_type_name)
-          ~actual:body_expr_t
+        TypeCtx.compatible_types type_ctx ~exp:body_expr_t
+          ~actual:(VTypeCustom quotient_type_name)
         >>= fun expr_type_compat ->
         if expr_type_compat then
           Ok { eqcons with body = (typed_pattern, typed_body) }
@@ -618,7 +618,7 @@ functor
       else
         Error
           (EqConsBodyTypeMismatch
-             (get_plain_eqcons (), VTypeCustom base_type_name, pattern_t))
+             (get_plain_eqcons (), VTypeCustom quotient_type_name, pattern_t))
 
     let type_custom_types ~(type_ctx : TypeCtx.t)
         (custom_types : ('tag_e, 'tag_p) custom_type list) =
