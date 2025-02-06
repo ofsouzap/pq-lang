@@ -565,12 +565,9 @@ functor
       let body_expr_t = typed_body |> expr_node_val |> fst in
       (* Check the pattern has the type of the quotient type's base type *)
       (match pattern_t with
-      | VTypeCustom pattern_ct_name ->
-          if equal_string base_type_name pattern_ct_name then Ok ()
-          else
-            Error
-              (EqConsBodyPatternNotExpectedType
-                 (get_plain_eqcons (), VTypeCustom base_type_name))
+      | VTypeCustom pattern_ct_name
+        when equal_string base_type_name pattern_ct_name ->
+          Ok ()
       | _ ->
           Error
             (EqConsBodyPatternNotExpectedType (get_plain_eqcons (), pattern_t)))
