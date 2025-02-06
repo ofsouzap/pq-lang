@@ -135,13 +135,13 @@ end = struct
     if equal_vtype exp actual then Ok true
     else
       match (exp, actual) with
-      | VTypeCustom _, VTypeCustom actual_ct_name -> (
-          find_type_defn_by_name ctx actual_ct_name
-          |> Result.of_option ~error:(UndefinedTypeName actual_ct_name)
+      | VTypeCustom exp_ct_name, VTypeCustom _ -> (
+          find_type_defn_by_name ctx exp_ct_name
+          |> Result.of_option ~error:(UndefinedTypeName exp_ct_name)
           >>= function
-          | QuotientType actual_qt ->
-              compatible_types ctx ~exp
-                ~actual:(VTypeCustom actual_qt.base_type_name)
+          | QuotientType exp_qt ->
+              compatible_types ctx ~exp:(VTypeCustom exp_qt.base_type_name)
+                ~actual
           | _ -> Ok false)
       | VTypePair (exp_t1, exp_t2), VTypePair (actual_t1, actual_t2) ->
           compatible_types ctx ~exp:exp_t1 ~actual:actual_t1
