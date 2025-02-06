@@ -10,6 +10,9 @@ open Program
 type typing_error =
   | UndefinedVariable of string
       (** A variable was referenced that isn't defined in the scope *)
+  | EqconsVariableNotInBindings of string * vtype
+      (** A variable-type pair was used that wasn't defined in an eqcons binding
+      *)
   | TypeMismatch of vtype * vtype
       (** An expression was expected to have the first type but had the second
       *)
@@ -97,6 +100,9 @@ module type TypingVarContext = sig
 
   (** Check whether a variable exists in the context, by name *)
   val exists : t -> string -> bool
+
+  (** Convert the context to a list of variable-type pairs *)
+  val to_list : t -> (string * vtype) list
 end
 
 (** Typing context of variables using a simple list-based approach *)

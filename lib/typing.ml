@@ -10,6 +10,7 @@ open Program
 
 type typing_error =
   | UndefinedVariable of string
+  | EqconsVariableNotInBindings of string * vtype
   | TypeMismatch of vtype * vtype
   | PatternTypeMismatch of plain_pattern * vtype * vtype
   | EqConsBodyPatternNotExpectedType of plain_quotient_type_eqcons * vtype
@@ -27,6 +28,7 @@ type typing_error =
 let equal_typing_error_variant x y =
   match (x, y) with
   | UndefinedVariable _, UndefinedVariable _
+  | EqconsVariableNotInBindings _, EqconsVariableNotInBindings _
   | TypeMismatch _, TypeMismatch _
   | PatternTypeMismatch _, PatternTypeMismatch _
   | EqConsBodyPatternNotExpectedType _, EqConsBodyPatternNotExpectedType _
@@ -42,6 +44,7 @@ let equal_typing_error_variant x y =
       MultipleVariantTypeConstructorDefinitions _ ) ->
       true
   | UndefinedVariable _, _
+  | EqconsVariableNotInBindings _, _
   | TypeMismatch _, _
   | PatternTypeMismatch _, _
   | EqConsBodyPatternNotExpectedType _, _
@@ -58,6 +61,11 @@ let equal_typing_error_variant x y =
 
 let print_typing_error = function
   | UndefinedVariable x -> "Undefined variable: " ^ x
+  | EqconsVariableNotInBindings (xname, xtype) ->
+      sprintf
+        "Variable %s of type %s is not in the bindings of an eqcons but is used"
+        xname
+        (vtype_to_source_code xtype)
   | TypeMismatch (t1, t2) ->
       sprintf "Type mismatch: expected %s but got %s" (vtype_to_source_code t1)
         (vtype_to_source_code t2)
@@ -167,6 +175,7 @@ module type TypingVarContext = sig
   val singleton : string -> vtype -> t
   val append : t -> t -> t
   val exists : t -> string -> bool
+  val to_list : t -> (string * vtype) list
 end
 
 module ListTypingVarContext : TypingVarContext = struct
@@ -181,6 +190,7 @@ module ListTypingVarContext : TypingVarContext = struct
     List.fold ~init:ctx1 ~f:(fun ctx_acc (x, t) -> add ctx_acc x t)
 
   let exists ctx x = match find ctx x with None -> false | Some _ -> true
+  let to_list = Fn.id
 end
 
 module type TypeCheckerSig = functor
@@ -531,17 +541,29 @@ functor
         |> eqcons_fmap_pattern ~f:(fun _ -> ())
       in
       let body_pattern, body_expr = eqcons.body in
+      (* Create a variable context from only the bindings *)
       List.fold_result ~init:VarCtx.empty
         ~f:(fun acc_var_ctx (xname, xtype) ->
           check_vtype type_ctx xtype >>| fun () ->
           VarCtx.add acc_var_ctx xname xtype)
         eqcons.bindings
-      >>= fun var_ctx ->
-      type_pattern (type_ctx, var_ctx) body_pattern
-      >>= fun (typed_pattern, _) ->
-      type_expr (type_ctx, var_ctx) body_expr >>= fun typed_body ->
+      >>= fun bindings_var_ctx ->
+      (* Type the pattern *)
+      type_pattern (type_ctx, VarCtx.empty) body_pattern
+      >>= fun (typed_pattern, pattern_var_ctx) ->
+      (* Check that all the defined variables in the pattern come from the bindings  *)
+      List.fold_result ~init:()
+        ~f:(fun () (xname, xtype) ->
+          match VarCtx.find bindings_var_ctx xname with
+          | Some ctx_xtype when equal_vtype ctx_xtype xtype -> Ok ()
+          | _ -> Error (EqconsVariableNotInBindings (xname, xtype)))
+        (pattern_var_ctx |> VarCtx.to_list)
+      >>= fun () ->
+      (* Type the expression, with the bindings' variable context *)
+      type_expr (type_ctx, bindings_var_ctx) body_expr >>= fun typed_body ->
       let pattern_t = typed_pattern |> pattern_node_val |> fst in
       let body_expr_t = typed_body |> expr_node_val |> fst in
+      (* Check the pattern has the type of the quotient type's base type *)
       (match pattern_t with
       | VTypeCustom pattern_ct_name ->
           if equal_string base_type_name pattern_ct_name then Ok ()
@@ -553,6 +575,7 @@ functor
           Error
             (EqConsBodyPatternNotExpectedType (get_plain_eqcons (), pattern_t)))
       >>= fun () ->
+      (* Check the pattern and the expression have the same type *)
       if equal_vtype pattern_t body_expr_t then
         Ok { eqcons with body = (typed_pattern, typed_body) }
       else
