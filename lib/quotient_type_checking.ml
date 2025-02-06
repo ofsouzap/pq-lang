@@ -72,6 +72,7 @@ type quotient_typing_error =
           unexpectedly and cannot be handled *)
   | PairTypeNotDefinedInState of vtype * vtype
   | PartialEvaluationError of Partial_evaluation.partial_evaluation_error
+[@@deriving sexp, equal]
 
 module TagAst = struct
   type t = ast_tag [@@deriving sexp, equal]
@@ -1330,8 +1331,8 @@ let rec check_expr ~(existing_names : StringSet.t)
         cases
   | Constructor (_, _, e) -> check_expr ~existing_names ~quotient_types state e
 
-let check_program (prog : tag_program) :
-    (StringSet.t, quotient_typing_error) Result.t =
+let check_program (prog : tag_program) : (unit, quotient_typing_error) Result.t
+    =
   let open Result in
   let open Smt.State in
   let existing_names = Program.existing_names prog in
@@ -1384,4 +1385,4 @@ let check_program (prog : tag_program) :
     flat_prog.top_level_defns
   >>= fun (existing_names, state) ->
   (* Check the main body of the program with the accumulated state *)
-  check_expr ~existing_names ~quotient_types state flat_prog.e
+  check_expr ~existing_names ~quotient_types state flat_prog.e >>| fun _ -> ()

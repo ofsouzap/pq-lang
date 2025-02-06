@@ -10,6 +10,7 @@
   test_program
   test_partial_evaluation
   test_typing
+  test_quotient_type_checking
   test_lexer_parser
   test_ast_executor
   test_ast_executor_store
