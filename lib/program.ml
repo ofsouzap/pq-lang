@@ -87,7 +87,12 @@ let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
     (Set.union
        (List.fold ~init:StringSet.empty
           ~f:(fun acc defn ->
-            Set.union (Set.add acc defn.name) (failwith "TODO - param and body"))
+            Set.union acc
+              (Set.union
+                 (StringSet.singleton defn.name)
+                 (Set.union
+                    (StringSet.singleton (fst defn.param))
+                    (Ast.existing_names defn.body))))
           prog.top_level_defns)
        (Ast.existing_names prog.e))
 
