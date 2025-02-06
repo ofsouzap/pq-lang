@@ -365,7 +365,193 @@ let test_cases_typing_with_var_ctx : test list =
       ([ ("x", VTypeBool) ], Var ((), "y"), Error (UndefinedVariable "y"));
     ]
 
-(* TODO - type context tester module and implementations *)
+module MakeTypingContextTester (TypeCtx : TypingTypeContext) = struct
+  (* TODO - make the rest of the tests *)
+
+  let create_test_compatible_types
+      ( (name : string),
+        (custom_types_list : plain_custom_type list),
+        ((inp_exp : vtype), (inp_actual : vtype)),
+        (exp : bool) ) : test =
+    name >:: fun _ ->
+    match TypeCtx.create ~custom_types:custom_types_list with
+    | Error err ->
+        assert_failure
+          (sprintf "Error creating type context: %s\n" (print_typing_error err))
+    | Ok ctx -> (
+        match TypeCtx.compatible_types ctx ~exp:inp_exp ~actual:inp_actual with
+        | Ok out -> assert_equal ~printer:string_of_bool ~cmp:equal_bool exp out
+        | Error err ->
+            assert_failure
+              (sprintf "Typing error: %s\n" (print_typing_error err)))
+
+  let all_test_cases : test list =
+    [
+      "Compatible Types"
+      >::: List.map ~f:create_test_compatible_types
+             [
+               ("int int", [], (VTypeInt, VTypeInt), true);
+               ("bool bool", [], (VTypeBool, VTypeBool), true);
+               ("int bool", [], (VTypeInt, VTypeBool), false);
+               ("bool int", [], (VTypeBool, VTypeInt), false);
+               ( "quotient true",
+                 [
+                   VariantType ("my_t", [ ("My_t_val", VTypeInt) ]);
+                   QuotientType
+                     {
+                       name = "my_qt";
+                       base_type_name = "my_t";
+                       eqconss =
+                         [
+                           {
+                             bindings = [ ("x", VTypeInt) ];
+                             body =
+                               ( PatConstructor
+                                   ((), "My_t_val", PatName ((), "x", VTypeInt)),
+                                 Constructor ((), "My_t_val", Var ((), "x")) );
+                           };
+                         ];
+                     };
+                 ],
+                 (VTypeCustom "my_qt", VTypeCustom "my_t"),
+                 true );
+               ( "quotient false",
+                 [
+                   VariantType ("my_t", [ ("My_t_val", VTypeInt) ]);
+                   QuotientType
+                     {
+                       name = "my_qt";
+                       base_type_name = "my_t";
+                       eqconss =
+                         [
+                           {
+                             bindings = [ ("x", VTypeInt) ];
+                             body =
+                               ( PatConstructor
+                                   ((), "My_t_val", PatName ((), "x", VTypeInt)),
+                                 Constructor ((), "My_t_val", Var ((), "x")) );
+                           };
+                         ];
+                     };
+                 ],
+                 (VTypeCustom "my_t", VTypeCustom "my_qt"),
+                 false );
+               ( "quotient two steps",
+                 [
+                   VariantType ("my_t", [ ("My_t_val", VTypeInt) ]);
+                   QuotientType
+                     {
+                       name = "my_qt1";
+                       base_type_name = "my_t";
+                       eqconss =
+                         [
+                           {
+                             bindings = [ ("x", VTypeInt) ];
+                             body =
+                               ( PatConstructor
+                                   ((), "My_t_val", PatName ((), "x", VTypeInt)),
+                                 Constructor ((), "My_t_val", Var ((), "x")) );
+                           };
+                         ];
+                     };
+                   QuotientType
+                     {
+                       name = "my_qt2";
+                       base_type_name = "my_qt1";
+                       eqconss =
+                         [
+                           {
+                             bindings = [ ("x", VTypeInt) ];
+                             body =
+                               ( PatConstructor
+                                   ((), "My_t_val", PatName ((), "x", VTypeInt)),
+                                 Constructor ((), "My_t_val", Var ((), "x")) );
+                           };
+                         ];
+                     };
+                 ],
+                 (VTypeCustom "my_qt2", VTypeCustom "my_t"),
+                 true );
+               ( "quotient for quotient true",
+                 [
+                   VariantType ("my_t", [ ("My_t_val", VTypeInt) ]);
+                   QuotientType
+                     {
+                       name = "my_qt1";
+                       base_type_name = "my_t";
+                       eqconss =
+                         [
+                           {
+                             bindings = [ ("x", VTypeInt) ];
+                             body =
+                               ( PatConstructor
+                                   ((), "My_t_val", PatName ((), "x", VTypeInt)),
+                                 Constructor ((), "My_t_val", Var ((), "x")) );
+                           };
+                         ];
+                     };
+                   QuotientType
+                     {
+                       name = "my_qt2";
+                       base_type_name = "my_qt1";
+                       eqconss =
+                         [
+                           {
+                             bindings = [ ("x", VTypeInt) ];
+                             body =
+                               ( PatConstructor
+                                   ((), "My_t_val", PatName ((), "x", VTypeInt)),
+                                 Constructor ((), "My_t_val", Var ((), "x")) );
+                           };
+                         ];
+                     };
+                 ],
+                 (VTypeCustom "my_qt2", VTypeCustom "my_qt1"),
+                 true );
+               ( "quotient for quotient false",
+                 [
+                   VariantType ("my_t", [ ("My_t_val", VTypeInt) ]);
+                   QuotientType
+                     {
+                       name = "my_qt1";
+                       base_type_name = "my_t";
+                       eqconss =
+                         [
+                           {
+                             bindings = [ ("x", VTypeInt) ];
+                             body =
+                               ( PatConstructor
+                                   ((), "My_t_val", PatName ((), "x", VTypeInt)),
+                                 Constructor ((), "My_t_val", Var ((), "x")) );
+                           };
+                         ];
+                     };
+                   QuotientType
+                     {
+                       name = "my_qt2";
+                       base_type_name = "my_qt1";
+                       eqconss =
+                         [
+                           {
+                             bindings = [ ("x", VTypeInt) ];
+                             body =
+                               ( PatConstructor
+                                   ((), "My_t_val", PatName ((), "x", VTypeInt)),
+                                 Constructor ((), "My_t_val", Var ((), "x")) );
+                           };
+                         ];
+                     };
+                 ],
+                 (VTypeCustom "my_qt1", VTypeCustom "my_qt2"),
+                 false );
+             ];
+    ]
+end
+
+(* TODO - simple (e.g. function-based) implementation of type context, for ground truth testing *)
+
+module SetTypeContextTester = MakeTypingContextTester (SetTypingTypeContext)
+module TestingTypeContextTester = MakeTypingContextTester (TestingTypeCtx)
 
 module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
   let create_test_add_then_get
@@ -429,20 +615,24 @@ end
     but is just meant to be used as a ground truth to test against the
     actually-used implementations *)
 module FunctionTypingVarContext : TypingVarContext = struct
-  type t = string -> vtype option
+  type t = (string -> vtype option) * string list
 
-  let empty : t = Fn.const None
+  let empty : t = (Fn.const None, [])
 
-  let add (f' : t) (xname : string) (xtype : vtype) : t =
-   fun x -> if equal_string xname x then Some xtype else f' x
+  let add ((f', xs) : t) (xname : string) (xtype : vtype) : t =
+    ((fun x -> if equal_string xname x then Some xtype else f' x), xname :: xs)
 
-  let find = Fn.id
+  let find ((f, _) : t) = f
   let singleton xname xtype = add empty xname xtype
 
-  let append (f1 : t) (f2 : t) x =
-    match f2 x with None -> f1 x | Some v -> Some v
+  let append ((f1, xs) : t) ((f2, ys) : t) : t =
+    ( (fun x -> match f2 x with None -> f1 x | Some v -> Some v),
+      List.append xs ys )
 
-  let exists (f : t) xname = match f xname with None -> false | Some _ -> true
+  let exists ((_, xs) : t) xname : bool = List.mem ~equal:String.equal xs xname
+
+  let to_list ((f, xs) : t) =
+    List.map ~f:(fun x -> (x, Option.value_exn (f x))) xs
 end
 
 module FunctionVariableContextTester =
@@ -687,6 +877,11 @@ let suite =
          "Arbitrary expression typing" >::: test_cases_arb_compound_expr_typing;
          "Typing maintains structure"
          >::: [ test_cases_typing_maintains_structure ];
+         "Type contexts"
+         >::: [
+                "Set context" >::: SetTypeContextTester.all_test_cases;
+                "Testing context" >::: TestingTypeContextTester.all_test_cases;
+              ];
          "Variable contexts"
          >::: [
                 "Function context"
