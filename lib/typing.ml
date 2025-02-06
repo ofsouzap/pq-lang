@@ -614,11 +614,11 @@ functor
         else
           Error
             (EqConsBodyTypeMismatch
-               (get_plain_eqcons (), VTypeCustom quotient_type_name, body_expr_t))
+               (get_plain_eqcons (), body_expr_t, VTypeCustom quotient_type_name))
       else
         Error
           (EqConsBodyTypeMismatch
-             (get_plain_eqcons (), VTypeCustom quotient_type_name, pattern_t))
+             (get_plain_eqcons (), pattern_t, VTypeCustom quotient_type_name))
 
     let type_custom_types ~(type_ctx : TypeCtx.t)
         (custom_types : ('tag_e, 'tag_p) custom_type list) =
