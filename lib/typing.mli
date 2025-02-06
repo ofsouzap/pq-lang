@@ -76,7 +76,8 @@ module type TypingTypeContext = sig
   (** Checks whether one type is compatible with another under the context. That
       is, whether the `actual` type can be used when we are expecting type `exp`
   *)
-  val compatible_types : t -> exp:vtype -> actual:vtype -> bool
+  val compatible_types :
+    t -> exp:vtype -> actual:vtype -> (bool, typing_error) Result.t
 end
 
 (** Typing context of types using a simple set-based approach *)

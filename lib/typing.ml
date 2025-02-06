@@ -99,7 +99,7 @@ let print_typing_error = function
   | DuplicateTypeNameDefinition vt_name ->
       sprintf "Variant type named \"%s\" has been defined multiple times"
         vt_name
-  | UndefinedTypeName vt_name -> sprintf "Undefined variant type: %s" vt_name
+  | UndefinedTypeName vt_name -> sprintf "Undefined custom type: %s" vt_name
   | MultipleVariantTypeConstructorDefinitions c_name ->
       sprintf
         "Variant type constructor named \"%s\" has been defined multiple times"
@@ -120,7 +120,9 @@ module type TypingTypeContext = sig
     t -> string -> (variant_type * variant_type_constructor) option
 
   val type_defns_to_list : t -> plain_custom_type list
-  val compatible_types : t -> exp:vtype -> actual:vtype -> bool
+
+  val compatible_types :
+    t -> exp:vtype -> actual:vtype -> (bool, typing_error) Result.t
 end
 
 module SetTypingTypeContext : TypingTypeContext = struct
@@ -166,23 +168,32 @@ module SetTypingTypeContext : TypingTypeContext = struct
   let type_defns_to_list (ctx : t) : ('tag_e, 'tag_p) custom_type list =
     Map.data ctx.custom_types
 
-  let rec compatible_types (ctx : t) ~(exp : vtype) ~(actual : vtype) : bool =
-    equal_vtype exp actual
-    ||
-    match actual with
-    | VTypeCustom actual_ct_name ->
-        let child_quotient_types =
-          (* Find all the quotient types that have actual as their base type *)
-          ctx |> type_defns_to_list
-          |> List.filter_map ~f:(function
-               | QuotientType qt
-                 when equal_string qt.base_type_name actual_ct_name ->
-                   Some qt
-               | _ -> None)
-        in
-        List.exists child_quotient_types ~f:(fun qt ->
-            compatible_types ctx ~exp ~actual:(VTypeCustom qt.name))
-    | _ -> false
+  let rec compatible_types (ctx : t) ~(exp : vtype) ~(actual : vtype) :
+      (bool, typing_error) Result.t =
+    let open Result in
+    if equal_vtype exp actual then Ok true
+    else
+      match (exp, actual) with
+      | VTypeCustom _, VTypeCustom actual_ct_name -> (
+          find_type_defn_by_name ctx actual_ct_name
+          |> Result.of_option ~error:(UndefinedTypeName actual_ct_name)
+          >>= function
+          | QuotientType actual_qt ->
+              compatible_types ctx ~exp
+                ~actual:(VTypeCustom actual_qt.base_type_name)
+          | _ -> Ok false)
+      | VTypePair (exp_t1, exp_t2), VTypePair (actual_t1, actual_t2) ->
+          compatible_types ctx ~exp:exp_t1 ~actual:actual_t1
+          >>= fun t1_compat ->
+          compatible_types ctx ~exp:exp_t2 ~actual:actual_t2
+          >>= fun t2_compat -> Ok (t1_compat && t2_compat)
+      | VTypeFun (exp_t1, exp_t2), VTypeFun (actual_t1, actual_t2) ->
+          compatible_types ctx ~exp:exp_t1 ~actual:actual_t1
+          >>= fun t1_compat ->
+          (* Note that this is the other way round *)
+          compatible_types ctx ~exp:actual_t2 ~actual:exp_t2
+          >>= fun t2_compat -> Ok (t1_compat && t2_compat)
+      | _ -> Ok false
 end
 
 module type TypingVarContext = sig
@@ -301,7 +312,9 @@ functor
           | Some ((vt_name, _), (_, c_t)) ->
               type_pattern ctx p >>= fun (p_typed, var_ctx_from_p) ->
               let p_t = pattern_node_val p_typed |> fst in
-              if TypeCtx.compatible_types type_ctx ~exp:c_t ~actual:p_t then
+              TypeCtx.compatible_types type_ctx ~exp:c_t ~actual:p_t
+              >>= fun types_compatible ->
+              if types_compatible then
                 Ok
                   ( PatConstructor ((VTypeCustom vt_name, v), c_name, p_typed),
                     var_ctx_from_p )
@@ -318,8 +331,9 @@ functor
       in
       let be_of_type (exp : vtype) (e : (vtype * 'tag_e, vtype * 'tag_p) expr) :
           ((vtype * 'tag_e, vtype * 'tag_p) expr, typing_error) Result.t =
-        if TypeCtx.compatible_types type_ctx ~exp ~actual:(e_type e) then Ok e
-        else Error (TypeMismatch (exp, e_type e))
+        TypeCtx.compatible_types type_ctx ~exp ~actual:(e_type e)
+        >>= fun types_compat ->
+        if types_compat then Ok e else Error (TypeMismatch (exp, e_type e))
       in
       let type_binop
           (recomp :
@@ -426,8 +440,9 @@ functor
           let t2 = e_type e2' in
           match t1 with
           | VTypeFun (t11, t12) ->
-              if TypeCtx.compatible_types type_ctx ~exp:t11 ~actual:t2 then
-                Ok (App ((t12, v), e1', e2'))
+              TypeCtx.compatible_types type_ctx ~exp:t11 ~actual:t2
+              >>= fun types_compat ->
+              if types_compat then Ok (App ((t12, v), e1', e2'))
               else Error (TypeMismatch (t11, t2))
           | _ -> Error (ExpectedFunctionOf t1))
       | Match (v, e, cs) ->
@@ -451,7 +466,9 @@ functor
               >>= fun (typed_p, p_ctx) ->
               let p_t : vtype = pattern_node_val typed_p |> fst in
               (* Check the pattern's type *)
-              if TypeCtx.compatible_types type_ctx ~exp:t_in ~actual:p_t then
+              TypeCtx.compatible_types type_ctx ~exp:t_in ~actual:p_t
+              >>= fun pattern_type_compat ->
+              if pattern_type_compat then
                 let case_ctx = VarCtx.append var_ctx p_ctx in
                 (* Then, type the case's expression using the extended context *)
                 type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
@@ -462,9 +479,9 @@ functor
                     Ok (t_c_e, Nonempty_list.singleton (typed_p, c_e'))
                 | Second (t_out, cs_prev_rev) ->
                     (* If this isn't the first case, check the case's expression's type *)
-                    if
-                      TypeCtx.compatible_types type_ctx ~exp:t_out ~actual:t_c_e
-                    then
+                    TypeCtx.compatible_types type_ctx ~exp:t_out ~actual:t_c_e
+                    >>= fun case_e_type_compat ->
+                    if case_e_type_compat then
                       Ok (t_out, Nonempty_list.cons (typed_p, c_e') cs_prev_rev)
                     else Error (TypeMismatch (t_out, t_c_e))
               else
@@ -484,7 +501,9 @@ functor
           match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
           | None -> Error (UndefinedVariantTypeConstructor c_name)
           | Some ((vt_name, _), (_, c_t)) ->
-              if TypeCtx.compatible_types type_ctx ~exp:c_t ~actual:t1 then
+              TypeCtx.compatible_types type_ctx ~exp:c_t ~actual:t1
+              >>= fun types_compat ->
+              if types_compat then
                 Ok (Constructor ((VTypeCustom vt_name, v), c_name, e1'))
               else Error (TypeMismatch (c_t, t1)))
 
@@ -560,10 +579,11 @@ functor
       List.fold_result ~init:()
         ~f:(fun () (xname, xtype) ->
           match VarCtx.find bindings_var_ctx xname with
-          | Some ctx_xtype
-            when TypeCtx.compatible_types type_ctx ~exp:ctx_xtype ~actual:xtype
-            ->
-              Ok ()
+          | Some ctx_xtype ->
+              TypeCtx.compatible_types type_ctx ~exp:ctx_xtype ~actual:xtype
+              >>= fun compatible_types ->
+              if compatible_types then Ok ()
+              else Error (EqconsVariableNotInBindings (xname, xtype))
           | _ -> Error (EqconsVariableNotInBindings (xname, xtype)))
         (pattern_var_ctx |> VarCtx.to_list)
       >>= fun () ->
@@ -580,16 +600,17 @@ functor
           Error
             (EqConsBodyPatternNotExpectedType (get_plain_eqcons (), pattern_t)))
       >>= fun () ->
-      if
-        (* Check the body's pattern has the correct type *)
+      (* Check the body's pattern has the correct type *)
+      TypeCtx.compatible_types type_ctx ~exp:(VTypeCustom quotient_type_name)
+        ~actual:pattern_t
+      >>= fun pattern_type_compat ->
+      if pattern_type_compat then
+        (* Check the body's expression has the correct type *)
         TypeCtx.compatible_types type_ctx ~exp:(VTypeCustom quotient_type_name)
-          ~actual:pattern_t
-      then
-        if
-          (* Check the body's expression has the correct type *)
-          TypeCtx.compatible_types type_ctx
-            ~exp:(VTypeCustom quotient_type_name) ~actual:body_expr_t
-        then Ok { eqcons with body = (typed_pattern, typed_body) }
+          ~actual:body_expr_t
+        >>= fun expr_type_compat ->
+        if expr_type_compat then
+          Ok { eqcons with body = (typed_pattern, typed_body) }
         else
           Error
             (EqConsBodyTypeMismatch

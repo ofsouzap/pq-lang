@@ -129,23 +129,32 @@ end = struct
           >>| fun c -> (vt, c)
       | QuotientType _ -> None)
 
-  let rec compatible_types (ctx : t) ~(exp : vtype) ~(actual : vtype) : bool =
-    equal_vtype exp actual
-    ||
-    match actual with
-    | VTypeCustom actual_ct_name ->
-        let child_quotient_types =
-          (* Find all the quotient types that have actual as their base type *)
-          ctx
-          |> List.filter_map ~f:(function
-               | QuotientType qt
-                 when equal_string qt.base_type_name actual_ct_name ->
-                   Some qt
-               | _ -> None)
-        in
-        List.exists child_quotient_types ~f:(fun qt ->
-            compatible_types ctx ~exp ~actual:(VTypeCustom qt.name))
-    | _ -> false
+  let rec compatible_types (ctx : t) ~(exp : vtype) ~(actual : vtype) :
+      (bool, typing_error) Result.t =
+    let open Result in
+    if equal_vtype exp actual then Ok true
+    else
+      match (exp, actual) with
+      | VTypeCustom _, VTypeCustom actual_ct_name -> (
+          find_type_defn_by_name ctx actual_ct_name
+          |> Result.of_option ~error:(UndefinedTypeName actual_ct_name)
+          >>= function
+          | QuotientType actual_qt ->
+              compatible_types ctx ~exp
+                ~actual:(VTypeCustom actual_qt.base_type_name)
+          | _ -> Ok false)
+      | VTypePair (exp_t1, exp_t2), VTypePair (actual_t1, actual_t2) ->
+          compatible_types ctx ~exp:exp_t1 ~actual:actual_t1
+          >>= fun t1_compat ->
+          compatible_types ctx ~exp:exp_t2 ~actual:actual_t2
+          >>= fun t2_compat -> Ok (t1_compat && t2_compat)
+      | VTypeFun (exp_t1, exp_t2), VTypeFun (actual_t1, actual_t2) ->
+          compatible_types ctx ~exp:exp_t1 ~actual:actual_t1
+          >>= fun t1_compat ->
+          (* Note that this is the other way round *)
+          compatible_types ctx ~exp:actual_t2 ~actual:exp_t2
+          >>= fun t2_compat -> Ok (t1_compat && t2_compat)
+      | _ -> Ok false
 
   let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
 
