@@ -129,6 +129,24 @@ end = struct
           >>| fun c -> (vt, c)
       | QuotientType _ -> None)
 
+  let rec compatible_types (ctx : t) ~(exp : vtype) ~(actual : vtype) : bool =
+    equal_vtype exp actual
+    ||
+    match actual with
+    | VTypeCustom actual_ct_name ->
+        let child_quotient_types =
+          (* Find all the quotient types that have actual as their base type *)
+          ctx
+          |> List.filter_map ~f:(function
+               | QuotientType qt
+                 when equal_string qt.base_type_name actual_ct_name ->
+                   Some qt
+               | _ -> None)
+        in
+        List.exists child_quotient_types ~f:(fun qt ->
+            compatible_types ctx ~exp ~actual:(VTypeCustom qt.name))
+    | _ -> false
+
   let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
 
   let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) quotient_type) : t =

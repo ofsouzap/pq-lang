@@ -72,6 +72,11 @@ module type TypingTypeContext = sig
 
   (** Get a list of the variant types defined in the context *)
   val type_defns_to_list : t -> plain_custom_type list
+
+  (** Checks whether one type is compatible with another under the context. That
+      is, whether the `actual` type can be used when we are expecting type `exp`
+  *)
+  val compatible_types : t -> exp:vtype -> actual:vtype -> bool
 end
 
 (** Typing context of types using a simple set-based approach *)

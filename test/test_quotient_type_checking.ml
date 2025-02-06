@@ -56,8 +56,8 @@ type tree =
 
 qtype list
   = tree
-  |/ (x : list) => Node (Empty (u : unit), (x : list)) == (x)
-  |/ (x : list) => Node ((x : list), Empty (u : unit)) == (x)
+  |/ (u : unit) -> (x : list) => Node (Empty (u : unit), (x : list)) == (x)
+  |/ (u : unit) -> (x : list) => Node ((x : list), Empty (u : unit)) == (x)
   |/ (x : list) -> (y : list) -> (z : list) =>
     Node (
       Node (
