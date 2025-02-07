@@ -2,7 +2,6 @@ open Variant_types
 open Vtype
 open Pattern
 open Ast
-open Quotient_types
 open Custom_types
 open Program
 
@@ -18,12 +17,12 @@ type typing_error =
       *)
   | PatternTypeMismatch of plain_pattern * vtype * vtype
       (** A pattern was expected to have the first type but had the second *)
-  | EqConsBodyPatternNotExpectedType of plain_quotient_type_eqcons * vtype
-      (** The eqcons's body's pattern was meant to type as the given type but
-          didn't *)
-  | EqConsBodyTypeMismatch of plain_quotient_type_eqcons * vtype * vtype
-      (** The body of an equivalence constructor was expected to have the first
-          type but had the second *)
+  | EqConsBodyPatternTypeMismatch of plain_pattern * vtype * vtype
+      (** The pattern of an equivalence constructor body was expected to have
+          the first type but had the second *)
+  | EqConsBodyExprTypeMismatch of plain_expr * vtype * vtype
+      (** The expression of an equivalence constructor body was expected to have
+          the first type but had the second *)
   | EqualOperatorTypeMistmatch of vtype * vtype
       (** An application of the equality operation had a type mismatch as the
           operands had the specified types instead of compatible ones *)
@@ -71,12 +70,15 @@ module type TypingTypeContext = sig
     t -> string -> (variant_type * variant_type_constructor) option
 
   (** Get a list of the variant types defined in the context *)
-  val type_defns_to_list : t -> plain_custom_type list
+  val type_defns_to_ordered_list : t -> plain_custom_type list
 
   (** Check if the first custom type (given by name) is a descendant (by
       quotienting) of the second (also given by name) *)
   val is_quotient_descendant :
     t -> vtype -> vtype -> (bool, typing_error) Result.t
+
+  val find_common_root_type :
+    t -> vtype -> vtype -> (vtype option, typing_error) Result.t
 end
 
 (** Typing context of types using a simple set-based approach *)

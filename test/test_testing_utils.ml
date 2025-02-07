@@ -13,7 +13,7 @@ let vtype_gen_no_fun (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.gen
     {
       variant_types =
-        TestingTypeCtx.type_defns_to_list type_ctx
+        TestingTypeCtx.type_defns_to_ordered_list type_ctx
         |> List.filter_map ~f:(function
              | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
@@ -26,7 +26,7 @@ let vtype_arb_no_fun_type (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.arbitrary
     {
       variant_types =
-        TestingTypeCtx.type_defns_to_list type_ctx
+        TestingTypeCtx.type_defns_to_ordered_list type_ctx
         |> List.filter_map ~f:(function
              | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
@@ -125,7 +125,7 @@ let create_typed_expr_gen_test (name : string)
             {
               t = Some (Unit_ast_qcheck_testing.vtype_to_gen_vtype_unsafe t);
               variant_types =
-                TestingTypeCtx.type_defns_to_list type_ctx
+                TestingTypeCtx.type_defns_to_ordered_list type_ctx
                 |> List.filter_map ~f:(function
                      | VariantType vt -> Some vt
                      | QuotientType _ -> None);

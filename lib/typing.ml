@@ -13,8 +13,8 @@ type typing_error =
   | EqconsVariableNotInBindings of string * vtype
   | TypeMismatch of vtype * vtype
   | PatternTypeMismatch of plain_pattern * vtype * vtype
-  | EqConsBodyPatternNotExpectedType of plain_quotient_type_eqcons * vtype
-  | EqConsBodyTypeMismatch of plain_quotient_type_eqcons * vtype * vtype
+  | EqConsBodyPatternTypeMismatch of plain_pattern * vtype * vtype
+  | EqConsBodyExprTypeMismatch of plain_expr * vtype * vtype
   | EqualOperatorTypeMistmatch of vtype * vtype
   | ExpectedFunctionOf of vtype
   | UndefinedVariantTypeConstructor of string
@@ -31,8 +31,8 @@ let equal_typing_error_variant x y =
   | EqconsVariableNotInBindings _, EqconsVariableNotInBindings _
   | TypeMismatch _, TypeMismatch _
   | PatternTypeMismatch _, PatternTypeMismatch _
-  | EqConsBodyPatternNotExpectedType _, EqConsBodyPatternNotExpectedType _
-  | EqConsBodyTypeMismatch _, EqConsBodyTypeMismatch _
+  | EqConsBodyPatternTypeMismatch _, EqConsBodyPatternTypeMismatch _
+  | EqConsBodyExprTypeMismatch _, EqConsBodyExprTypeMismatch _
   | EqualOperatorTypeMistmatch _, EqualOperatorTypeMistmatch _
   | ExpectedFunctionOf _, ExpectedFunctionOf _
   | UndefinedVariantTypeConstructor _, UndefinedVariantTypeConstructor _
@@ -47,8 +47,8 @@ let equal_typing_error_variant x y =
   | EqconsVariableNotInBindings _, _
   | TypeMismatch _, _
   | PatternTypeMismatch _, _
-  | EqConsBodyPatternNotExpectedType _, _
-  | EqConsBodyTypeMismatch _, _
+  | EqConsBodyPatternTypeMismatch _, _
+  | EqConsBodyExprTypeMismatch _, _
   | EqualOperatorTypeMistmatch _, _
   | ExpectedFunctionOf _, _
   | UndefinedVariantTypeConstructor _, _
@@ -73,17 +73,17 @@ let print_typing_error = function
       sprintf "Type mismatch in pattern \"%s\": expected %s but got %s"
         (pattern_to_source_code p) (vtype_to_source_code t1)
         (vtype_to_source_code t2)
-  | EqConsBodyPatternNotExpectedType (eqcons, t) ->
+  | EqConsBodyPatternTypeMismatch (pattern, t1, t2) ->
       sprintf
-        "Pattern in equivalence constructor body for \"%s\" is not of the \
-         expected type %s"
-        (quotient_type_eqcons_to_source_code eqcons)
-        (vtype_to_source_code t)
-  | EqConsBodyTypeMismatch (eqcons, t1, t2) ->
+        "Type mismatch in equivalence constructor body pattern for \"%s\": \
+         expected %s but got %s"
+        (pattern_to_source_code pattern)
+        (vtype_to_source_code t1) (vtype_to_source_code t2)
+  | EqConsBodyExprTypeMismatch (expr, t1, t2) ->
       sprintf
-        "Type mismatch in equivalence constructor body for \"%s\": expected %s \
-         but got %s"
-        (quotient_type_eqcons_to_source_code eqcons)
+        "Type mismatch in equivalence constructor body pattern for \"%s\": \
+         expected %s but got %s"
+        (ast_to_source_code ~use_newlines:false expr)
         (vtype_to_source_code t1) (vtype_to_source_code t2)
   | EqualOperatorTypeMistmatch (t1, t2) ->
       sprintf "Trying to apply equality operator to %s and %s"
@@ -119,16 +119,22 @@ module type TypingTypeContext = sig
   val find_variant_type_with_constructor :
     t -> string -> (variant_type * variant_type_constructor) option
 
-  val type_defns_to_list : t -> plain_custom_type list
+  val type_defns_to_ordered_list : t -> plain_custom_type list
 
   val is_quotient_descendant :
     t -> vtype -> vtype -> (bool, typing_error) Result.t
+
+  val find_common_root_type :
+    t -> vtype -> vtype -> (vtype option, typing_error) Result.t
 end
 
 module SetTypingTypeContext : TypingTypeContext = struct
-  type t = { custom_types : plain_custom_type StringMap.t }
+  type t = {
+    custom_types : plain_custom_type StringMap.t;
+    custom_types_order : string list;
+  }
 
-  let empty : t = { custom_types = StringMap.empty }
+  let empty : t = { custom_types = StringMap.empty; custom_types_order = [] }
 
   let create ~(custom_types : ('tag_e, 'tag_p) custom_type list) :
       (t, typing_error) Result.t =
@@ -141,7 +147,13 @@ module SetTypingTypeContext : TypingTypeContext = struct
     in
     match type_defns_map_or_err with
     | `Duplicate_key dup_name -> Error (DuplicateTypeNameDefinition dup_name)
-    | `Ok type_defns_map -> Ok { custom_types = type_defns_map }
+    | `Ok type_defns_map ->
+        Ok
+          {
+            custom_types = type_defns_map;
+            custom_types_order =
+              List.map ~f:(fun ct -> custom_type_name ct) custom_types;
+          }
 
   let find_type_defn_by_name (ctx : t) :
       string -> ('tag_e, 'tag_p) custom_type option =
@@ -165,8 +177,10 @@ module SetTypingTypeContext : TypingTypeContext = struct
         | QuotientType _ -> Continue ())
       ~finish:(fun () -> None)
 
-  let type_defns_to_list (ctx : t) : ('tag_e, 'tag_p) custom_type list =
-    Map.data ctx.custom_types
+  let type_defns_to_ordered_list (ctx : t) : ('tag_e, 'tag_p) custom_type list =
+    List.map
+      ~f:(fun ct_name -> find_type_defn_by_name ctx ct_name |> Option.value_exn)
+      ctx.custom_types_order
 
   let rec is_quotient_descendant (ctx : t) (t1 : vtype) (t2 : vtype) :
       (bool, typing_error) Result.t =
@@ -198,6 +212,39 @@ module SetTypingTypeContext : TypingTypeContext = struct
         (* Note that this part is the other way round to usual *)
         is_quotient_descendant ctx t22 t12 >>| fun second -> first && second
     | _ -> Ok (equal_vtype t1 t2)
+
+  let rec find_common_root_type (ctx : t) (t1 : vtype) (t2 : vtype) :
+      (vtype option, typing_error) Result.t =
+    let open Result in
+    match (t1, t2) with
+    | VTypeCustom ct1_name, VTypeCustom ct2_name -> (
+        find_type_defn_by_name ctx ct1_name
+        |> Result.of_option ~error:(UndefinedTypeName ct1_name)
+        >>= fun ct1 ->
+        find_type_defn_by_name ctx ct2_name
+        |> Result.of_option ~error:(UndefinedTypeName ct2_name)
+        >>= fun ct2 ->
+        match (ct1, ct2) with
+        | VariantType vt1, VariantType vt2 ->
+            if equal_variant_type vt1 vt2 then Ok (Some t1) else Ok None
+        | QuotientType qt1, QuotientType qt2 ->
+            if equal_quotient_type equal_unit equal_unit qt1 qt2 then
+              Ok (Some t1)
+            else
+              find_common_root_type ctx (VTypeCustom qt1.base_type_name)
+                (VTypeCustom qt2.name)
+        | VariantType vt, QuotientType qt | QuotientType qt, VariantType vt ->
+            find_common_root_type ctx (VTypeCustom qt.base_type_name)
+              (VTypeCustom (fst vt)))
+    | VTypePair (t11, t12), VTypePair (t21, t22) ->
+        find_common_root_type ctx t11 t21 >>= fun t1 ->
+        find_common_root_type ctx t12 t22 >>= fun t2 ->
+        Ok
+          Option.(
+            t1 >>= fun t1 ->
+            t2 >>| fun t2 -> VTypePair (t1, t2))
+    | VTypeFun _, VTypeFun _ -> failwith "TODO"
+    | _ -> if equal_vtype t1 t2 then Ok (Some t1) else Ok None
 end
 
 module type TypingVarContext = sig
@@ -316,7 +363,11 @@ functor
           | Some ((vt_name, _), (_, c_t)) ->
               type_pattern ctx p >>= fun (p_typed, var_ctx_from_p) ->
               let p_t = pattern_node_val p_typed |> fst in
-              if equal_vtype c_t p_t then
+              (* Check if the subpattern's determined type is valid for the expected constructor's argument type.
+                For non-quotient type cases, this is just an equality check *)
+              TypeCtx.is_quotient_descendant type_ctx p_t c_t
+              >>= fun subpattern_type_matches ->
+              if subpattern_type_matches then
                 Ok
                   ( PatConstructor ((VTypeCustom vt_name, v), c_name, p_typed),
                     var_ctx_from_p )
@@ -454,7 +505,9 @@ functor
             let t2 = e_type e2' in
             match t1 with
             | VTypeFun (t11, t12) ->
-                if equal_vtype t11 t2 then Ok (App ((t12, v), e1', e2'))
+                TypeCtx.is_quotient_descendant type_ctx t11 t2
+                >>= fun arg_type_valid ->
+                if arg_type_valid then Ok (App ((t12, v), e1', e2'))
                 else Error (TypeMismatch (t11, t2))
             | _ -> Error (ExpectedFunctionOf t1))
         | Match (v, e, cs) ->
@@ -478,7 +531,9 @@ functor
                 >>= fun (typed_p, p_ctx) ->
                 let p_t : vtype = pattern_node_val typed_p |> fst in
                 (* Check the pattern's type *)
-                if equal_vtype t_in p_t then
+                TypeCtx.find_common_root_type type_ctx p_t t_in
+                >>= fun pattern_input_common_type ->
+                if Option.is_some pattern_input_common_type then
                   let case_ctx = VarCtx.append var_ctx p_ctx in
                   (* Then, type the case's expression using the extended context *)
                   type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
@@ -531,7 +586,7 @@ functor
           : (checked_type_ctx, typing_error) Result.t =
         TypeCtx.create ~custom_types:acc.type_defns_list
       in
-      List.fold_result (TypeCtx.type_defns_to_list ctx_in)
+      List.fold_result (TypeCtx.type_defns_to_ordered_list ctx_in)
         ~init:
           {
             types = StringSet.empty;
@@ -565,15 +620,11 @@ functor
             { acc with type_defns_list = td :: acc.type_defns_list })
       >>= acc_to_checked_type_ctx
 
-    let type_eqcons ~(type_ctx : TypeCtx.t) ~(base_type_name : string)
+    let type_eqcons ~(type_ctx : TypeCtx.t) ~(quotient_type_name : string)
         (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) :
         (('tag_e, 'tag_p) typed_quotient_type_eqcons, typing_error) Result.t =
       let open Result in
-      let get_plain_eqcons () =
-        eqcons
-        |> eqcons_fmap_expr ~f:(fun _ -> ())
-        |> eqcons_fmap_pattern ~f:(fun _ -> ())
-      in
+      let quotient_type = VTypeCustom quotient_type_name in
       let body_pattern, body_expr = eqcons.body in
       (* Create a variable context from only the bindings *)
       List.fold_result ~init:VarCtx.empty
@@ -597,21 +648,21 @@ functor
       type_expr (type_ctx, bindings_var_ctx) body_expr >>= fun typed_body ->
       let pattern_t = typed_pattern |> pattern_node_val |> fst in
       let body_expr_t = typed_body |> expr_node_val |> fst in
-      (* Check the pattern has the type of the quotient type's base type *)
-      (match pattern_t with
-      | VTypeCustom pattern_ct_name
-        when equal_string base_type_name pattern_ct_name ->
-          Ok ()
-      | _ ->
+      TypeCtx.is_quotient_descendant type_ctx quotient_type pattern_t
+      >>= fun pattern_t_valid ->
+      if pattern_t_valid then
+        TypeCtx.find_common_root_type type_ctx quotient_type body_expr_t
+        >>= fun body_expr_t_common_root ->
+        if Option.is_some body_expr_t_common_root then
+          Ok { eqcons with body = (typed_pattern, typed_body) }
+        else
           Error
-            (EqConsBodyPatternNotExpectedType (get_plain_eqcons (), pattern_t)))
-      >>= fun () ->
-      (* Check the pattern and the expression have the same type *)
-      if equal_vtype pattern_t body_expr_t then
-        Ok { eqcons with body = (typed_pattern, typed_body) }
+            (EqConsBodyExprTypeMismatch
+               (expr_to_plain_expr body_expr, quotient_type, body_expr_t))
       else
         Error
-          (EqConsBodyTypeMismatch (get_plain_eqcons (), pattern_t, body_expr_t))
+          (EqConsBodyPatternTypeMismatch
+             (pattern_to_plain_pattern body_pattern, quotient_type, pattern_t))
 
     let type_custom_types ~(type_ctx : TypeCtx.t)
         (custom_types : ('tag_e, 'tag_p) custom_type list) =
@@ -621,7 +672,7 @@ functor
           | VariantType vt -> VariantType vt |> Ok
           | QuotientType qt ->
               List.map
-                ~f:(type_eqcons ~type_ctx ~base_type_name:qt.base_type_name)
+                ~f:(type_eqcons ~type_ctx ~quotient_type_name:qt.name)
                 qt.eqconss
               |> Result.all
               >>| fun eqconss ->
