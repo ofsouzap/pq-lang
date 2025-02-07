@@ -270,7 +270,7 @@ let ast_to_source_code ?(use_newlines : bool option) :
            write "match"
            |.> block (convert e)
            |.> write "with" |.> block cases_converter |.> write "end"
-       | Constructor (_, cname, e) -> write cname |.> convert e)
+       | Constructor (_, cname, e) -> write cname |.> write " " |.> convert e)
     |> if bracketed then write ")" else Fn.id
   in
   SourceCodeBuilder.from_converter ~converter:(convert ~bracketed:false)
