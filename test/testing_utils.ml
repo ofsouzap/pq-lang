@@ -80,7 +80,6 @@ module TestingTypeCtx : sig
 
   val add_variant : t -> variant_type -> t
   val add_quotient : t -> ('tag_e, 'tag_p) quotient_type -> t
-  val type_defns_to_ordered_list : t -> plain_custom_type list
   val from_list : ('tag_e, 'tag_p) custom_type list -> t
   val variant_gen_opt : t -> variant_type QCheck.Gen.t option
   val sexp_of_t : t -> Sexp.t
