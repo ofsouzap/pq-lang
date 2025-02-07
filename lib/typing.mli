@@ -72,6 +72,11 @@ module type TypingTypeContext = sig
 
   (** Get a list of the variant types defined in the context *)
   val type_defns_to_list : t -> plain_custom_type list
+
+  (** Check if the first custom type (given by name) is a descendant (by
+      quotienting) of the second (also given by name) *)
+  val is_quotient_descendant :
+    t -> vtype -> vtype -> (bool, typing_error) Result.t
 end
 
 (** Typing context of types using a simple set-based approach *)

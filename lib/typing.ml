@@ -120,6 +120,9 @@ module type TypingTypeContext = sig
     t -> string -> (variant_type * variant_type_constructor) option
 
   val type_defns_to_list : t -> plain_custom_type list
+
+  val is_quotient_descendant :
+    t -> vtype -> vtype -> (bool, typing_error) Result.t
 end
 
 module SetTypingTypeContext : TypingTypeContext = struct
@@ -164,6 +167,37 @@ module SetTypingTypeContext : TypingTypeContext = struct
 
   let type_defns_to_list (ctx : t) : ('tag_e, 'tag_p) custom_type list =
     Map.data ctx.custom_types
+
+  let rec is_quotient_descendant (ctx : t) (t1 : vtype) (t2 : vtype) :
+      (bool, typing_error) Result.t =
+    let open Result in
+    match (t1, t2) with
+    | VTypeCustom ct1_name, VTypeCustom ct2_name -> (
+        find_type_defn_by_name ctx ct1_name
+        |> Result.of_option ~error:(UndefinedTypeName ct1_name)
+        >>= fun ct1 ->
+        find_type_defn_by_name ctx ct2_name
+        |> Result.of_option ~error:(UndefinedTypeName ct2_name)
+        >>= fun ct2 ->
+        match (ct1, ct2) with
+        | VariantType _, QuotientType _ -> Ok false
+        | VariantType vt1, VariantType vt2 -> Ok (equal_variant_type vt1 vt2)
+        | QuotientType qt1, VariantType vt2 ->
+            is_quotient_descendant ctx (VTypeCustom qt1.base_type_name)
+              (VTypeCustom (fst vt2))
+        | QuotientType qt1, QuotientType qt2 ->
+            if equal_quotient_type equal_unit equal_unit qt1 qt2 then Ok true
+            else
+              is_quotient_descendant ctx (VTypeCustom qt1.base_type_name)
+                (VTypeCustom qt2.name))
+    | VTypePair (t11, t12), VTypePair (t21, t22) ->
+        is_quotient_descendant ctx t11 t21 >>= fun first ->
+        is_quotient_descendant ctx t12 t22 >>| fun second -> first && second
+    | VTypeFun (t11, t12), VTypeFun (t21, t22) ->
+        is_quotient_descendant ctx t11 t21 >>= fun first ->
+        (* Note that this part is the other way round to usual *)
+        is_quotient_descendant ctx t22 t12 >>| fun second -> first && second
+    | _ -> Ok (equal_vtype t1 t2)
 end
 
 module type TypingVarContext = sig
