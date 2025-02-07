@@ -429,20 +429,24 @@ end
     but is just meant to be used as a ground truth to test against the
     actually-used implementations *)
 module FunctionTypingVarContext : TypingVarContext = struct
-  type t = string -> vtype option
+  type t = (string -> vtype option) * string list
 
-  let empty : t = Fn.const None
+  let empty : t = (Fn.const None, [])
 
-  let add (f' : t) (xname : string) (xtype : vtype) : t =
-   fun x -> if equal_string xname x then Some xtype else f' x
+  let add ((f', xs') : t) (xname : string) (xtype : vtype) : t =
+    ((fun x -> if equal_string xname x then Some xtype else f' x), xname :: xs')
 
-  let find = Fn.id
+  let find ((f, _) : t) = f
   let singleton xname xtype = add empty xname xtype
 
-  let append (f1 : t) (f2 : t) x =
-    match f2 x with None -> f1 x | Some v -> Some v
+  let append ((f1, xs1) : t) ((f2, xs2) : t) : t =
+    ((fun x -> match f2 x with None -> f1 x | Some v -> Some v), xs2 @ xs1)
 
-  let exists (f : t) xname = match f xname with None -> false | Some _ -> true
+  let exists ((_, xs) : t) xname = List.mem ~equal:equal_string xs xname
+
+  let to_list ((f, xs) : t) : (string * vtype) list =
+    List.filter_map xs ~f:(fun x ->
+        match f x with None -> None | Some v -> Some (x, v))
 end
 
 module FunctionVariableContextTester =
