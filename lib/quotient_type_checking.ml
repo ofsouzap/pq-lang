@@ -423,8 +423,8 @@ module FlatPattern = struct
             | Second (_, acc) ->
                 (existing_names, Nonempty_list.cons (flat_p, flat_e) acc) |> Ok)
           cs
-        >>= fun (existing_names, flat_cases) ->
-        (existing_names, Match (v, e', flat_cases)) |> Ok
+        >>= fun (existing_names, flat_cases_rev) ->
+        (existing_names, Match (v, e', Nonempty_list.rev flat_cases_rev)) |> Ok
     | Constructor (v, name, e) ->
         unop
           (fun existing_names e' -> (existing_names, Constructor (v, name, e')))
