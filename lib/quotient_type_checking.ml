@@ -988,7 +988,7 @@ module Smt = struct
               build_case case >>| fun case_node -> case_node :: acc)
             cases
           >>| List.rev
-          >>| fun case_nodes -> Op ("match", e_node :: case_nodes)
+          >>| fun case_nodes -> Op ("match", e_node :: [ List case_nodes ])
 
     let build_top_level_elem (state : State.t) :
         top_level_elem -> (LispBuilder.node, quotient_typing_error) Result.t =
