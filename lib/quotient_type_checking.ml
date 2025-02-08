@@ -72,6 +72,8 @@ type quotient_typing_error =
           unexpectedly and cannot be handled *)
   | PairTypeNotDefinedInState of vtype * vtype
   | PartialEvaluationError of Partial_evaluation.partial_evaluation_error
+  | UndefinedCustomTypeName of string
+      (** A custom type of the given name was referenced but isn't defined *)
 [@@deriving sexp, equal]
 
 module TagAst = struct
@@ -544,6 +546,10 @@ module Smt = struct
     [@@deriving sexp, equal]
 
     type t = {
+      custom_types : plain_custom_type list;
+          (** A list of the custom types defined. This isn't used for building
+              the SMT formula, but is used for e.g. mapping quotient types to
+              their root base type *)
       pair_types_defined : pair_type_info VtypePairMap.t;
           (** A mapping from all pair types that have been defined to info about
               them. This used to decide which possible instantiations of the
@@ -575,8 +581,9 @@ module Smt = struct
 
     let vt_unit_val : string = custom_special_name (`Var "unit")
 
-    let state_initial : t =
+    let state_init (custom_types : plain_custom_type list) : t =
       {
+        custom_types;
         pair_types_defined =
           (VtypePairMap.empty : pair_type_info VtypePairMap.t);
         special_variant_types =
@@ -590,8 +597,27 @@ module Smt = struct
         top_level_rev = [];
       }
 
+    let rec find_root_base_type (state : t) (t : vtype) :
+        (vtype, quotient_typing_error) Result.t =
+      let open Result in
+      match t with
+      | VTypeCustom ct_name -> (
+          List.find state.custom_types ~f:(fun x_ct ->
+              equal_string (custom_type_name x_ct) ct_name)
+          |> Result.of_option ~error:(UndefinedCustomTypeName ct_name)
+          >>= function
+          | VariantType (vt_name, _) -> Ok (VTypeCustom vt_name)
+          | QuotientType qt ->
+              find_root_base_type state (VTypeCustom qt.base_type_name))
+      | _ -> Ok t
+
     (* Once defining signatures, keep this private! *)
-    let state_add_pair_type ((t1 : vtype), (t2 : vtype)) (state : t) : t =
+    let state_add_pair_type ((t1 : vtype), (t2 : vtype)) (state : t) :
+        (t, quotient_typing_error) Result.t =
+      let open Result in
+      (* Make sure to only be using types for base variant types, not quotient types *)
+      find_root_base_type state t1 >>= fun t1 ->
+      find_root_base_type state t2 >>| fun t2 ->
       let pair_type_vt_name : vtype * vtype -> string =
         (* Generates an implicitly-unique name for the instantiation of the
             pair type for the specified two parameter types *)
@@ -637,6 +663,9 @@ module Smt = struct
 
     let state_get_pair_type_info ((t1 : vtype), (t2 : vtype)) (state : t) :
         (pair_type_info, quotient_typing_error) Result.t =
+      let open Result in
+      find_root_base_type state t1 >>= fun t1 ->
+      find_root_base_type state t2 >>= fun t2 ->
       match Map.find state.pair_types_defined (t1, t2) with
       | Some info -> Ok info
       | None -> Error (PairTypeNotDefinedInState (t1, t2))
@@ -670,101 +699,105 @@ module Smt = struct
       }
 
     (** Add a variable definition to the state *)
-    let state_add_var_defn (defn : var_defn) (state : t) : t =
-      let rec add_pair_types_used (state : t) : vtype -> t = function
-        | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> state
+    let state_add_var_defn (defn : var_defn) (state : t) :
+        (t, quotient_typing_error) Result.t =
+      let open Result in
+      let rec add_pair_types_used (state : state) :
+          vtype -> (state, quotient_typing_error) Result.t = function
+        | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> Ok state
         | VTypePair (t1, t2) ->
-            state_add_pair_type (t1, t2) state |> fun state ->
-            add_pair_types_used (add_pair_types_used state t1) t2
+            state_add_pair_type (t1, t2) state >>= fun state ->
+            add_pair_types_used state t1 >>= fun state ->
+            add_pair_types_used state t2
         | VTypeFun (t1, t2) ->
-            add_pair_types_used (add_pair_types_used state t1) t2
+            add_pair_types_used state t1 >>= fun state ->
+            add_pair_types_used state t2
       in
-      let rec search_add_pair_types_used (state : t) :
-          FlatPattern.flat_expr -> t = function
+      let rec search_add_pair_types_used (state : state) :
+          FlatPattern.flat_expr -> (state, quotient_typing_error) Result.t =
+        function
         | UnitLit v -> add_pair_types_used state v.t
         | IntLit (v, _) -> add_pair_types_used state v.t
         | Add (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Neg (v, e1) ->
-            add_pair_types_used state v.t |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1
         | Subtr (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Mult (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | BoolLit (v, _) -> add_pair_types_used state v.t
         | BNot (v, e1) ->
-            add_pair_types_used state v.t |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1
         | BOr (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | BAnd (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Pair (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Eq (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Gt (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | GtEq (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Lt (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | LtEq (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | If (v, e1, e2, e3) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
-            search_add_pair_types_used state e2 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
+            search_add_pair_types_used state e2 >>= fun state ->
             search_add_pair_types_used state e3
         | Var (v, _) -> add_pair_types_used state v.t
         | Let (v, _, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | App (v, e1, e2) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Match (v, e1, cases) ->
-            add_pair_types_used state v.t |> fun state ->
-            search_add_pair_types_used state e1 |> fun state ->
-            Nonempty_list.fold
+            add_pair_types_used state v.t >>= fun state ->
+            search_add_pair_types_used state e1 >>= fun state ->
+            Nonempty_list.fold_result
               ~f:(fun state (pat, e) ->
                 let pat_t = FlatPattern.flat_pattern_node_val pat in
-                add_pair_types_used state pat_t.t |> fun state ->
+                add_pair_types_used state pat_t.t >>= fun state ->
                 search_add_pair_types_used state e)
               ~init:state cases
         | Constructor (v, _, e1) ->
-            add_pair_types_used state v.t |> fun state ->
+            add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1
       in
-      let state =
-        (* Add all used pair types to the state *)
-        search_add_pair_types_used state defn.body
-      in
+      (* Add all used pair types to the state *)
+      search_add_pair_types_used state defn.body >>| fun state ->
       { state with top_level_rev = VarDefn defn :: state.top_level_rev }
 
     let to_partial_evaluator_store (state : t) : PartialEvaluator.store =
@@ -812,11 +845,13 @@ module Smt = struct
     open State
     open Assertion
 
-    let rec build_vtype (state : State.t) :
-        vtype -> (LispBuilder.node, quotient_typing_error) Result.t =
+    let rec build_vtype (state : State.t) (t : vtype) :
+        (LispBuilder.node, quotient_typing_error) Result.t =
       let open Result in
       let open LispBuilder in
-      function
+      (* Make sure to map the type to its root base type, in case it is a quotient type *)
+      State.find_root_base_type state t >>= fun t ->
+      match t with
       | VTypeUnit -> Ok (Atom vt_unit_name)
       | VTypeInt -> Ok (Atom "Int")
       | VTypeBool -> Ok (Atom "Bool")
@@ -1285,11 +1320,11 @@ let rec check_expr ?(partial_evaluation_mrd : int option)
       check_expr ~existing_names ~quotient_types state e1
       >>= fun existing_names ->
       let e1_type = (FlatPattern.flat_node_val e1).t in
-      check_expr ~existing_names ~quotient_types
-        (state_add_var_defn
-           { name = xname; kind = `NonRec None; return_t = e1_type; body = e1 }
-           state)
-        e2
+
+      state_add_var_defn
+        { name = xname; kind = `NonRec None; return_t = e1_type; body = e1 }
+        state
+      >>= fun state -> check_expr ~existing_names ~quotient_types state e2
   | App (_, e1, e2) ->
       check_expr ~existing_names ~quotient_types state e1
       >>= fun existing_names ->
@@ -1344,7 +1379,14 @@ let check_program (prog : tag_program) : (unit, quotient_typing_error) Result.t
       ~f:(function QuotientType qt -> Some qt | _ -> None)
       flat_prog.custom_types
   in
-  let state = Smt.State.state_initial in
+  let state =
+    Smt.State.state_init
+      (prog.custom_types
+      |> List.map ~f:(fun ct ->
+             ct
+             |> Custom_types.fmap_expr ~f:(Fn.const ())
+             |> Custom_types.fmap_pattern ~f:(Fn.const ())))
+  in
   let state =
     (* Add the variant type definitions to the state *)
     List.fold ~init:state
@@ -1356,33 +1398,32 @@ let check_program (prog : tag_program) : (unit, quotient_typing_error) Result.t
   (* Check the top-level definitions and add them to the state *)
   List.fold_result ~init:(existing_names, state)
     ~f:(fun (existing_names, state) defn ->
-      let defn_checking_state =
-        (* Create the state used whne checking the body of the function *)
-        (if defn.recursive then
-           state_add_var_defn
-             {
-               name = defn.name;
-               kind = `Rec defn.param;
-               return_t = defn.return_t;
-               body = defn.body;
-             }
-             state
-         else state)
-        |> state_add_var_decl defn.param
-      in
+      (* Create the state used when checking the body of the function *)
+      let defn_checking_state = state_add_var_decl defn.param state in
+      (if defn.recursive then
+         state_add_var_defn
+           {
+             name = defn.name;
+             kind = `Rec defn.param;
+             return_t = defn.return_t;
+             body = defn.body;
+           }
+           defn_checking_state
+       else Ok state)
+      >>= fun defn_checking_state ->
       (* Check the body of the TLD *)
       check_expr ~existing_names ~quotient_types defn_checking_state defn.body
-      >>| fun existing_names ->
+      >>= fun existing_names ->
       (* Return the resulting state after defining the TLD *)
-      ( existing_names,
-        state_add_var_defn
-          {
-            name = defn.name;
-            kind = `NonRec None;
-            return_t = defn.return_t;
-            body = defn.body;
-          }
-          state ))
+      state_add_var_defn
+        {
+          name = defn.name;
+          kind = `NonRec None;
+          return_t = defn.return_t;
+          body = defn.body;
+        }
+        state
+      >>| fun state -> (existing_names, state))
     flat_prog.top_level_defns
   >>= fun (existing_names, state) ->
   (* Check the main body of the program with the accumulated state *)
