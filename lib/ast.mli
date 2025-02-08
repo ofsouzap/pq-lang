@@ -96,6 +96,13 @@ type plain_typed_expr = (unit, unit) typed_expr [@@deriving sexp, equal]
 (** Delete an AST's tagging data to form a plain AST *)
 val expr_to_plain_expr : ('tag_e, 'tag_p) expr -> plain_expr
 
+(** Rename a variable in an expression *)
+val rename_var :
+  old_name:varname ->
+  new_name:varname ->
+  ('tag_e, 'tag_p) expr ->
+  ('tag_e, 'tag_p) expr
+
 exception AstConverionFixError
 
 (** Convert an AST expression into source code that corresponds to the AST

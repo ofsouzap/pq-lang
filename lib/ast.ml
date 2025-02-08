@@ -208,6 +208,77 @@ let rec expr_to_plain_expr (e : ('tag_e, 'tag_p) expr) : plain_expr =
             cs )
   | Constructor (_, cname, e) -> Constructor ((), cname, expr_to_plain_expr e)
 
+let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
+  | UnitLit _ as e -> e
+  | IntLit _ as e -> e
+  | BoolLit _ as e -> e
+  | Add (v, e1, e2) ->
+      Add
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Neg (v, e) -> Neg (v, rename_var ~old_name ~new_name e)
+  | Subtr (v, e1, e2) ->
+      Subtr
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Mult (v, e1, e2) ->
+      Mult
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | BNot (v, e) -> BNot (v, rename_var ~old_name ~new_name e)
+  | BOr (v, e1, e2) ->
+      BOr
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | BAnd (v, e1, e2) ->
+      BAnd
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Pair (v, e1, e2) ->
+      Pair
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Eq (v, e1, e2) ->
+      Eq
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Gt (v, e1, e2) ->
+      Gt
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | GtEq (v, e1, e2) ->
+      GtEq
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Lt (v, e1, e2) ->
+      Lt
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | LtEq (v, e1, e2) ->
+      LtEq
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | If (v, e1, e2, e3) ->
+      If
+        ( v,
+          rename_var ~old_name ~new_name e1,
+          rename_var ~old_name ~new_name e2,
+          rename_var ~old_name ~new_name e3 )
+  | Var (v, xname) ->
+      if equal_string old_name xname then Var (v, new_name) else Var (v, xname)
+  | Let (v, xname, e1, e2) ->
+      Let
+        ( v,
+          xname,
+          rename_var ~old_name ~new_name e1,
+          if equal_string xname old_name then e2
+          else rename_var ~old_name ~new_name e2 )
+  | App (v, e1, e2) ->
+      App
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Match (v, e, cases) ->
+      Match
+        ( v,
+          rename_var ~old_name ~new_name e,
+          Nonempty_list.map cases ~f:(fun (case_p, case_e) ->
+              ( case_p,
+                if
+                  List.exists ~f:(equal_string old_name)
+                    (Pattern.defined_vars case_p |> List.map ~f:fst)
+                then case_e
+                else rename_var ~old_name ~new_name case_e )) )
+  | Constructor (v, name, e) ->
+      Constructor (v, name, rename_var ~old_name ~new_name e)
+
 exception AstConverionFixError
 
 let ast_to_source_code ?(use_newlines : bool option) :
