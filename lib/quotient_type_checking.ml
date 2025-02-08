@@ -1141,20 +1141,29 @@ module Smt = struct
     | Z3.Solver.UNKNOWN -> `Unknown
 end
 
-let use_fresh_names_for_eqcons_unifier ~(existing_names : StringSet.t)
-    ( (eqcons : tag_quotient_type_eqcons),
-      (unifier : pattern_tag Pattern_unification.unifier) ) :
-    StringSet.t * pattern_tag Pattern_unification.unifier =
-  let bindings = eqcons.bindings in
-  List.fold ~init:(existing_names, unifier)
-    ~f:(fun (existing_names, unifier) (xname, _) ->
+let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
+    (eqcons : tag_quotient_type_eqcons) : StringSet.t * tag_quotient_type_eqcons
+    =
+  List.fold ~init:(existing_names, [], [])
+    ~f:(fun (existing_names, acc_map, acc_bindings_rev) (xname, xtype) ->
       let xname', existing_names =
         generate_fresh_varname ~seed_name:xname existing_names
       in
       ( Set.add existing_names xname',
-        Pattern_unification.rename_var_in_body ~old_name:xname ~new_name:xname'
-          unifier ))
-    bindings
+        (xname, xname') :: acc_map,
+        (xname', xtype) :: acc_bindings_rev ))
+    eqcons.bindings
+  |> fun (existing_names, renames_list, acc_bindings_rev) ->
+  ( existing_names,
+    {
+      bindings = List.rev acc_bindings_rev;
+      body =
+        List.fold ~init:eqcons.body
+          ~f:(fun (p, e) (old_name, new_name) ->
+            ( Pattern.rename_var ~old_name ~new_name p,
+              Ast.rename_var ~old_name ~new_name e ))
+          renames_list;
+    } )
 
 let find_matching_eqconss (x : [ `Pattern of tag_pattern | `Expr of tag_expr ])
     (eqconss : tag_quotient_type_eqcons list) :
@@ -1214,11 +1223,12 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
         (find_matching_eqconss (`Pattern case_p) quotient_type.eqconss)
         ~f:(fun existing_names (unifier, eqcons) ->
           (* Iterating through matching eqconss of the case *)
-          let existing_names, unifier =
-            use_fresh_names_for_eqcons_unifier ~existing_names (eqcons, unifier)
+          let existing_names, eqcons =
+            (* Alter the eqcons to use fresh variable names *)
+            use_fresh_names_for_eqcons ~existing_names eqcons
           in
           let state =
-            (* Add the first eqcons' bindings to the state *)
+            (* Add the eqcons' bindings to the state *)
             List.fold ~init:state
               ~f:(fun state (xname, xtype) ->
                 Smt.State.state_add_var_decl (xname, xtype) state)
