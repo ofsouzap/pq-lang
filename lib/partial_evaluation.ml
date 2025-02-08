@@ -189,16 +189,11 @@ end = struct
           | _ -> get_default_result ())
       | Match (v, e1, cases) -> (
           eval e1 >>= fun e1' ->
-          Nonempty_list.fold_result_consume_init
+          Nonempty_list.fold_result
           (* In this fold, an Ok value means we haven't found a matching case and have instead partially evaluated each case,
         and an Error value means we've found a matching case and create a function that will evaluate it with the updated store *)
             ~init:()
-            ~f:(fun acc (case_p, case_e) ->
-              let add_to_acc v =
-                match acc with
-                | First () -> Nonempty_list.singleton v
-                | Second acc -> Nonempty_list.cons v acc
-              in
+            ~f:(fun () (case_p, case_e) ->
               match match_pattern case_p e1' with
               | Ok var_bindings ->
                   Error
@@ -207,15 +202,10 @@ end = struct
                          | `Left e | `Right e | `Both (_, e) -> Some e)
                      in
                      fun () -> eval ~new_store case_e)
-              | Error () ->
-                  Ok
-                    (add_to_acc
-                       (eval case_e >>| fun case_e' -> (case_p, case_e'))))
+              | Error () -> Ok ())
             cases
           |> function
-          | Ok cases'_res_rev ->
-              cases'_res_rev |> Nonempty_list.result_all >>| Nonempty_list.rev
-              >>| fun cases' -> Match (v, e1', cases')
+          | Ok () -> Ok (Match (v, e1', cases))
           | Error case_eval_f -> case_eval_f ())
       | Constructor (v, c_name, e1) ->
           eval e1 >>| fun e1' -> Constructor (v, c_name, e1')
