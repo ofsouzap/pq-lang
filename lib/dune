@@ -3,6 +3,7 @@
  (name pq_lang)
  (libraries core qcheck z3)
  (modules
+  debug_tools
   utils
   vtype
   variant_types
@@ -21,6 +22,7 @@
   lexer
   frontend
   ast_executor)
+ (private_modules debug_tools)
  (preprocess
   (pps ppx_jane)))
 
