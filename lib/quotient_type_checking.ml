@@ -32,7 +32,7 @@ module LispBuilder : LispBuilderSig = struct
   let rec build_node = function
     | Unit -> "()"
     | Atom s -> s
-    | Op (op, []) -> op
+    | Op (op, []) -> sprintf "(%s)" op
     | Op (op, (_ :: _ as xs)) ->
         sprintf "(%s %s)" op
           (String.concat ~sep:" " (List.map ~f:build_node xs))
@@ -1080,7 +1080,7 @@ module Smt = struct
         List.fold_result ~init:[]
           ~f:(fun acc (xname, xtype) ->
             build_vtype state xtype >>| fun xtype_node ->
-            List [ Op ("declare-const", [ Atom xname; xtype_node ]) ] :: acc)
+            Op ("declare-const", [ Atom xname; xtype_node ]) :: acc)
           state.declared_consts
         >>| List.rev
       in
