@@ -1251,12 +1251,13 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
           | `Sat -> Error QuotientConstraintCheckFailed
           | `Unknown -> Error SmtUnknownResult))
 
-let rec check_expr ~(existing_names : StringSet.t)
-    ~(quotient_types : tag_quotient_type list) (state : Smt.State.t) :
-    FlatPattern.flat_expr -> (StringSet.t, quotient_typing_error) Result.t =
+let rec check_expr ?(partial_evaluation_mrd : int option)
+    ~(existing_names : StringSet.t) ~(quotient_types : tag_quotient_type list)
+    (state : Smt.State.t) (orig_e : FlatPattern.flat_expr) :
+    (StringSet.t, quotient_typing_error) Result.t =
   let open Result in
   let open Smt.State in
-  function
+  match orig_e with
   | UnitLit _ | IntLit _ | BoolLit _ | Var _ -> Ok existing_names
   | Neg (_, e) -> check_expr ~existing_names ~quotient_types state e
   | BNot (_, e) -> check_expr ~existing_names ~quotient_types state e
@@ -1310,9 +1311,9 @@ let rec check_expr ~(existing_names : StringSet.t)
                       (to_non_flat_pattern flat_p, to_non_flat_expr flat_e))
                   cases
               in
-              perform_quotient_match_check ~existing_names
-                ~all_quotient_types:quotient_types ~quotient_type:qt
-                ~match_node_v:v ~cases:non_flat_cases state
+              perform_quotient_match_check ?partial_evaluation_mrd
+                ~existing_names ~all_quotient_types:quotient_types
+                ~quotient_type:qt ~match_node_v:v ~cases:non_flat_cases state
           | None -> Ok existing_names)
       | _ -> Ok existing_names)
       >>= fun existing_names ->
