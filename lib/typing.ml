@@ -555,7 +555,11 @@ functor
           match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
           | None -> Error (UndefinedVariantTypeConstructor c_name)
           | Some ((vt_name, _), (_, c_t)) ->
-              if equal_vtype c_t t1 then
+              (* Check if the subexpressions's determined type is valid for the expected constructor's argument type.
+                For non-quotient type cases, this is just an equality check *)
+              TypeCtx.is_quotient_descendant type_ctx t1 c_t
+              >>= fun subexpr_type_matches ->
+              if subexpr_type_matches then
                 Ok (Constructor ((VTypeCustom vt_name, v), c_name, e1'))
               else Error (TypeMismatch (c_t, t1)))
 
