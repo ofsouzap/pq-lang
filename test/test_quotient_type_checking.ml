@@ -87,6 +87,68 @@ end
 empty_count (Node (Empty (), (Node (Empty (), (Leaf 1)))))
 |},
         `Invalid );
+      ( "Boom hierarchy list (map)",
+        {|
+type tree =
+  | Empty of unit
+  | Leaf of int
+  | Node of tree * tree
+
+qtype list
+  = tree
+  |/ (u : unit) -> (x : list) => Node (Empty (u : unit), (x : list)) == (x)
+  |/ (u : unit) -> (x : list) => Node ((x : list), Empty (u : unit)) == (x)
+  |/ (x : list) -> (y : list) -> (z : list) =>
+    Node (
+      Node (
+        (x : list),
+        (y : list)
+      ),
+      (z : list)
+    )
+    ==
+    (Node (
+      x,
+      Node (
+        y,
+        z
+      )
+    ))
+
+let rec map (arg : ((int -> int) * list)) : list =
+  match arg with
+  | ((f : int -> int), (t : list)) ->
+    match t with
+    | Empty (u : unit) -> Empty u
+    | Leaf (x : int) -> Leaf (f x)
+    | Node ((l : list), (r : list)) ->
+      Node (
+        map (f, l),
+        map (f, r)
+      )
+    end
+  end
+end
+
+let incr (x : int) : int =
+  x + 1
+end
+
+map (
+  incr,
+  Node (
+    Empty (),
+    Node (
+      Node (
+        Leaf 5,
+        Leaf 6
+      ),
+      Empty ()
+    )
+  )
+)
+|},
+        `Valid );
     ]
 
 let suite = "Quotient type checking" >::: [ "Manual tests" >::: manual_tests ]

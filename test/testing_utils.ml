@@ -189,8 +189,12 @@ end = struct
           Option.(
             t1 >>= fun t1 ->
             t2 >>| fun t2 -> VTypePair (t1, t2))
-    | VTypeFun _, VTypeFun _ -> failwith "TODO"
-    | _ -> if equal_vtype t1 t2 then Ok (Some t1) else Ok None
+    | ( VTypeFun _,
+        VTypeFun _
+        (* TODO - for now, I won't try figure out how to implement this for function types. this is for another time *)
+      )
+    | _ ->
+        if equal_vtype t1 t2 then Ok (Some t1) else Ok None
 
   let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
 
