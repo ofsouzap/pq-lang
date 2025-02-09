@@ -89,25 +89,6 @@ module PartialEvaluator =
 
 let partial_evaluation_default_mrd : int = 100
 
-let custom_special_name x =
-  "PQ-"
-  ^ (function
-      | `Var _ -> "Var-"
-      | `VariantType _ -> "VT-"
-      | `VariantTypeConstructor _ -> "VTC-"
-      | `VariantTypeConstructorAccessor _ -> "VTCA-"
-      | `Function _ -> "Fun-")
-      x
-  ^
-  match x with
-  | `Var name -> name
-  | `VariantType (vt_name : string) -> vt_name
-  | `VariantTypeConstructor ((vt_name : string), (c_name : string)) ->
-      vt_name ^ "-" ^ c_name
-  | `VariantTypeConstructorAccessor ((vt_name : string), (c_name : string)) ->
-      vt_name ^ "-" ^ c_name ^ "-val"
-  | `Function (f_name : string) -> f_name
-
 (** Generate a fresh variable name, given a set of the currently-defined names
 *)
 let generate_fresh_varname ?(seed_name : string option)
@@ -497,6 +478,25 @@ end
 
 (** Provides integration with the SMT solver *)
 module Smt = struct
+  let custom_special_name x =
+    "PQ-"
+    ^ (function
+        | `Var _ -> "Var-"
+        | `VariantType _ -> "VT-"
+        | `VariantTypeConstructor _ -> "VTC-"
+        | `VariantTypeConstructorAccessor _ -> "VTCA-"
+        | `Function _ -> "Fun-")
+        x
+    ^
+    match x with
+    | `Var name -> name
+    | `VariantType (vt_name : string) -> vt_name
+    | `VariantTypeConstructor ((vt_name : string), (c_name : string)) ->
+        vt_name ^ "-" ^ c_name
+    | `VariantTypeConstructorAccessor ((vt_name : string), (c_name : string)) ->
+        vt_name ^ "-" ^ c_name ^ "-val"
+    | `Function (f_name : string) -> f_name
+
   (** Provides a representation of a state that can be built into input for the
       solver *)
   module State = struct
@@ -640,8 +640,7 @@ module Smt = struct
         custom_special_name (`VariantTypeConstructor (vt_name, "pair"))
       in
       let accessor_name (side : [ `Fst | `Snd ]) : string =
-        custom_special_name
-          (`VariantTypeConstructorAccessor (vt_name, constructor_name))
+        custom_special_name (`VariantTypeConstructorAccessor (vt_name, "pair"))
         ^ match side with `Fst -> "-fst" | `Snd -> "-snd"
       in
       let info =
