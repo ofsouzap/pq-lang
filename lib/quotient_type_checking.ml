@@ -1242,6 +1242,8 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
               eqcons.bindings
           in
           (* Considering the LHS of the eqcons body *)
+          (* TODO - we need PartialEvaluator.eval to return the new state once it has run,
+          so that we can declare the new vars. *)
           PartialEvaluator.eval ~mrd:partial_evaluation_mrd
             {
               store = Smt.State.to_partial_evaluator_store state;
