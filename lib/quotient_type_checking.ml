@@ -1218,15 +1218,23 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
   in
   Nonempty_list.fold_result cases ~init:existing_names
     ~f:(fun existing_names (case_p, case_e) ->
+      (* Use fresh names for each of the eqconss (before finding unifiers) *)
+      let existing_names, fresh_name_eqconss =
+        List.fold ~init:(existing_names, [])
+          ~f:(fun (existing_names, acc) eqcons ->
+            let existing_names, eqcons' =
+              use_fresh_names_for_eqcons ~existing_names eqcons
+            in
+            (existing_names, eqcons' :: acc))
+          quotient_type.eqconss
+        |> fun (existing_names, fresh_name_eqconss_rev) ->
+        (existing_names, List.rev fresh_name_eqconss_rev)
+      in
       (* Iterating through each case of the match *)
       List.fold_result ~init:existing_names
-        (find_matching_eqconss (`Pattern case_p) quotient_type.eqconss)
+        (find_matching_eqconss (`Pattern case_p) fresh_name_eqconss)
         ~f:(fun existing_names (unifier, eqcons) ->
           (* Iterating through matching eqconss of the case *)
-          let existing_names, eqcons =
-            (* Alter the eqcons to use fresh variable names *)
-            use_fresh_names_for_eqcons ~existing_names eqcons
-          in
           let state =
             (* Add the eqcons' bindings to the state *)
             List.fold ~init:state
