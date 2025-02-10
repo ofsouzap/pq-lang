@@ -13,7 +13,7 @@ module Logger = struct
     config := { out_channel; flush }
 
   let debug (msg : string) : unit =
-    Out_channel.output_string !config.out_channel msg;
+    Out_channel.output_string !config.out_channel (sprintf "%s\n" msg);
     if !config.flush then Out_channel.flush !config.out_channel else ()
 
   let debug_sexp (sexp : Sexp.t) : unit = debug (Sexp.to_string_hum sexp ^ "\n")
