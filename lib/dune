@@ -10,7 +10,7 @@
   varname
   pattern
   ast
-  pattern_unification
+  unification
   quotient_types
   custom_types
   program

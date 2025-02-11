@@ -1155,14 +1155,13 @@ let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
 
 let find_matching_eqconss (x : [ `Pattern of tag_pattern | `Expr of tag_expr ])
     (eqconss : tag_quotient_type_eqcons list) :
-    (pattern_tag Pattern_unification.unifier * tag_quotient_type_eqcons) list =
+    (pattern_tag Unification.unifier * tag_quotient_type_eqcons) list =
   List.filter_map eqconss ~f:(fun eqcons ->
       (match x with
       | `Pattern p ->
-          Pattern_unification.find_unifier ~from_pattern:p
-            ~to_pattern:(fst eqcons.body)
+          Unification.find_unifier ~from_pattern:p ~to_pattern:(fst eqcons.body)
       | `Expr e ->
-          Pattern_unification.find_expr_unifier
+          Unification.find_expr_unifier
             ~convert_tag:(fun (e_tag : ast_tag) ->
               ({ t = e_tag.t } : pattern_tag))
             ~get_type:(fun e -> (expr_node_val e).t)
@@ -1185,7 +1184,7 @@ let find_all_possible_quotient_rewrites ~(existing_names : StringSet.t)
           (* For each unifier found, apply to input expression and add to accumulated output.
               Also have to perform renaming for the bindings *)
           ( existing_names,
-            Pattern_unification.apply_to_expr
+            Unification.apply_to_expr
               ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
               ~unifier e
             :: acc ))
@@ -1237,7 +1236,7 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
             {
               store = Smt.State.to_partial_evaluator_store state;
               e =
-                Pattern_unification.apply_to_expr
+                Unification.apply_to_expr
                   ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
                   ~unifier case_e;
             }
