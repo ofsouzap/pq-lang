@@ -1095,12 +1095,12 @@ module Smt = struct
       in
       let build_top_level_nodes () : (node list, quotient_typing_error) Result.t
           =
+        (* Note that top_level_rev is reversed, but the folding here un-reverses it *)
         List.fold_result ~init:[]
           ~f:(fun acc elem ->
             build_top_level_elem state elem >>| fun elem_node ->
             elem_node :: acc)
           state.top_level_rev
-        >>| List.rev
       in
       build_datatype_decl () >>= fun (datatype_decl : node) ->
       build_consts_nodes () >>= fun (declared_consts_nodes : node list) ->
