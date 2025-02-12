@@ -280,6 +280,41 @@ end
 1
 |},
         `Invalid );
+      ( "List set addtwo (flat patterns)",
+        {|
+type list =
+  | Nil of unit
+  | Cons of int * list
+
+qtype set =
+  list
+  |/ (x : int) -> (y : int) -> (zs : set)
+    => Cons ((x : int), Cons ((y : int), (zs : set))) == (Cons (y, Cons (x, zs)))
+
+let rec addtwo (arg : (set * set)) : set =
+  match arg with
+  | ((xs : set), (ys : set)) ->
+    match xs with
+    | Nil (u : unit) -> Nil u
+    | Cons (x : int * set) ->
+      match x with
+      | ((xh : int), (xts : set)) ->
+        match ys with
+        | Nil (u : unit) -> Nil u
+        | Cons (y : int * set) ->
+          match y with
+          | ((yh : int), (yts : set)) ->
+            Cons (xh + yh, addtwo (xts, yts))
+          end
+        end
+      end
+    end
+  end
+end
+
+1
+|},
+        `Invalid );
     ]
 
 let suite = "Quotient type checking" >::: [ "Manual tests" >::: manual_tests ]
