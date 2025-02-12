@@ -1,64 +1,28 @@
 open Core
 open Utils
-open Vtype
 open Varname
 open Pattern
+open Ast
 
-type 'tag_p unifier = 'tag_p pattern StringMap.t [@@deriving sexp, equal]
+type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) expr StringMap.t
+[@@deriving sexp, equal]
 
-let find_unifier ~(from_pattern : 'tag_p pattern) ~(to_pattern : 'tag_p pattern)
-    : ('tag_p unifier, unit) Result.t =
+let find_unifier ~(from_pattern : 'a pattern) ~(to_expr : ('tag_e, 'tag_p) expr)
+    : (('tag_e, 'tag_p) unifier, unit) Result.t =
   let open Result in
-  let open Pattern in
-  let rec aux (acc : 'tag_p unifier) :
-      'tag_p pattern * 'tag_p pattern -> ('tag_p unifier, unit) Result.t =
-    (* We assume that the patterns are well-typed, meaning that each name only occurs a maximum of once within them *)
-    function
-    | PatName (_, x1name, _), p2 -> Map.set acc ~key:x1name ~data:p2 |> Ok
-    | PatPair (_, x1_p1, x1_p2), PatPair (_, x2_p1, x2_p2) ->
-        aux acc (x1_p1, x2_p1) >>= fun acc -> aux acc (x1_p2, x2_p2)
+  let rec aux (acc : ('tag_e, 'tag_p) unifier) :
+      'a pattern * ('tag_e, 'tag_p) expr ->
+      (('tag_e, 'tag_p) unifier, unit) Result.t = function
+    | PatName (_, xname, _), e -> Ok (Map.set acc ~key:xname ~data:e)
+    | PatPair (_, p1, p2), Pair (_, e1, e2) ->
+        aux acc (p1, e1) >>= fun acc -> aux acc (p2, e2)
     | PatPair _, _ -> Error ()
-    | PatConstructor (_, c1name, x1), PatConstructor (_, c2name, x2) ->
-        if equal_string c1name c2name then aux acc (x1, x2) else Error ()
+    | PatConstructor (_, cname, p), Constructor (_, cname', e)
+      when equal_string cname cname' ->
+        aux acc (p, e)
     | PatConstructor _, _ -> Error ()
   in
-  aux StringMap.empty (from_pattern, to_pattern)
-
-let rec expr_to_pattern ~(convert_tag : 'tag_e -> 'tag_p)
-    ~(get_type : ('tag_e, 'tag_p) Ast.expr -> vtype) :
-    ('tag_e, 'tag_p) Ast.expr -> ('tag_p pattern, unit) Result.t =
-  let open Result in
-  function
-  | Var (v, xname) as e -> Ok (PatName (convert_tag v, xname, get_type e))
-  | Pair (v, e1, e2) ->
-      expr_to_pattern ~convert_tag ~get_type e1 >>= fun p1 ->
-      expr_to_pattern ~convert_tag ~get_type e2 >>= fun p2 ->
-      Ok (PatPair (convert_tag v, p1, p2))
-  | Constructor (v, cname, e) ->
-      expr_to_pattern ~convert_tag ~get_type e >>= fun p ->
-      Ok (PatConstructor (convert_tag v, cname, p))
-  | _ -> Error ()
-
-let find_expr_unifier ~(convert_tag : 'tag_e -> 'tag_p)
-    ~(get_type : ('tag_e, 'tag_p) Ast.expr -> vtype)
-    ~(from_expr : ('tag_e, 'tag_p) Ast.expr) ~(to_pattern : 'tag_p pattern) :
-    ('tag_p unifier, unit) Result.t =
-  let open Result in
-  expr_to_pattern ~convert_tag ~get_type from_expr >>= fun from_pattern ->
-  find_unifier ~from_pattern ~to_pattern
-
-let rename_var_in_body ~(old_name : varname) ~(new_name : varname)
-    (unifier : 'tag_p unifier) : 'tag_p unifier =
-  Map.map unifier ~f:(Pattern.rename_var ~old_name ~new_name)
-
-let rec apply_to_pattern ~(unifier : 'tag_p unifier) :
-    'tag_p pattern -> 'tag_p pattern = function
-  | PatName (_, xname, _) as p -> (
-      match Map.find unifier xname with Some p_subst -> p_subst | None -> p)
-  | PatPair (v, p1, p2) ->
-      PatPair (v, apply_to_pattern ~unifier p1, apply_to_pattern ~unifier p2)
-  | PatConstructor (v, cname, p) ->
-      PatConstructor (v, cname, apply_to_pattern ~unifier p)
+  aux StringMap.empty (from_pattern, to_expr)
 
 let rec pattern_to_expr ~(convert_tag : 'tag_p -> 'tag_e) :
     'tag_p pattern -> ('tag_e, 'tag_p) Ast.expr =
@@ -73,92 +37,54 @@ let rec pattern_to_expr ~(convert_tag : 'tag_p -> 'tag_e) :
   | PatConstructor (v, cname, p) ->
       Constructor (convert_tag v, cname, pattern_to_expr ~convert_tag p)
 
-let rec apply_to_expr ~(convert_tag : 'tag_p -> 'tag_e)
-    ~(unifier : 'tag_p unifier) :
-    ('tag_e, 'tag_p) Ast.expr -> ('tag_e, 'tag_p) Ast.expr =
-  let open Ast in
-  function
+let rename_var_in_body ~(old_name : varname) ~(new_name : varname)
+    (unifier : ('tag_e, 'tag_p) unifier) : ('tag_e, 'tag_p) unifier =
+  Map.map unifier ~f:(Ast.rename_var ~old_name ~new_name)
+
+let rec apply_to_expr ~(unifier : ('tag_e, 'tag_p) unifier) :
+    ('tag_e, 'tag_p) expr -> ('tag_e, 'tag_p) expr = function
   | UnitLit v -> UnitLit v
   | IntLit (v, i) -> IntLit (v, i)
   | Add (v, e1, e2) ->
-      Add
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
-  | Neg (v, e) -> Neg (v, apply_to_expr ~convert_tag ~unifier e)
+      Add (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
+  | Neg (v, e) -> Neg (v, apply_to_expr ~unifier e)
   | Subtr (v, e1, e2) ->
-      Subtr
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      Subtr (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | Mult (v, e1, e2) ->
-      Mult
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      Mult (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | BoolLit (v, b) -> BoolLit (v, b)
-  | BNot (v, e) -> BNot (v, apply_to_expr ~convert_tag ~unifier e)
+  | BNot (v, e) -> BNot (v, apply_to_expr ~unifier e)
   | BOr (v, e1, e2) ->
-      BOr
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      BOr (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | BAnd (v, e1, e2) ->
-      BAnd
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      BAnd (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | Pair (v, e1, e2) ->
-      Pair
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      Pair (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | Eq (v, e1, e2) ->
-      Eq
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      Eq (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | Gt (v, e1, e2) ->
-      Gt
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      Gt (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | GtEq (v, e1, e2) ->
-      GtEq
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      GtEq (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | Lt (v, e1, e2) ->
-      Lt
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      Lt (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | LtEq (v, e1, e2) ->
-      LtEq
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      LtEq (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | If (v, e1, e2, e3) ->
       If
         ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2,
-          apply_to_expr ~convert_tag ~unifier e3 )
+          apply_to_expr ~unifier e1,
+          apply_to_expr ~unifier e2,
+          apply_to_expr ~unifier e3 )
   | Var (v, xname) -> (
       match Map.find unifier xname with
-      | Some p_subst -> pattern_to_expr ~convert_tag p_subst
+      | Some p_subst -> p_subst
       | None -> Var (v, xname))
-  | Let (v, x, e1, e2) ->
-      Let
-        ( v,
-          x,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+  | Let (v, xname, e1, e2) ->
+      let unifier = Map.remove unifier xname in
+      Let (v, xname, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | App (v, e1, e2) ->
-      App
-        ( v,
-          apply_to_expr ~convert_tag ~unifier e1,
-          apply_to_expr ~convert_tag ~unifier e2 )
+      App (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | Match (v, e, cases) ->
       let cases' =
         Nonempty_list.map
@@ -171,9 +97,8 @@ let rec apply_to_expr ~(convert_tag : 'tag_p -> 'tag_e)
                 ~f:(fun acc (xname, _) -> Map.remove acc xname)
                 case_p_defined_vars
             in
-            (case_p, apply_to_expr ~convert_tag ~unifier:unifier' case_e))
+            (case_p, apply_to_expr ~unifier:unifier' case_e))
           cases
       in
-      Match (v, apply_to_expr ~convert_tag ~unifier e, cases')
-  | Constructor (v, name, e) ->
-      Constructor (v, name, apply_to_expr ~convert_tag ~unifier e)
+      Match (v, apply_to_expr ~unifier e, cases')
+  | Constructor (v, name, e) -> Constructor (v, name, apply_to_expr ~unifier e)

@@ -49,6 +49,9 @@ type pattern_tag = { t : vtype } [@@deriving sexp, equal]
 type tag_pattern = pattern_tag Pattern.pattern [@@deriving sexp, equal]
 type tag_expr = (ast_tag, pattern_tag) expr [@@deriving sexp, equal]
 
+type tag_unifier = (ast_tag, pattern_tag) Unification.unifier
+[@@deriving sexp, equal]
+
 type tag_quotient_type_eqcons = (ast_tag, pattern_tag) quotient_type_eqcons
 [@@deriving sexp, equal]
 
@@ -1153,19 +1156,21 @@ let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
           renames_list;
     } )
 
+(** Find the eqconss where a unifier can be found from the eqcons' body pattern
+    to the given pattern/expression *)
 let find_matching_eqconss (x : [ `Pattern of tag_pattern | `Expr of tag_expr ])
     (eqconss : tag_quotient_type_eqcons list) :
-    (pattern_tag Unification.unifier * tag_quotient_type_eqcons) list =
+    (tag_unifier * tag_quotient_type_eqcons) list =
   List.filter_map eqconss ~f:(fun eqcons ->
-      (match x with
+      let to_expr =
+        match x with
       | `Pattern p ->
-          Unification.find_unifier ~from_pattern:p ~to_pattern:(fst eqcons.body)
-      | `Expr e ->
-          Unification.find_expr_unifier
-            ~convert_tag:(fun (e_tag : ast_tag) ->
-              ({ t = e_tag.t } : pattern_tag))
-            ~get_type:(fun e -> (expr_node_val e).t)
-            ~from_expr:e ~to_pattern:(fst eqcons.body))
+            Unification.pattern_to_expr
+              ~convert_tag:(fun (v : pattern_tag) -> ({ t = v.t } : ast_tag))
+              p
+        | `Expr e -> e
+      in
+      Unification.find_unifier ~from_pattern:(fst eqcons.body) ~to_expr
       |> function
       | Error () -> None
       | Ok unifier -> Some (unifier, eqcons))
@@ -1173,22 +1178,18 @@ let find_matching_eqconss (x : [ `Pattern of tag_pattern | `Expr of tag_expr ])
 let find_all_possible_quotient_rewrites ~(existing_names : StringSet.t)
     ~(all_quotient_types : tag_quotient_type list) (e : tag_expr) :
     StringSet.t * tag_expr list =
-  List.fold all_quotient_types ~init:(existing_names, [])
-    ~f:(fun (existing_names, acc) qt ->
-      let unifiers =
-        (* Find all possible unifiers *)
-        List.map ~f:fst (find_matching_eqconss (`Expr e) qt.eqconss)
+  List.fold_map all_quotient_types ~init:existing_names
+    ~f:(fun existing_names qt ->
+      let existing_names, fresh_eqconss =
+        (* Make sure to use fresh names for the eqconss *)
+        List.fold_map qt.eqconss ~init:existing_names ~f:(fun existing_names ->
+            use_fresh_names_for_eqcons ~existing_names)
       in
-      List.fold ~init:(existing_names, acc)
-        ~f:(fun (existing_names, acc) unifier ->
-          (* For each unifier found, apply to input expression and add to accumulated output.
-              Also have to perform renaming for the bindings *)
           ( existing_names,
-            Unification.apply_to_expr
-              ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
-              ~unifier e
-            :: acc ))
-        unifiers)
+        List.map
+          (find_matching_eqconss (`Expr e) fresh_eqconss)
+          ~f:(fun (unifier, _) -> Unification.apply_to_expr ~unifier e) ))
+  |> fun (existing_names, rewrites) -> (existing_names, List.concat rewrites)
 
 let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
     ~(existing_names : StringSet.t)
@@ -1220,7 +1221,7 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
       (* Iterating through each case of the match *)
       List.fold_result ~init:existing_names
         (find_matching_eqconss (`Pattern case_p) fresh_name_eqconss)
-        ~f:(fun existing_names (unifier, eqcons) ->
+        ~f:(fun existing_names (eqcons_to_expr_unifier, eqcons) ->
           (* Iterating through matching eqconss of the case *)
           let state =
             (* Add the eqcons' bindings to the state *)
@@ -1233,20 +1234,16 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
           (* TODO - we need PartialEvaluator.eval to return the new state once it has run,
           so that we can declare the new vars. *)
           PartialEvaluator.eval ~mrd:partial_evaluation_mrd
-            {
-              store = Smt.State.to_partial_evaluator_store state;
-              e =
-                Unification.apply_to_expr
-                  ~convert_tag:(fun pat_tag -> ({ t = pat_tag.t } : ast_tag))
-                  ~unifier case_e;
-            }
+            { store = Smt.State.to_partial_evaluator_store state; e = case_e }
           |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
           >>= fun l ->
           (* Considering the RHS of the eqcons body *)
           PartialEvaluator.eval ~mrd:partial_evaluation_mrd
             {
               store = Smt.State.to_partial_evaluator_store state;
-              e = reform_match_with_arg (snd eqcons.body);
+              e =
+                Unification.apply_to_expr ~unifier:eqcons_to_expr_unifier
+                  (reform_match_with_arg (snd eqcons.body));
             }
           |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
           >>= fun r ->
