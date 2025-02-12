@@ -19,6 +19,9 @@ module type LispBuilderSig = sig
 
   (** Build the source to a string *)
   val build : use_newlines:bool -> node list -> string
+
+  (** Build the source to a human-readable string *)
+  val build_hum : node list -> string
 end
 
 module LispBuilder : LispBuilderSig = struct
@@ -42,6 +45,16 @@ module LispBuilder : LispBuilderSig = struct
   let build ~(use_newlines : bool) (nodes : node list) : string =
     let sep = if use_newlines then "\n" else " " in
     String.concat ~sep (List.map ~f:build_node nodes)
+
+  let rec node_to_sexp : node -> Sexp.t = function
+    | Unit -> Atom "Unit"
+    | Atom s -> Atom s
+    | Op (op, nodes) -> List (Atom op :: List.map ~f:node_to_sexp nodes)
+    | List nodes -> List (List.map ~f:node_to_sexp nodes)
+
+  let build_hum (nodes : node list) =
+    String.concat ~sep:"\n"
+      (List.map ~f:(fun n -> node_to_sexp n |> Sexp.to_string_hum) nodes)
 end
 
 type ast_tag = { t : vtype } [@@deriving sexp, equal]
