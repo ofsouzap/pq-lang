@@ -1161,32 +1161,6 @@ let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
           renames_list;
     } )
 
-(** Find the eqconss where a unifier can be found from the eqcons' body pattern
-    to the given pattern/expression. When providing an expression as the "from"
-    argument, a set of bound variable names must also be provided *)
-let find_matching_eqconss
-    (x : [ `Pattern of tag_pattern | `Expr of StringSet.t * tag_expr ])
-    (eqconss : tag_quotient_type_eqcons list) :
-    (tag_unifier * tag_quotient_type_eqcons) list =
-  List.filter_map eqconss ~f:(fun eqcons ->
-      let bound_names_in_from, from_expr =
-        match x with
-      | `Pattern p ->
-            ( StringSet.empty,
-            Unification.pattern_to_expr
-              ~convert_tag:(fun (v : pattern_tag) -> ({ t = v.t } : ast_tag))
-                p )
-        | `Expr (bound_names, e) -> (bound_names, e)
-      in
-      Unification.simply_find_unifier ~bound_names_in_from ~from_expr
-        ~to_expr:
-          (fst eqcons.body
-          |> Unification.pattern_to_expr ~convert_tag:(fun (v : pattern_tag) ->
-                 ({ t = v.t } : ast_tag)))
-      |> function
-      | Error () -> None
-      | Ok unifier -> Some (unifier, eqcons))
-
 let find_all_possible_quotient_rewrites ~(bound_names_in_arg : StringSet.t)
     ~(existing_names : StringSet.t)
     ~(all_quotient_types : tag_quotient_type list) (e : tag_expr) :
@@ -1198,10 +1172,24 @@ let find_all_possible_quotient_rewrites ~(bound_names_in_arg : StringSet.t)
         List.fold_map qt.eqconss ~init:existing_names ~f:(fun existing_names ->
             use_fresh_names_for_eqcons ~existing_names)
       in
-          ( existing_names,
-        List.map
-          (find_matching_eqconss (`Expr (bound_names_in_arg, e)) fresh_eqconss)
-          ~f:(fun (unifier, _) -> Unification.apply_to_expr ~unifier e) ))
+      let rewrites : tag_expr list =
+        List.filter_map fresh_eqconss ~f:(fun eqcons ->
+            Unification.simply_find_unifier
+              ~bound_names_in_from:bound_names_in_arg
+              ~from_expr:
+                (fst eqcons.body
+                |> Unification.pattern_to_expr
+                     ~convert_tag:(fun (v : pattern_tag) ->
+                       ({ t = v.t } : ast_tag)))
+              ~to_expr:e
+            |> function
+            | Error () -> None
+            | Ok eqcons_to_expr_unifier ->
+                Some
+                  (Unification.apply_to_expr ~unifier:eqcons_to_expr_unifier
+                     (snd eqcons.body)))
+      in
+      (existing_names, rewrites))
   |> fun (existing_names, rewrites) -> (existing_names, List.concat rewrites)
 
 let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
@@ -1233,7 +1221,22 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
       in
       (* Iterating through each case of the match *)
       List.fold_result ~init:existing_names
-        (find_matching_eqconss (`Pattern case_p) fresh_name_eqconss)
+        (List.filter_map fresh_name_eqconss ~f:(fun eqcons ->
+             Unification.simply_find_unifier
+               ~bound_names_in_from:StringSet.empty
+               ~from_expr:
+                 (case_p
+                 |> Unification.pattern_to_expr
+                      ~convert_tag:(fun (v : pattern_tag) ->
+                        ({ t = v.t } : ast_tag)))
+               ~to_expr:
+                 (fst eqcons.body
+                 |> Unification.pattern_to_expr
+                      ~convert_tag:(fun (v : pattern_tag) ->
+                        ({ t = v.t } : ast_tag)))
+             |> function
+             | Error () -> None
+             | Ok unifier -> Some (unifier, eqcons)))
         ~f:(fun existing_names (expr_to_eqcons_unifier, eqcons) ->
           (* Iterating through matching eqconss of the case *)
           let state =
