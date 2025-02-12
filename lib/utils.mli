@@ -68,6 +68,7 @@ module type Nonempty_list_sig = sig
   val make : 'a * 'a list -> 'a t
   val to_list : 'a t -> 'a list
   val from_list_unsafe : 'a list -> 'a t
+  val length : 'a t -> int
   val head : 'a t -> 'a
   val tail : 'a t -> 'a list
   val singleton : 'a -> 'a t
@@ -75,6 +76,11 @@ module type Nonempty_list_sig = sig
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
   val rev : 'a t -> 'a t
+
+  (** Zip two non-empty lists together, returning None if they have unequal
+      lengths *)
+  val zip : 'a t -> 'b t -> ('a * 'b) t option
+
   val result_all : ('a, 'err) Result.t t -> ('a t, 'err) Result.t
 
   val fold_result :

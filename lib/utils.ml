@@ -96,6 +96,7 @@ module type Nonempty_list_sig = sig
   val make : 'a * 'a list -> 'a t
   val to_list : 'a t -> 'a list
   val from_list_unsafe : 'a list -> 'a t
+  val length : 'a t -> int
   val head : 'a t -> 'a
   val tail : 'a t -> 'a list
   val singleton : 'a -> 'a t
@@ -103,6 +104,7 @@ module type Nonempty_list_sig = sig
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
   val rev : 'a t -> 'a t
+  val zip : 'a t -> 'b t -> ('a * 'b) t option
   val result_all : ('a, 'err) Result.t t -> ('a t, 'err) Result.t
 
   val fold_result :
@@ -141,6 +143,7 @@ module Nonempty_list : Nonempty_list_sig = struct
   let from_list_unsafe (xs : 'a list) =
     match xs with [] -> failwith "Empty list" | h :: ts -> (h, ts)
 
+  let length ((_, ts) : 'a t) = List.length ts + 1
   let head (h, _) = h
   let tail (_, ts) = ts
   let singleton (h : 'a) = (h, [])
@@ -156,6 +159,11 @@ module Nonempty_list : Nonempty_list_sig = struct
           ~init:(singleton (head xs))
           ~f:(fun acc x -> cons x acc)
           (make (ts_h, ts_ts))
+
+  let zip (xs : 'a t) (ys : 'b t) : ('a * 'b) t option =
+    match List.zip (tail xs) (tail ys) with
+    | Ok zs_ts -> Some (make ((head xs, head ys), zs_ts))
+    | Unequal_lengths -> None
 
   let result_all (xs : ('a, 'err) Result.t t) : ('a t, 'err) Result.t =
     let open Result in

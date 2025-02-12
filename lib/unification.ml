@@ -7,22 +7,43 @@ open Ast
 type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) expr StringMap.t
 [@@deriving sexp, equal]
 
-let find_unifier ~(from_pattern : 'a pattern) ~(to_expr : ('tag_e, 'tag_p) expr)
-    : (('tag_e, 'tag_p) unifier, unit) Result.t =
+let simply_find_unifier ~(bound_names : StringSet.t)
+    ~(from_expr : ('a, 'b) expr) ~(to_expr : ('tag_e, 'tag_p) expr) :
+    (('tag_e, 'tag_p) unifier, unit) Result.t =
   let open Result in
-  let rec aux (acc : ('tag_e, 'tag_p) unifier) :
-      'a pattern * ('tag_e, 'tag_p) expr ->
+  let rec aux ~(bound_names : StringSet.t) (acc : ('tag_e, 'tag_p) unifier) :
+      ('a, 'b) expr * ('tag_e, 'tag_p) expr ->
       (('tag_e, 'tag_p) unifier, unit) Result.t = function
-    | PatName (_, xname, _), e -> Ok (Map.set acc ~key:xname ~data:e)
-    | PatPair (_, p1, p2), Pair (_, e1, e2) ->
-        aux acc (p1, e1) >>= fun acc -> aux acc (p2, e2)
-    | PatPair _, _ -> Error ()
-    | PatConstructor (_, cname, p), Constructor (_, cname', e)
+    | Var (_, xname), Var (_, xname')
+      when Set.mem bound_names xname && equal_string xname xname' ->
+        Ok acc
+    | Var (_, xname), _ when Set.mem bound_names xname -> Error ()
+    | Var (_, xname), e' -> Ok (Map.set acc ~key:xname ~data:e')
+    | UnitLit _, UnitLit _ -> Ok acc
+    | IntLit (_, x1), IntLit (_, x2) when equal_int x1 x2 -> Ok acc
+    | BoolLit (_, b1), BoolLit (_, b2) when equal_bool b1 b2 -> Ok acc
+    | Neg (_, e), Neg (_, e') | BNot (_, e), BNot (_, e') ->
+        aux ~bound_names acc (e, e')
+    | Add (_, e1, e2), Add (_, e1', e2')
+    | Subtr (_, e1, e2), Subtr (_, e1', e2')
+    | Mult (_, e1, e2), Mult (_, e1', e2')
+    | BOr (_, e1, e2), BOr (_, e1', e2')
+    | BAnd (_, e1, e2), BAnd (_, e1', e2')
+    | Pair (_, e1, e2), Pair (_, e1', e2')
+    | Eq (_, e1, e2), Eq (_, e1', e2')
+    | Gt (_, e1, e2), Gt (_, e1', e2')
+    | GtEq (_, e1, e2), GtEq (_, e1', e2')
+    | Lt (_, e1, e2), Lt (_, e1', e2')
+    | LtEq (_, e1, e2), LtEq (_, e1', e2')
+    | App (_, e1, e2), App (_, e1', e2') ->
+        aux ~bound_names acc (e1, e1') >>= fun acc ->
+        aux ~bound_names acc (e2, e2')
+    | Constructor (_, cname, e1), Constructor (_, cname', e2)
       when equal_string cname cname' ->
-        aux acc (p, e)
-    | PatConstructor _, _ -> Error ()
+        aux ~bound_names acc (e1, e2)
+    | If _, If _ | Let _, Let _ | Match _, Match _ | _, _ -> Error ()
   in
-  aux StringMap.empty (from_pattern, to_expr)
+  aux ~bound_names StringMap.empty (from_expr, to_expr)
 
 let rec pattern_to_expr ~(convert_tag : 'tag_p -> 'tag_e) :
     'tag_p pattern -> ('tag_e, 'tag_p) Ast.expr =

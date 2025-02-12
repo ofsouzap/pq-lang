@@ -7,10 +7,11 @@ open Ast
 type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) expr StringMap.t
 [@@deriving sexp, equal]
 
-(** Create a unifier from the given pattern to the given expression, if one is
-    possible *)
-val find_unifier :
-  from_pattern:'a pattern ->
+(** Find a simple unifier from one expression to another. This doesn't try
+    unifying branching code or let-bindings *)
+val simply_find_unifier :
+  bound_names:StringSet.t ->
+  from_expr:('a, 'b) expr ->
   to_expr:('tag_e, 'tag_p) expr ->
   (('tag_e, 'tag_p) unifier, unit) Result.t
 
