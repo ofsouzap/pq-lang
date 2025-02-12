@@ -204,6 +204,82 @@ end
 
 |},
         `Valid );
+      ( "List set incr",
+        {|
+type list =
+  | Nil of unit
+  | Cons of int * list
+
+qtype set =
+  list
+  |/ (x : int) -> (y : int) -> (zs : set)
+    => Cons ((x : int), Cons ((y : int), (zs : set))) == (Cons (y, Cons (x, zs)))
+
+let rec incr (xs : set) : set =
+  match xs with
+  | Nil (u : unit) -> Nil u
+  | Cons ((h : int), (ts : set)) -> Cons (1 + h, incr ts)
+  end
+end
+
+incr (Cons (1, Nil ()))
+|},
+        `Valid );
+      ( "List set contains",
+        {|
+type list =
+  | Nil of unit
+  | Cons of int * list
+
+qtype set =
+  list
+  |/ (x : int) -> (y : int) -> (zs : set)
+    => Cons ((x : int), Cons ((y : int), (zs : set))) == (Cons (y, Cons (x, zs)))
+
+let rec contains (arg : (int * set)) : bool =
+  match arg with
+  | ((q : int), (xs : set)) ->
+    match xs with
+    | Nil (u : unit) -> false
+    | Cons ((h : int), (ts : set)) ->
+      if q == h
+      then true
+      else contains (q, ts)
+      end
+    end
+  end
+end
+
+contains (2, (Cons (1, Nil ())))
+|},
+        `Valid );
+      ( "List set addtwo",
+        {|
+type list =
+  | Nil of unit
+  | Cons of int * list
+
+qtype set =
+  list
+  |/ (x : int) -> (y : int) -> (zs : set)
+    => Cons ((x : int), Cons ((y : int), (zs : set))) == (Cons (y, Cons (x, zs)))
+
+let rec addtwo (arg : (set * set)) : set =
+  match arg with
+  | (Nil (u1 : unit), Nil (u2 : unit)) -> Nil u1
+  | (Nil (u : unit), Cons (k : int * set)) -> Nil u
+  | (Cons (k : int * set), Nil (u : unit)) -> Nil u
+  | (
+      Cons ((xh : int), (xts : set)),
+      Cons ((yh : int), (yts : set))
+    ) ->
+    Cons (xh + yh, addtwo (xts, yts))
+  end
+end
+
+1
+|},
+        `Invalid );
     ]
 
 let suite = "Quotient type checking" >::: [ "Manual tests" >::: manual_tests ]
