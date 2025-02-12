@@ -47,7 +47,7 @@ module LispBuilder : LispBuilderSig = struct
     String.concat ~sep (List.map ~f:build_node nodes)
 
   let rec node_to_sexp : node -> Sexp.t = function
-    | Unit -> Atom "Unit"
+    | Unit -> Atom "()"
     | Atom s -> Atom s
     | Op (op, nodes) -> List (Atom op :: List.map ~f:node_to_sexp nodes)
     | List nodes -> List (List.map ~f:node_to_sexp nodes)
