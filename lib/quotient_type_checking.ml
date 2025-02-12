@@ -1126,6 +1126,8 @@ module Smt = struct
   (** Check the satisifability of a given formula *)
   let check_satisfiability (formula : formula) : [ `Sat | `Unsat | `Unknown ] =
     let smtlib_string = LispBuilder.build ~use_newlines:true formula in
+    Debug_tools.Logger.debug (smtlib_string ^ "\n");
+    Debug_tools.pause ();
     let ctx = Z3.mk_context [ ("model", "false") ] in
     let ast_vec = Z3.SMT.parse_smtlib2_string ctx smtlib_string [] [] [] [] in
     let solver = Z3.Solver.mk_solver ctx None in
@@ -1247,8 +1249,6 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
               eqcons.bindings
           in
           (* Considering the LHS of the eqcons body *)
-          (* TODO - we need PartialEvaluator.eval to return the new state once it has run,
-          so that we can declare the new vars. *)
           PartialEvaluator.eval ~mrd:partial_evaluation_mrd
             {
               store = Smt.State.to_partial_evaluator_store state;
