@@ -1455,7 +1455,9 @@ let check_program (prog : tag_program) : (unit, quotient_typing_error) Result.t
       state_add_var_defn
         {
           name = defn.name;
-          kind = `NonRec None;
+          kind =
+            (if defn.recursive then `Rec defn.param
+             else `NonRec (Some defn.param));
           return_t = defn.return_t;
           body = defn.body;
         }
