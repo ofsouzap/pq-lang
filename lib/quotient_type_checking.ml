@@ -226,6 +226,27 @@ module FlatPattern = struct
       ((p : tag_pattern), (e : flat_expr)) :
       (StringSet.t * flat_pattern * flat_expr, quotient_typing_error) Result.t =
     let open Result in
+    match p with
+    | PatName _ -> Error UnexpectedTrivialMatchCasePatternError
+    | PatPair
+        (v_pair, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
+      ->
+        (* A flat pair pattern *)
+        ( existing_names,
+          FlatPatPair (v_pair, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)),
+          e )
+        |> Ok
+    | PatConstructor (v_constructor, c_name, PatName (x_v, x_name, x_t)) ->
+        (* A flat constructor pattern *)
+        ( existing_names,
+          FlatPatConstructor (v_constructor, c_name, (x_v, x_name, x_t)),
+          e )
+        |> Ok
+    | _ ->
+        failwith
+          "TODO - the compound cases for flattening patterns haven't yet been \
+           implemented"
+  (*
     let outer_expr_type : vtype = (flat_node_val e).t in
     match p with
     | PatName _ -> Error UnexpectedTrivialMatchCasePatternError
@@ -316,7 +337,7 @@ module FlatPattern = struct
             ( { t = outer_expr_type },
               Var ({ t = p1_t }, new_binding_name),
               Nonempty_list.singleton (flattened_p1_case_p, flattened_p1_case_e)
-            ) )
+            ) ) *)
 
   (** Convert an AST expression to a flat expression *)
   let rec of_ast ~(existing_names : StringSet.t) :
