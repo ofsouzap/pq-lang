@@ -66,6 +66,64 @@ end = struct
         match_pattern p1 e1
     | PatConstructor _, _ -> Error ()
 
+  let rec substitute ((xname : varname), (xe : tag_expr)) : tag_expr -> tag_expr
+      = function
+    | UnitLit v -> UnitLit v
+    | IntLit (v, x) -> IntLit (v, x)
+    | BoolLit (v, x) -> BoolLit (v, x)
+    | Var (v, e_name) ->
+        if equal_varname e_name xname then xe else Var (v, e_name)
+    | Add (v, e1, e2) ->
+        Add (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | Neg (v, e1) -> Neg (v, substitute (xname, xe) e1)
+    | Subtr (v, e1, e2) ->
+        Subtr (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | Mult (v, e1, e2) ->
+        Mult (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | BNot (v, e1) -> BNot (v, substitute (xname, xe) e1)
+    | BOr (v, e1, e2) ->
+        BOr (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | BAnd (v, e1, e2) ->
+        BAnd (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | Pair (v, e1, e2) ->
+        Pair (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | Eq (v, e1, e2) ->
+        Eq (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | Gt (v, e1, e2) ->
+        Gt (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | GtEq (v, e1, e2) ->
+        GtEq (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | Lt (v, e1, e2) ->
+        Lt (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | LtEq (v, e1, e2) ->
+        LtEq (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | If (v, e1, e2, e3) ->
+        If
+          ( v,
+            substitute (xname, xe) e1,
+            substitute (xname, xe) e2,
+            substitute (xname, xe) e3 )
+    | Let (v, e_name, e1, e2) ->
+        (* Note we have to consider alpha-equivalence *)
+        if equal_varname xname e_name then Let (v, e_name, e1, e2)
+        else
+          Let (v, e_name, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | App (v, e1, e2) ->
+        App (v, substitute (xname, xe) e1, substitute (xname, xe) e2)
+    | Match (v, e1, cases) ->
+        Match
+          ( v,
+            substitute (xname, xe) e1,
+            Nonempty_list.map cases ~f:(fun (p, e) ->
+                (* Note we have to check if the pattern redefines the name *)
+                if
+                  List.exists (Pattern.defined_vars p) ~f:(fun (px_name, _) ->
+                      equal_varname xname px_name)
+                then (p, e)
+                else (p, substitute (xname, xe) e)) )
+    | Constructor (v, name, e1) ->
+        Constructor (v, name, substitute (xname, xe) e1)
+
   let rec eval ~(mrd : int) { store; e = orig_e } :
       (tag_expr, partial_evaluation_error) Result.t =
     let open Result in
@@ -164,7 +222,14 @@ end = struct
           | Some (Second _) | None -> Ok (Var (v, xname)))
       | Let (_, xname, e1, e2) ->
           eval e1 >>= fun e1' ->
-          eval ~new_store:(Map.set store ~key:xname ~data:(First e1')) e2
+          let e2' =
+            (* Performing a substitution immediately means that the result is still
+              valid, even if all subexpressions haven't been partially evaluated
+              (e.g. as happens when partially evaluating match constructs, when we don't
+              partially evaluate the case expressions) *)
+            substitute (xname, e1') e2
+          in
+          eval ~new_store:(Map.set store ~key:xname ~data:(First e1')) e2'
       | App (v, e1, e2) -> (
           eval e1 >>= fun e1' ->
           eval e2 >>= fun e2' ->
@@ -190,8 +255,9 @@ end = struct
       | Match (v, e1, cases) -> (
           eval e1 >>= fun e1' ->
           Nonempty_list.fold_result
-          (* In this fold, an Ok value means we haven't found a matching case and have instead partially evaluated each case,
-        and an Error value means we've found a matching case and create a function that will evaluate it with the updated store *)
+          (* In this fold, an Ok value means we haven't found a matching case
+          and an Error value means we've found a matching case and create
+          a function that will evaluate it with the updated store *)
             ~init:()
             ~f:(fun () (case_p, case_e) ->
               match match_pattern case_p e1' with
@@ -201,8 +267,20 @@ end = struct
                        Map.merge store var_bindings ~f:(fun ~key:_ -> function
                          | `Left e | `Right e | `Both (_, e) -> Some e)
                      in
-                     fun () -> eval ~new_store case_e)
-              | Error () -> Ok ())
+                     let substituted_e =
+                       (* Perform substitutions for all the bound variables into the case expression.
+                        For motivation, see comment for Let node. *)
+                       List.fold ~init:case_e
+                         ~f:(fun e xname ->
+                           match Map.find_exn var_bindings xname with
+                           | First xe -> substitute (xname, xe) e
+                           | Second _ -> e)
+                         (Map.keys var_bindings)
+                     in
+                     fun () -> eval ~new_store substituted_e)
+              | Error () ->
+                  (* Partially evaluating the cases' expressions caused problems so we don't do that *)
+                  Ok ())
             cases
           |> function
           | Ok () -> Ok (Match (v, e1', cases))
