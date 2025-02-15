@@ -222,7 +222,7 @@ module FlatPattern = struct
   (** Flatten a single case of a Match node so that the pattern is a flat
       pattern, and modify the case expression to perform any subsequent matching
       as needed *)
-  let rec flatten_case_pattern ~(existing_names : StringSet.t)
+  let flatten_case_pattern ~(existing_names : StringSet.t)
       ((p : tag_pattern), (e : flat_expr)) :
       (StringSet.t * flat_pattern * flat_expr, quotient_typing_error) Result.t =
     let open Result in
