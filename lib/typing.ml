@@ -11,7 +11,7 @@ open Program
 type typing_error =
   | UndefinedVariable of string
   | EqconsVariableNotInBindings of string * vtype
-  | TypeMismatch of vtype * vtype
+  | TypeMismatch of vtype * vtype * string option
   | PatternTypeMismatch of plain_pattern * vtype * vtype
   | EqConsBodyPatternTypeMismatch of plain_pattern * vtype * vtype
   | EqConsBodyExprTypeMismatch of plain_expr * vtype * vtype
@@ -66,9 +66,10 @@ let print_typing_error = function
         "Variable %s of type %s is not in the bindings of an eqcons but is used"
         xname
         (vtype_to_source_code xtype)
-  | TypeMismatch (t1, t2) ->
-      sprintf "Type mismatch: expected %s but got %s" (vtype_to_source_code t1)
-        (vtype_to_source_code t2)
+  | TypeMismatch (t1, t2, msg) ->
+      sprintf "Type mismatch: expected %s but got %s%s"
+        (vtype_to_source_code t1) (vtype_to_source_code t2)
+        (match msg with None -> "" | Some msg -> sprintf " (%s)" msg)
   | PatternTypeMismatch (p, t1, t2) ->
       sprintf "Type mismatch in pattern \"%s\": expected %s but got %s"
         (pattern_to_source_code p) (vtype_to_source_code t1)
@@ -386,12 +387,13 @@ functor
       let e_type (e : (vtype * 'tag_e, vtype * 'tag_p) expr) : vtype =
         e |> expr_node_val |> fst
       in
-      let be_of_type (exp : vtype) (e : (vtype * 'tag_e, vtype * 'tag_p) expr) :
+      let be_of_type ?(msg : string option) (exp : vtype)
+          (e : (vtype * 'tag_e, vtype * 'tag_p) expr) :
           ((vtype * 'tag_e, vtype * 'tag_p) expr, typing_error) Result.t =
         if equal_vtype exp (e_type e) then Ok e
-        else Error (TypeMismatch (exp, e_type e))
+        else Error (TypeMismatch (exp, e_type e, msg))
       in
-      let type_binop
+      let type_binop ?(msg : string option)
           (recomp :
             (vtype * 'tag_e, vtype * 'tag_p) expr ->
             (vtype * 'tag_e, vtype * 'tag_p) expr ->
@@ -401,10 +403,16 @@ functor
           ((vtype * 'tag_e, vtype * 'tag_p) expr, typing_error) Result.t =
         type_expr ctx e1 >>= fun e1' ->
         type_expr ctx e2 >>= fun e2' ->
-        be_of_type req_t e1' >>= fun _ ->
-        be_of_type req_t e2' >>= fun _ -> Ok (recomp e1' e2' (e_type e1'))
+        be_of_type
+          ?msg:(Option.map msg ~f:(fun s -> sprintf "%s (first arg)" s))
+          req_t e1'
+        >>= fun _ ->
+        be_of_type
+          ?msg:(Option.map msg ~f:(fun s -> sprintf "%s (second arg)" s))
+          req_t e2'
+        >>= fun _ -> Ok (recomp e1' e2' (e_type e1'))
       in
-      let type_unop
+      let type_unop ?(msg : string option)
           (recomp :
             (vtype * 'tag_e, vtype * 'tag_p) expr ->
             vtype ->
@@ -412,9 +420,9 @@ functor
           (req_t : vtype) :
           ((vtype * 'tag_e, vtype * 'tag_p) expr, typing_error) Result.t =
         type_expr ctx e1 >>= fun e1' ->
-        be_of_type req_t e1' >>= fun _ -> Ok (recomp e1' (e_type e1'))
+        be_of_type ?msg req_t e1' >>= fun _ -> Ok (recomp e1' (e_type e1'))
       in
-      let type_int_compare
+      let type_int_compare ?(msg : string option)
           (recomp :
             (vtype * 'tag_e, vtype * 'tag_p) expr ->
             (vtype * 'tag_e, vtype * 'tag_p) expr ->
@@ -426,25 +434,39 @@ functor
         let t2 = e_type e2' in
         match (t1, t2) with
         | VTypeInt, VTypeInt -> Ok (recomp e1' e2')
-        | VTypeInt, _ -> Error (TypeMismatch (VTypeInt, t2))
-        | _, _ -> Error (TypeMismatch (VTypeInt, t1))
+        | VTypeInt, _ -> Error (TypeMismatch (VTypeInt, t2, msg))
+        | _, _ -> Error (TypeMismatch (VTypeInt, t1, msg))
       in
       match orig_e with
       | UnitLit v -> Ok (UnitLit (VTypeUnit, v))
       | IntLit (v, x) -> Ok (IntLit ((VTypeInt, v), x))
       | Add (v, e1, e2) ->
-          type_binop (fun e1' e2' t -> Add ((t, v), e1', e2')) e1 e2 VTypeInt
+          type_binop ~msg:"Add node"
+            (fun e1' e2' t -> Add ((t, v), e1', e2'))
+            e1 e2 VTypeInt
       | Subtr (v, e1, e2) ->
-          type_binop (fun e1' e2' t -> Subtr ((t, v), e1', e2')) e1 e2 VTypeInt
+          type_binop ~msg:"Subtr node"
+            (fun e1' e2' t -> Subtr ((t, v), e1', e2'))
+            e1 e2 VTypeInt
       | Mult (v, e1, e2) ->
-          type_binop (fun e1' e2' t -> Mult ((t, v), e1', e2')) e1 e2 VTypeInt
-      | Neg (v, e1) -> type_unop (fun e1' t -> Neg ((t, v), e1')) e1 VTypeInt
+          type_binop ~msg:"Mult node"
+            (fun e1' e2' t -> Mult ((t, v), e1', e2'))
+            e1 e2 VTypeInt
+      | Neg (v, e1) ->
+          type_unop ~msg:"Neg node" (fun e1' t -> Neg ((t, v), e1')) e1 VTypeInt
       | BoolLit (v, x) -> Ok (BoolLit ((VTypeBool, v), x))
-      | BNot (v, e1) -> type_unop (fun e1' t -> BNot ((t, v), e1')) e1 VTypeBool
+      | BNot (v, e1) ->
+          type_unop ~msg:"BNot node"
+            (fun e1' t -> BNot ((t, v), e1'))
+            e1 VTypeBool
       | BOr (v, e1, e2) ->
-          type_binop (fun e1' e2' t -> BOr ((t, v), e1', e2')) e1 e2 VTypeBool
+          type_binop ~msg:"BOr node"
+            (fun e1' e2' t -> BOr ((t, v), e1', e2'))
+            e1 e2 VTypeBool
       | BAnd (v, e1, e2) ->
-          type_binop (fun e1' e2' t -> BAnd ((t, v), e1', e2')) e1 e2 VTypeBool
+          type_binop ~msg:"BAnd node"
+            (fun e1' e2' t -> BAnd ((t, v), e1', e2'))
+            e1 e2 VTypeBool
       | Pair (v, e1, e2) ->
           type_expr ctx e1 >>= fun e1' ->
           type_expr ctx e2 >>= fun e2' ->
@@ -461,24 +483,29 @@ functor
               Ok (Eq ((VTypeBool, v), e1', e2'))
           | _, _ -> Error (EqualOperatorTypeMistmatch (t1, t2)))
       | Gt (v, e1, e2) ->
-          type_int_compare (fun e1' e2' -> Gt ((VTypeBool, v), e1', e2')) e1 e2
+          type_int_compare ~msg:"Gt node"
+            (fun e1' e2' -> Gt ((VTypeBool, v), e1', e2'))
+            e1 e2
       | GtEq (v, e1, e2) ->
-          type_int_compare
+          type_int_compare ~msg:"GtEq node"
             (fun e1' e2' -> GtEq ((VTypeBool, v), e1', e2'))
             e1 e2
       | Lt (v, e1, e2) ->
-          type_int_compare (fun e1' e2' -> Lt ((VTypeBool, v), e1', e2')) e1 e2
+          type_int_compare ~msg:"Lt node"
+            (fun e1' e2' -> Lt ((VTypeBool, v), e1', e2'))
+            e1 e2
       | LtEq (v, e1, e2) ->
-          type_int_compare
+          type_int_compare ~msg:"LtEq node"
             (fun e1' e2' -> LtEq ((VTypeBool, v), e1', e2'))
             e1 e2
       | If (v, e1, e2, e3) ->
           type_expr ctx e1 >>= fun e1' ->
-          be_of_type VTypeBool e1' >>= fun _ ->
+          be_of_type ~msg:"If cond node" VTypeBool e1' >>= fun _ ->
           type_expr ctx e2 >>= fun e2' ->
           type_expr ctx e3 >>= fun e3' ->
           let t2 = e_type e2' in
-          be_of_type t2 e3' >>= fun _ -> Ok (If ((t2, v), e1', e2', e3'))
+          be_of_type ~msg:"If node branch types" t2 e3' >>= fun _ ->
+          Ok (If ((t2, v), e1', e2', e3'))
       | Var (v, xname) -> (
           match VarCtx.find var_ctx xname with
           | Some t -> Ok (Var ((t, v), xname))
@@ -499,7 +526,9 @@ functor
               TypeCtx.is_quotient_descendant type_ctx t11 t2
               >>= fun arg_type_valid ->
               if arg_type_valid then Ok (App ((t12, v), e1', e2'))
-              else Error (TypeMismatch (t11, t2))
+              else
+                Error
+                  (TypeMismatch (t11, t2, Some "App node function argument"))
           | _ -> Error (ExpectedFunctionOf t1))
       | Match (v, e, cs) ->
           type_expr ctx e >>= fun e' ->
@@ -537,7 +566,10 @@ functor
                     (* If this isn't the first case, check the case's expression's type *)
                     if equal_vtype t_out t_c_e then
                       Ok (t_out, Nonempty_list.cons (typed_p, c_e') cs_prev_rev)
-                    else Error (TypeMismatch (t_out, t_c_e))
+                    else
+                      Error
+                        (TypeMismatch
+                           (t_out, t_c_e, Some "Match case expression type"))
               else
                 Error
                   (PatternTypeMismatch (pattern_to_plain_pattern p, t_in, p_t)))
@@ -561,7 +593,7 @@ functor
               >>= fun subexpr_type_matches ->
               if subexpr_type_matches then
                 Ok (Constructor ((VTypeCustom vt_name, v), c_name, e1'))
-              else Error (TypeMismatch (c_t, t1)))
+              else Error (TypeMismatch (c_t, t1, Some "Constructor argument")))
 
     type ('tag_e, 'tag_p) checking_type_ctx_acc = {
       types : StringSet.t;
@@ -711,7 +743,12 @@ functor
                   defns_rev = { defn with body = typed_body } :: acc.defns_rev;
                   defns_var_ctx = VarCtx.add acc.defns_var_ctx defn.name defn_t;
                 }
-            else Error (TypeMismatch (defn.return_t, typed_body_t)))
+            else
+              Error
+                (TypeMismatch
+                   ( defn.return_t,
+                     typed_body_t,
+                     Some "Top-level defintion return type" )))
         prog.top_level_defns
       >>= fun tld_fold_final_acc ->
       let var_ctx = tld_fold_final_acc.defns_var_ctx in

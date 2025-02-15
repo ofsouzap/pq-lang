@@ -12,7 +12,7 @@ type typing_error =
   | EqconsVariableNotInBindings of string * vtype
       (** A variable-type pair was used that wasn't defined in an eqcons binding
       *)
-  | TypeMismatch of vtype * vtype
+  | TypeMismatch of vtype * vtype * string option
       (** An expression was expected to have the first type but had the second
       *)
   | PatternTypeMismatch of plain_pattern * vtype * vtype
