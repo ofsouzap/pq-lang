@@ -79,8 +79,11 @@ let rec empty_count (t : list) : int =
   match t with
   | Empty (u : unit) -> 1
   | Leaf (x : int) -> 0
-  | Node ((l : list), (r : list)) ->
-    empty_count l + empty_count r
+  | Node (p : list * list) ->
+    match p with
+    | ((l : list), (r : list)) ->
+      empty_count l + empty_count r
+    end
   end
 end
 
@@ -121,11 +124,14 @@ let rec map (arg : ((int -> int) * list)) : list =
     match t with
     | Empty (u : unit) -> Empty u
     | Leaf (x : int) -> Leaf (f x)
-    | Node ((l : list), (r : list)) ->
-      Node (
-        map (f, l),
-        map (f, r)
-      )
+    | Node (p : list * list) ->
+      match p with
+      | ((l : list), (r : list)) ->
+        Node (
+          map (f, l),
+          map (f, r)
+        )
+      end
     end
   end
 end
@@ -218,7 +224,11 @@ qtype set =
 let rec incr (xs : set) : set =
   match xs with
   | Nil (u : unit) -> Nil u
-  | Cons ((h : int), (ts : set)) -> Cons (1 + h, incr ts)
+  | Cons (v : int * set) ->
+    match v with
+    | ((h : int), (ts : set)) ->
+      Cons (1 + h, incr ts)
+    end
   end
 end
 
@@ -241,10 +251,13 @@ let rec contains (arg : (int * set)) : bool =
   | ((q : int), (xs : set)) ->
     match xs with
     | Nil (u : unit) -> false
-    | Cons ((h : int), (ts : set)) ->
-      if q == h
-      then true
-      else contains (q, ts)
+    | Cons (p : int * set) ->
+      match p with
+      | ((h : int), (ts : set)) ->
+        if q == h
+        then true
+        else contains (q, ts)
+        end
       end
     end
   end
@@ -253,33 +266,6 @@ end
 contains (2, (Cons (1, Nil ())))
 |},
         `Valid );
-      ( "List set addtwo",
-        {|
-type list =
-  | Nil of unit
-  | Cons of int * list
-
-qtype set =
-  list
-  |/ (x : int) -> (y : int) -> (zs : set)
-    => Cons ((x : int), Cons ((y : int), (zs : set))) == (Cons (y, Cons (x, zs)))
-
-let rec addtwo (arg : (set * set)) : set =
-  match arg with
-  | (Nil (u1 : unit), Nil (u2 : unit)) -> Nil u1
-  | (Nil (u : unit), Cons (k : int * set)) -> Nil u
-  | (Cons (k : int * set), Nil (u : unit)) -> Nil u
-  | (
-      Cons ((xh : int), (xts : set)),
-      Cons ((yh : int), (yts : set))
-    ) ->
-    Cons (xh + yh, addtwo (xts, yts))
-  end
-end
-
-1
-|},
-        `Invalid );
       ( "List set addtwo (flat patterns)",
         {|
 type list =
