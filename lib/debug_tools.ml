@@ -16,6 +16,7 @@ module Logger = struct
     Out_channel.output_string !config.out_channel (sprintf "%s\n" msg);
     if !config.flush then Out_channel.flush !config.out_channel else ()
 
+  let debugf (fmt : ('a, unit, string, unit) format4) : 'a = ksprintf debug fmt
   let debug_sexp (sexp : Sexp.t) : unit = debug (Sexp.to_string_hum sexp ^ "\n")
 end
 
