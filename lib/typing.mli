@@ -15,6 +15,8 @@ type typing_error =
   | TypeMismatch of vtype * vtype * string option
       (** An expression was expected to have the first type but had the second
       *)
+  | NoCommonRootType of vtype * vtype
+      (** The types given were expected to have a common root type but didn't *)
   | PatternTypeMismatch of plain_pattern * vtype * vtype
       (** A pattern was expected to have the first type but had the second *)
   | EqConsBodyPatternTypeMismatch of plain_pattern * vtype * vtype

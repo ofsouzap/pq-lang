@@ -12,6 +12,7 @@ type typing_error =
   | UndefinedVariable of string
   | EqconsVariableNotInBindings of string * vtype
   | TypeMismatch of vtype * vtype * string option
+  | NoCommonRootType of vtype * vtype
   | PatternTypeMismatch of plain_pattern * vtype * vtype
   | EqConsBodyPatternTypeMismatch of plain_pattern * vtype * vtype
   | EqConsBodyExprTypeMismatch of plain_expr * vtype * vtype
@@ -30,6 +31,7 @@ let equal_typing_error_variant x y =
   | UndefinedVariable _, UndefinedVariable _
   | EqconsVariableNotInBindings _, EqconsVariableNotInBindings _
   | TypeMismatch _, TypeMismatch _
+  | NoCommonRootType _, NoCommonRootType _
   | PatternTypeMismatch _, PatternTypeMismatch _
   | EqConsBodyPatternTypeMismatch _, EqConsBodyPatternTypeMismatch _
   | EqConsBodyExprTypeMismatch _, EqConsBodyExprTypeMismatch _
@@ -46,6 +48,7 @@ let equal_typing_error_variant x y =
   | UndefinedVariable _, _
   | EqconsVariableNotInBindings _, _
   | TypeMismatch _, _
+  | NoCommonRootType _, _
   | PatternTypeMismatch _, _
   | EqConsBodyPatternTypeMismatch _, _
   | EqConsBodyExprTypeMismatch _, _
@@ -70,6 +73,9 @@ let print_typing_error = function
       sprintf "Type mismatch: expected %s but got %s%s"
         (vtype_to_source_code t1) (vtype_to_source_code t2)
         (match msg with None -> "" | Some msg -> sprintf " (%s)" msg)
+  | NoCommonRootType (t1, t2) ->
+      sprintf "Expected common root type for %s and %s but none found"
+        (vtype_to_source_code t1) (vtype_to_source_code t2)
   | PatternTypeMismatch (p, t1, t2) ->
       sprintf "Type mismatch in pattern \"%s\": expected %s but got %s"
         (pattern_to_source_code p) (vtype_to_source_code t1)
@@ -498,14 +504,16 @@ functor
           type_int_compare ~msg:"LtEq node"
             (fun e1' e2' -> LtEq ((VTypeBool, v), e1', e2'))
             e1 e2
-      | If (v, e1, e2, e3) ->
+      | If (v, e1, e2, e3) -> (
           type_expr ctx e1 >>= fun e1' ->
           be_of_type ~msg:"If cond node" VTypeBool e1' >>= fun _ ->
           type_expr ctx e2 >>= fun e2' ->
           type_expr ctx e3 >>= fun e3' ->
           let t2 = e_type e2' in
-          be_of_type ~msg:"If node branch types" t2 e3' >>= fun _ ->
-          Ok (If ((t2, v), e1', e2', e3'))
+          let t3 = e_type e3' in
+          TypeCtx.find_common_root_type type_ctx t2 t3 >>= function
+          | None -> Error (failwith "TODO")
+          | Some branch_t -> Ok (If ((branch_t, v), e1', e2', e3')))
       | Var (v, xname) -> (
           match VarCtx.find var_ctx xname with
           | Some t -> Ok (Var ((t, v), xname))
@@ -734,7 +742,7 @@ functor
             in
             type_expr (type_ctx, body_var_ctx) defn.body >>= fun typed_body ->
             let typed_body_t = typed_body |> expr_node_val |> fst in
-            TypeCtx.is_quotient_descendant type_ctx typed_body_t defn.return_t
+            TypeCtx.is_quotient_descendant type_ctx defn.return_t typed_body_t
             >>= fun return_t_valid ->
             if return_t_valid then
               let defn_t = VTypeFun (snd defn.param, defn.return_t) in
