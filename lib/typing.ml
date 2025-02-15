@@ -701,12 +701,17 @@ functor
               else Fn.id
             in
             type_expr (type_ctx, body_var_ctx) defn.body >>= fun typed_body ->
-            let defn_t = VTypeFun (snd defn.param, defn.return_t) in
-            {
-              defns_rev = { defn with body = typed_body } :: acc.defns_rev;
-              defns_var_ctx = VarCtx.add acc.defns_var_ctx defn.name defn_t;
-            }
-            |> Ok)
+            let typed_body_t = typed_body |> expr_node_val |> fst in
+            TypeCtx.is_quotient_descendant type_ctx typed_body_t defn.return_t
+            >>= fun return_t_valid ->
+            if return_t_valid then
+              let defn_t = VTypeFun (snd defn.param, defn.return_t) in
+              Ok
+                {
+                  defns_rev = { defn with body = typed_body } :: acc.defns_rev;
+                  defns_var_ctx = VarCtx.add acc.defns_var_ctx defn.name defn_t;
+                }
+            else Error (TypeMismatch (defn.return_t, typed_body_t)))
         prog.top_level_defns
       >>= fun tld_fold_final_acc ->
       let var_ctx = tld_fold_final_acc.defns_var_ctx in
