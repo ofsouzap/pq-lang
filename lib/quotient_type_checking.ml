@@ -62,6 +62,8 @@ type pattern_tag = { t : vtype } [@@deriving sexp, equal]
 type tag_pattern = pattern_tag Pattern.pattern [@@deriving sexp, equal]
 type tag_expr = (ast_tag, pattern_tag) expr [@@deriving sexp, equal]
 
+let pattern_tag_to_ast_tag (v : pattern_tag) : ast_tag = ({ t = v.t } : ast_tag)
+
 type tag_unifier = (ast_tag, pattern_tag) Unification.unifier
 [@@deriving sexp, equal]
 
@@ -87,7 +89,6 @@ type quotient_typing_error =
           (matching all variables, equivalent to just renaming a variable)
           unexpectedly and cannot be handled *)
   | PairTypeNotDefinedInState of vtype * vtype
-  | PartialEvaluationError of Partial_evaluation.partial_evaluation_error
   | UndefinedCustomTypeName of string
       (** A custom type of the given name was referenced but isn't defined *)
 [@@deriving sexp, equal]
@@ -99,11 +100,6 @@ end
 module TagPattern = struct
   type t = pattern_tag [@@deriving sexp, equal]
 end
-
-module PartialEvaluator =
-  Partial_evaluation.PartialEvaluator (TagAst) (TagPattern)
-
-let partial_evaluation_default_mrd : int = 100
 
 (** Generate a fresh variable name, given a set of the currently-defined names
 *)
@@ -209,6 +205,101 @@ module FlatPattern = struct
     | FlatPatPair (_, (_, x1name, x1type), (_, x2name, x2type)) ->
         [ (x1name, x1type); (x2name, x2type) ]
     | FlatPatConstructor (_, _, (_, xname, xtype)) -> [ (xname, xtype) ]
+
+  let rec expr_rename_var ~(old_name : varname) ~(new_name : varname) = function
+    | UnitLit _ as e -> e
+    | IntLit _ as e -> e
+    | BoolLit _ as e -> e
+    | Add (v, e1, e2) ->
+        Add
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | Neg (v, e) -> Neg (v, expr_rename_var ~old_name ~new_name e)
+    | Subtr (v, e1, e2) ->
+        Subtr
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | Mult (v, e1, e2) ->
+        Mult
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | BNot (v, e) -> BNot (v, expr_rename_var ~old_name ~new_name e)
+    | BOr (v, e1, e2) ->
+        BOr
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | BAnd (v, e1, e2) ->
+        BAnd
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | Pair (v, e1, e2) ->
+        Pair
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | Eq (v, e1, e2) ->
+        Eq
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | Gt (v, e1, e2) ->
+        Gt
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | GtEq (v, e1, e2) ->
+        GtEq
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | Lt (v, e1, e2) ->
+        Lt
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | LtEq (v, e1, e2) ->
+        LtEq
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | If (v, e1, e2, e3) ->
+        If
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2,
+            expr_rename_var ~old_name ~new_name e3 )
+    | Var (v, xname) ->
+        if equal_string old_name xname then Var (v, new_name) else Var (v, xname)
+    | Let (v, xname, e1, e2) ->
+        Let
+          ( v,
+            xname,
+            expr_rename_var ~old_name ~new_name e1,
+            if equal_string xname old_name then e2
+            else expr_rename_var ~old_name ~new_name e2 )
+    | App (v, e1, e2) ->
+        App
+          ( v,
+            expr_rename_var ~old_name ~new_name e1,
+            expr_rename_var ~old_name ~new_name e2 )
+    | Match (v, e, cases) ->
+        Match
+          ( v,
+            expr_rename_var ~old_name ~new_name e,
+            Nonempty_list.map cases ~f:(fun (case_p, case_e) ->
+                ( case_p,
+                  if
+                    List.exists ~f:(equal_string old_name)
+                      (defined_vars case_p |> List.map ~f:fst)
+                  then case_e
+                  else expr_rename_var ~old_name ~new_name case_e )) )
+    | Constructor (v, name, e) ->
+        Constructor (v, name, expr_rename_var ~old_name ~new_name e)
 
   (** Convert a flat pattern to a regular pattern *)
   let to_non_flat_pattern : t -> tag_pattern =
@@ -523,20 +614,26 @@ module Smt = struct
     "PQ-"
     ^ (function
         | `Var _ -> "Var-"
+        | `QuotientEqBinding _ -> "QVar-"
         | `VariantType _ -> "VT-"
         | `VariantTypeConstructor _ -> "VTC-"
         | `VariantTypeConstructorAccessor _ -> "VTCA-"
-        | `Function _ -> "Fun-")
+        | `Function _ -> "Fun-"
+        | `EqualityFunction _ -> "Eq-")
         x
     ^
     match x with
     | `Var name -> name
+    | `QuotientEqBinding ((name : string), (side : [ `Pattern | `Expr ])) ->
+        sprintf "%s-%s" name
+          (match side with `Pattern -> "pat" | `Expr -> "expr")
     | `VariantType (vt_name : string) -> vt_name
     | `VariantTypeConstructor ((vt_name : string), (c_name : string)) ->
         vt_name ^ "-" ^ c_name
     | `VariantTypeConstructorAccessor ((vt_name : string), (c_name : string)) ->
         vt_name ^ "-" ^ c_name ^ "-val"
     | `Function (f_name : string) -> f_name
+    | `EqualityFunction (qt_name : string) -> qt_name
 
   (** Provides a representation of a state that can be built into input for the
       solver *)
@@ -587,7 +684,7 @@ module Smt = struct
     [@@deriving sexp, equal]
 
     type t = {
-      custom_types : plain_custom_type list;
+      custom_types : tag_custom_type list;
           (** A list of the custom types defined. This isn't used for building
               the SMT formula, but is used for e.g. mapping quotient types to
               their root base type *)
@@ -622,7 +719,7 @@ module Smt = struct
 
     let vt_unit_val : string = custom_special_name (`Var "unit")
 
-    let state_init (custom_types : plain_custom_type list) : t =
+    let state_init (custom_types : tag_custom_type list) : t =
       {
         custom_types;
         pair_types_defined =
@@ -709,6 +806,19 @@ module Smt = struct
       match Map.find state.pair_types_defined (t1, t2) with
       | Some info -> Ok info
       | None -> Error (PairTypeNotDefinedInState (t1, t2))
+
+    (** Get the name of the special function that should be defined to compare
+        two values of the specified type. This is only for quotient types *)
+    let state_get_vtype_special_eq_fun_name (state : t) : vtype -> string option
+        = function
+      | VTypeCustom ct_name ->
+          if
+            List.exists state.custom_types ~f:(function
+              | VariantType _ -> false
+              | QuotientType qt -> equal_string qt.name ct_name)
+          then Some (custom_special_name (`EqualityFunction ct_name))
+          else None
+      | _ -> None
 
     (** Add a variant type definition to the state *)
     let state_add_variant_type ((vt_name, vt_cs) : variant_type) (state : t) : t
@@ -845,39 +955,14 @@ module Smt = struct
         ~f:(fun acc -> function
         | VarDecl (xname, _) -> Set.add acc xname
         | VarDefn defn -> Set.add acc defn.name)
-
-    let to_partial_evaluator_store (state : t) : PartialEvaluator.store =
-      List.fold state.top_level_rev
-        ~init:(StringMap.empty : PartialEvaluator.store)
-        ~f:(fun acc -> function
-          | VarDecl _ -> acc
-          | VarDefn defn ->
-              let defn_body = defn.body |> FlatPattern.to_non_flat_expr in
-              let create_closure ~(recursive : bool) (param_name : string) :
-                  PartialEvaluator.closure =
-                {
-                  param = param_name;
-                  body = defn_body;
-                  store = StringMap.empty;
-                  recursive =
-                    (if recursive then `Recursive defn.name else `NonRecursive);
-                }
-              in
-              Map.set acc ~key:defn.name
-                ~data:
-                  (match defn.kind with
-                  | `NonRec None -> First defn_body
-                  | `NonRec (Some (param_name, _)) ->
-                      Second (create_closure ~recursive:false param_name)
-                  | `Rec (param_name, _) ->
-                      Second (create_closure ~recursive:true param_name)))
   end
 
   module Assertion = struct
     type t =
       | Not of t
-      | Eq of FlatPattern.flat_expr * FlatPattern.flat_expr
-      | Or of t list
+      | Eq of vtype option * FlatPattern.flat_expr * FlatPattern.flat_expr
+          (** Equality node. Optionally the types of the two expressions can be
+              specified. This allows for equality lifting for quotient types *)
 
     type assertion = t
 
@@ -1066,8 +1151,8 @@ module Smt = struct
                        body_node;
                      ] )))
 
-    let build_state (state : State.t) :
-        (LispBuilder.node list, quotient_typing_error) Result.t =
+    let build_state ~(existing_names : StringSet.t) (state : State.t) :
+        (StringSet.t * LispBuilder.node list, quotient_typing_error) Result.t =
       let open Result in
       let open LispBuilder in
       let build_datatype_decl () : (node, quotient_typing_error) Result.t =
@@ -1118,6 +1203,138 @@ module Smt = struct
           state.declared_consts
         >>| List.rev
       in
+      let build_lifted_eq_fun_nodes ~(existing_names : StringSet.t) () :
+          (StringSet.t * node list, quotient_typing_error) Result.t =
+        List.fold_result state.custom_types ~init:(existing_names, [])
+          ~f:(fun (existing_names, (acc_rev : node list list)) -> function
+          | VariantType _ -> Ok (existing_names, acc_rev)
+          | QuotientType qt ->
+              let t = VTypeCustom qt.name in
+              let eq_fun_name =
+                State.state_get_vtype_special_eq_fun_name state t
+                |> Option.value_exn
+                     ~message:"Quotient type has no special equality function"
+              in
+              build_vtype state t >>= fun t_node ->
+              build_vtype state VTypeBool >>= fun bool_node ->
+              (* Equality function definition node *)
+              Op
+                ( "declare-fun",
+                  [ Atom eq_fun_name; List [ t_node; t_node ]; bool_node ] )
+              |> fun decl_node ->
+              (* Assertion nodes *)
+              let create_assert_node (bindings : (varname * vtype) list)
+                  (l : FlatPattern.flat_expr) (r : FlatPattern.flat_expr) :
+                  (node, quotient_typing_error) Result.t =
+                List.fold_result bindings ~init:([], [])
+                  ~f:(fun (qt_names, acc_rev) (xname, xtype) ->
+                    (match xtype with
+                    | VTypeCustom ct_name ->
+                        List.find_map state.custom_types ~f:(function
+                          | VariantType _ -> None
+                          | QuotientType qt ->
+                              if equal_string ct_name qt.name then Some qt
+                              else None)
+                    | _ -> None)
+                    |> fun x_qt ->
+                    build_vtype state xtype >>| fun xtype_node ->
+                    match x_qt with
+                    | Some x_qt ->
+                        let xname_l =
+                          custom_special_name
+                            (`QuotientEqBinding (xname, `Pattern))
+                        in
+                        let xname_r =
+                          custom_special_name
+                            (`QuotientEqBinding (xname, `Expr))
+                        in
+                        ( (xname, x_qt) :: qt_names,
+                          Op (xname_l, [ xtype_node ])
+                          :: Op (xname_r, [ xtype_node ])
+                          :: acc_rev )
+                    | None -> (qt_names, Op (xname, [ xtype_node ]) :: acc_rev))
+                >>=
+                fun ( (qt_binding_names : (string * tag_quotient_type) list),
+                      bindings_nodes_rev )
+                ->
+                let bindings_nodes = List.rev bindings_nodes_rev in
+                let l, r =
+                  List.fold qt_binding_names ~init:(l, r)
+                    ~f:(fun (l, r) (xname, _) ->
+                      ( FlatPattern.expr_rename_var ~old_name:xname
+                          ~new_name:
+                            (custom_special_name
+                               (`QuotientEqBinding (xname, `Pattern)))
+                          l,
+                        FlatPattern.expr_rename_var ~old_name:xname
+                          ~new_name:
+                            (custom_special_name
+                               (`QuotientEqBinding (xname, `Expr)))
+                          r ))
+                in
+                build_expr ~directly_callable_fun_names:StringSet.empty state l
+                >>= fun l_node ->
+                build_expr ~directly_callable_fun_names:StringSet.empty state r
+                >>= fun r_node ->
+                (let eq_node = Op (eq_fun_name, [ l_node; r_node ]) in
+                 List.fold qt_binding_names ~init:eq_node
+                   ~f:(fun acc_node (xname, x_qt) ->
+                     let xname_l =
+                       custom_special_name
+                         (`QuotientEqBinding (xname, `Pattern))
+                     in
+                     let xname_r =
+                       custom_special_name (`QuotientEqBinding (xname, `Expr))
+                     in
+                     Op
+                       ( "=>",
+                         [
+                           Op
+                             ( State.state_get_vtype_special_eq_fun_name state
+                                 (VTypeCustom x_qt.name)
+                               |> Option.value_exn
+                                    ~message:
+                                      "Quotient type didn't have custom secial \
+                                       equality function name",
+                               [ Atom xname_l; Atom xname_r ] );
+                           acc_node;
+                         ] )))
+                |> fun body_node ->
+                Ok
+                  (Op
+                     ( "assert",
+                       [ Op ("forall", [ List bindings_nodes; body_node ]) ] ))
+              in
+              (let arg_name = custom_special_name (`Var "x") in
+               Op
+                 ( "assert",
+                   [
+                     Op
+                       ( "forall",
+                         [
+                           List [ List [ Atom arg_name; t_node ] ];
+                           Op (eq_fun_name, [ Atom arg_name; Atom arg_name ]);
+                         ] );
+                   ] ))
+              |> fun assert_node_base ->
+              List.fold_result qt.eqconss ~init:(existing_names, [])
+                ~f:(fun (existing_names, acc_rev) eqcons ->
+                  fst eqcons.body
+                  |> Ast.of_pattern ~convert_tag:pattern_tag_to_ast_tag
+                  |> FlatPattern.of_ast ~existing_names
+                  >>= fun (existing_names, flat_l) ->
+                  snd eqcons.body |> FlatPattern.of_ast ~existing_names
+                  >>= fun (existing_names, flat_r) ->
+                  create_assert_node eqcons.bindings flat_l flat_r
+                  >>| fun node -> (existing_names, node :: acc_rev))
+              >>= fun (existing_names, assert_nodes_main_rev) ->
+              let assert_nodes_main = List.rev assert_nodes_main_rev in
+              (* Output *)
+              [ decl_node; assert_node_base ] @ assert_nodes_main |> Ok
+              >>= fun node -> Ok (existing_names, node :: acc_rev))
+        >>| fun (existing_names, nodes_deep_rev) ->
+        (existing_names, nodes_deep_rev |> List.rev |> List.concat)
+      in
       let build_top_level_nodes () : (node list, quotient_typing_error) Result.t
           =
         (* Note that top_level_rev is reversed, but the folding here un-reverses it *)
@@ -1128,9 +1345,13 @@ module Smt = struct
           state.top_level_rev
       in
       build_datatype_decl () >>= fun (datatype_decl : node) ->
+      build_lifted_eq_fun_nodes ~existing_names ()
+      >>= fun (existing_names, (lifted_eq_fun_nodes : node list)) ->
       build_consts_nodes () >>= fun (declared_consts_nodes : node list) ->
       build_top_level_nodes () >>| fun (top_level_nodes : node list) ->
-      (datatype_decl :: declared_consts_nodes) @ top_level_nodes
+      ( existing_names,
+        (datatype_decl :: declared_consts_nodes)
+        @ lifted_eq_fun_nodes @ top_level_nodes )
 
     let build_assertion ~(state : State.t) :
         assertion -> (LispBuilder.node, quotient_typing_error) Result.t =
@@ -1140,13 +1361,21 @@ module Smt = struct
           assertion -> (LispBuilder.node, quotient_typing_error) Result.t =
         function
         | Not x -> aux x >>| fun x_node -> Op ("not", [ x_node ])
-        | Eq (e1, e2) ->
+        | Eq (t_opt, e1, e2) ->
             build_expr ~directly_callable_fun_names:StringSet.empty state e1
             >>= fun e1_node ->
             build_expr ~directly_callable_fun_names:StringSet.empty state e2
-            >>| fun e2_node -> Op ("=", [ e1_node; e2_node ])
-        | Or xs ->
-            List.map ~f:aux xs |> Result.all >>| fun nodes -> Op ("or", nodes)
+            >>|
+            let eq_fun_name =
+              let default = "=" in
+              match t_opt with
+              | None -> default
+              | Some t -> (
+                  match State.state_get_vtype_special_eq_fun_name state t with
+                  | None -> default
+                  | Some eq_fun_name -> eq_fun_name)
+            in
+            fun e2_node -> Op (eq_fun_name, [ e1_node; e2_node ])
       in
       fun assertion ->
         aux assertion >>| fun assertion_node -> Op ("assert", [ assertion_node ])
@@ -1154,17 +1383,19 @@ module Smt = struct
 
   type formula = LispBuilder.node list
 
-  let create_formula (state : State.t) (assertions : Assertion.t list) :
-      (formula, quotient_typing_error) Result.t =
+  let create_formula ~(existing_names : StringSet.t) (state : State.t)
+      (assertions : Assertion.t list) :
+      (StringSet.t * formula, quotient_typing_error) Result.t =
     let open Result in
-    Builder.build_state state >>= fun state_nodes ->
+    Builder.build_state ~existing_names state
+    >>= fun (existing_names, state_nodes) ->
     List.map assertions ~f:(Builder.build_assertion ~state) |> Result.all
-    >>| fun assertions_nodes -> state_nodes @ assertions_nodes
+    >>| fun assertions_nodes -> (existing_names, state_nodes @ assertions_nodes)
 
   (** Check the satisifability of a given formula *)
   let check_satisfiability (formula : formula) : [ `Sat | `Unsat | `Unknown ] =
     let smtlib_string = LispBuilder.build ~use_newlines:true formula in
-    Debug_tools.Logger.debug (smtlib_string ^ "\n");
+    Debug_tools.Logger.debug (LispBuilder.build_hum formula);
     Debug_tools.pause ();
     let ctx = Z3.mk_context [ ("model", "false") ] in
     let ast_vec = Z3.SMT.parse_smtlib2_string ctx smtlib_string [] [] [] [] in
@@ -1201,47 +1432,11 @@ let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
           renames_list;
     } )
 
-let find_all_possible_quotient_rewrites ~(bound_names_in_arg : StringSet.t)
-    ~(existing_names : StringSet.t)
-    ~(all_quotient_types : tag_quotient_type list) (e : tag_expr) :
-    StringSet.t * tag_expr list =
-  List.fold_map all_quotient_types ~init:existing_names
-    ~f:(fun existing_names qt ->
-      let existing_names, fresh_eqconss =
-        (* Make sure to use fresh names for the eqconss *)
-        List.fold_map qt.eqconss ~init:existing_names ~f:(fun existing_names ->
-            use_fresh_names_for_eqcons ~existing_names)
-      in
-      let rewrites : tag_expr list =
-        List.filter_map fresh_eqconss ~f:(fun eqcons ->
-            Unification.simply_find_unifier
-              ~bound_names_in_from:bound_names_in_arg
-              ~from_expr:
-                (fst eqcons.body
-                |> Unification.pattern_to_expr
-                     ~convert_tag:(fun (v : pattern_tag) ->
-                       ({ t = v.t } : ast_tag)))
-              ~to_expr:e
-            |> function
-            | Error () -> None
-            | Ok eqcons_to_expr_unifier ->
-                Some
-                  (Unification.apply_to_expr ~unifier:eqcons_to_expr_unifier
-                     (snd eqcons.body)))
-      in
-      (existing_names, rewrites))
-  |> fun (existing_names, rewrites) -> (existing_names, List.concat rewrites)
-
-let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
-    ~(existing_names : StringSet.t)
-    ~(all_quotient_types : tag_quotient_type list)
+let perform_quotient_match_check ~(existing_names : StringSet.t)
     ~(quotient_type : tag_quotient_type) ~(match_node_v : ast_tag)
     ~(cases : (tag_pattern * tag_expr) Nonempty_list.t) (state : Smt.State.t) :
     (StringSet.t, quotient_typing_error) Result.t =
   let open Result in
-  let partial_evaluation_mrd =
-    Option.value ~default:partial_evaluation_default_mrd partial_evaluation_mrd
-  in
   let reform_match_with_arg (e1 : tag_expr) : tag_expr =
     Match (match_node_v, e1, cases)
   in
@@ -1265,15 +1460,10 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
              Unification.simply_find_unifier
                ~bound_names_in_from:StringSet.empty
                ~from_expr:
-                 (case_p
-                 |> Unification.pattern_to_expr
-                      ~convert_tag:(fun (v : pattern_tag) ->
-                        ({ t = v.t } : ast_tag)))
+                 (case_p |> Ast.of_pattern ~convert_tag:pattern_tag_to_ast_tag)
                ~to_expr:
                  (fst eqcons.body
-                 |> Unification.pattern_to_expr
-                      ~convert_tag:(fun (v : pattern_tag) ->
-                        ({ t = v.t } : ast_tag)))
+                 |> Ast.of_pattern ~convert_tag:pattern_tag_to_ast_tag)
              |> function
              | Error () -> None
              | Ok unifier -> Some (unifier, eqcons)))
@@ -1286,71 +1476,38 @@ let perform_quotient_match_check ?(partial_evaluation_mrd : int option)
                 Smt.State.state_add_var_decl (xname, xtype) state)
               eqcons.bindings
           in
-          (* Considering the LHS of the eqcons body *)
-          PartialEvaluator.eval ~mrd:partial_evaluation_mrd
-            {
-              store = Smt.State.to_partial_evaluator_store state;
-              e =
-                Unification.apply_to_expr ~unifier:expr_to_eqcons_unifier case_e;
-            }
-          |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
-          >>= fun l ->
-          (* Considering the RHS of the eqcons body *)
-          PartialEvaluator.eval ~mrd:partial_evaluation_mrd
-            {
-              store = Smt.State.to_partial_evaluator_store state;
-              e = reform_match_with_arg (snd eqcons.body);
-            }
-          |> Result.map_error ~f:(fun err -> PartialEvaluationError err)
-          >>= fun r ->
-          let existing_names, l_rewrites =
-            (* All possible writings of l, including the original *)
-            find_all_possible_quotient_rewrites
-              ~bound_names_in_arg:(Smt.State.get_bound_varnames state)
-              ~existing_names ~all_quotient_types l
-            |> fun (existing_names, rewrites) -> (existing_names, l :: rewrites)
+          let l =
+            Unification.apply_to_expr ~unifier:expr_to_eqcons_unifier case_e
           in
-          let existing_names, r_rewrites =
-            (* All possible writings of r, including the original *)
-            find_all_possible_quotient_rewrites
-              ~bound_names_in_arg:(Smt.State.get_bound_varnames state)
-              ~existing_names ~all_quotient_types r
-            |> fun (existing_names, rewrites) -> (existing_names, r :: rewrites)
-          in
-          (* Flatten the l rewrite expressions *)
-          List.fold_result ~init:(existing_names, [])
-            ~f:(fun (existing_names, acc) e ->
-              FlatPattern.of_ast ~existing_names e
-              >>| fun (existing_names, flat_e) -> (existing_names, flat_e :: acc))
-            l_rewrites
-          >>= fun (existing_names, flat_l_rewrites) ->
-          (* Flatten the r rewrite expressions *)
-          List.fold_result ~init:(existing_names, [])
-            ~f:(fun (existing_names, acc) e ->
-              FlatPattern.of_ast ~existing_names e
-              >>| fun (existing_names, flat_e) -> (existing_names, flat_e :: acc))
-            r_rewrites
-          >>= fun (existing_names, flat_r_rewrites) ->
+          let r = reform_match_with_arg (snd eqcons.body) in
+          FlatPattern.of_ast ~existing_names l
+          >>= fun (existing_names, l_flat) ->
+          FlatPattern.of_ast ~existing_names r
+          >>= fun (existing_names, r_flat) ->
           (* Form the main assertion of the SMT check *)
           let assertion : Smt.Assertion.t =
             let open Smt.Assertion in
             (* Note that I use the negation as we are looking or validity, not satisifability:
                 the condition must be necessarily true, so we check that the negation is unsatisfiable *)
             Not
-              (Or
-                 (let open List in
-                  flat_l_rewrites >>= fun l ->
-                  flat_r_rewrites >>| fun r -> Eq (l, r)))
+              (Eq
+                 ( Some
+                     (failwith
+                        "TODO - need to be able to determine return type (esp. \
+                         if it is quotient) of the match"),
+                   l_flat,
+                   r_flat ))
           in
-          Smt.create_formula state [ assertion ] >>= fun formula ->
+          Smt.create_formula ~existing_names state [ assertion ]
+          >>= fun (existing_names, formula) ->
           match Smt.check_satisfiability formula with
           | `Unsat -> Ok existing_names
           | `Sat -> Error QuotientConstraintCheckFailed
           | `Unknown -> Error SmtUnknownResult))
 
-let rec check_expr ?(partial_evaluation_mrd : int option)
-    ~(existing_names : StringSet.t) ~(quotient_types : tag_quotient_type list)
-    (state : Smt.State.t) (orig_e : FlatPattern.flat_expr) :
+let rec check_expr ~(existing_names : StringSet.t)
+    ~(quotient_types : tag_quotient_type list) (state : Smt.State.t)
+    (orig_e : FlatPattern.flat_expr) :
     (StringSet.t, quotient_typing_error) Result.t =
   let open Result in
   let open Smt.State in
@@ -1408,9 +1565,8 @@ let rec check_expr ?(partial_evaluation_mrd : int option)
                       (to_non_flat_pattern flat_p, to_non_flat_expr flat_e))
                   cases
               in
-              perform_quotient_match_check ?partial_evaluation_mrd
-                ~existing_names ~all_quotient_types:quotient_types
-                ~quotient_type:qt ~match_node_v:v ~cases:non_flat_cases state
+              perform_quotient_match_check ~existing_names ~quotient_type:qt
+                ~match_node_v:v ~cases:non_flat_cases state
           | None -> Ok existing_names)
       | _ -> Ok existing_names)
       >>= fun existing_names ->
@@ -1441,14 +1597,7 @@ let check_program (prog : tag_program) : (unit, quotient_typing_error) Result.t
       ~f:(function QuotientType qt -> Some qt | _ -> None)
       flat_prog.custom_types
   in
-  let state =
-    Smt.State.state_init
-      (prog.custom_types
-      |> List.map ~f:(fun ct ->
-             ct
-             |> Custom_types.fmap_expr ~f:(Fn.const ())
-             |> Custom_types.fmap_pattern ~f:(Fn.const ())))
-  in
+  let state = Smt.State.state_init prog.custom_types in
   let state =
     (* Add the variant type definitions to the state *)
     List.fold ~init:state
