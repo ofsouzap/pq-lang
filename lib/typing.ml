@@ -565,7 +565,9 @@ functor
                 (* Then, type the case's expression using the extended context *)
                 type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
                 let t_c_e = e_type c_e' in
-                if equal_vtype t_out t_c_e then
+                TypeCtx.is_quotient_descendant type_ctx t_out t_c_e
+                >>= fun case_t_compatible ->
+                if case_t_compatible then
                   match acc with
                   | First () -> Ok (Nonempty_list.singleton (typed_p, c_e'))
                   | Second cs_prev_rev ->
