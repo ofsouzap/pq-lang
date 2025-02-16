@@ -279,6 +279,15 @@ let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
   | Constructor (v, name, e) ->
       Constructor (v, name, rename_var ~old_name ~new_name e)
 
+let rec of_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
+    'tag_p pattern -> ('tag_e, 'tag_p) expr = function
+  | PatName (v, xname, _) -> Var (convert_tag v, xname)
+  | PatPair (v, p1, p2) ->
+      Pair
+        (convert_tag v, of_pattern ~convert_tag p1, of_pattern ~convert_tag p2)
+  | PatConstructor (v, cname, p) ->
+      Constructor (convert_tag v, cname, of_pattern ~convert_tag p)
+
 exception AstConverionFixError
 
 let ast_to_source_code ?(use_newlines : bool option) :

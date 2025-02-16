@@ -46,19 +46,6 @@ let simply_find_unifier ~(bound_names_in_from : StringSet.t)
   in
   aux ~bound_names_in_from StringMap.empty (from_expr, to_expr)
 
-let rec pattern_to_expr ~(convert_tag : 'tag_p -> 'tag_e) :
-    'tag_p pattern -> ('tag_e, 'tag_p) Ast.expr =
-  let open Ast in
-  function
-  | PatName (v, xname, _) -> Var (convert_tag v, xname)
-  | PatPair (v, p1, p2) ->
-      Pair
-        ( convert_tag v,
-          pattern_to_expr ~convert_tag p1,
-          pattern_to_expr ~convert_tag p2 )
-  | PatConstructor (v, cname, p) ->
-      Constructor (convert_tag v, cname, pattern_to_expr ~convert_tag p)
-
 let rename_var_in_body ~(old_name : varname) ~(new_name : varname)
     (unifier : ('tag_e, 'tag_p) unifier) : ('tag_e, 'tag_p) unifier =
   Map.map unifier ~f:(Ast.rename_var ~old_name ~new_name)

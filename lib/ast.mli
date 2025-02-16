@@ -103,6 +103,10 @@ val rename_var :
   ('tag_e, 'tag_p) expr ->
   ('tag_e, 'tag_p) expr
 
+(** Create a possibly-open expression from a pattern *)
+val of_pattern :
+  convert_tag:('tag_p -> 'tag_e) -> 'tag_p pattern -> ('tag_e, 'tag_p) expr
+
 exception AstConverionFixError
 
 (** Convert an AST expression into source code that corresponds to the AST
