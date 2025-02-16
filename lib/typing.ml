@@ -538,7 +538,7 @@ functor
                 Error
                   (TypeMismatch (t11, t2, Some "App node function argument"))
           | _ -> Error (ExpectedFunctionOf t1))
-      | Match (v, e, cs) ->
+      | Match (v, e, t_out, cs) ->
           type_expr ctx e >>= fun e' ->
           let t_in = e_type e' in
           (* Type the cases and check them against each other, as well as determining the type of the output *)
@@ -546,10 +546,9 @@ functor
             ~f:(fun
                 (acc :
                   ( unit,
-                    vtype
-                    * ((vtype * 'tag_p) pattern
-                      * (vtype * 'tag_e, vtype * 'tag_p) expr)
-                      Nonempty_list.t )
+                    ((vtype * 'tag_p) pattern
+                    * (vtype * 'tag_e, vtype * 'tag_p) expr)
+                    Nonempty_list.t )
                   Either.t)
                 ((p : 'tag_p pattern), (c_e : ('tag_e, 'tag_p) expr))
               ->
@@ -566,29 +565,25 @@ functor
                 (* Then, type the case's expression using the extended context *)
                 type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
                 let t_c_e = e_type c_e' in
-                match acc with
-                | First _ ->
-                    (* If this is the first case, use this as the output type *)
-                    Ok (t_c_e, Nonempty_list.singleton (typed_p, c_e'))
-                | Second (t_out, cs_prev_rev) ->
-                    (* If this isn't the first case, check the case's expression's type *)
-                    if equal_vtype t_out t_c_e then
-                      Ok (t_out, Nonempty_list.cons (typed_p, c_e') cs_prev_rev)
-                    else
-                      Error
-                        (TypeMismatch
-                           (t_out, t_c_e, Some "Match case expression type"))
+                if equal_vtype t_out t_c_e then
+                  match acc with
+                  | First () -> Ok (Nonempty_list.singleton (typed_p, c_e'))
+                  | Second cs_prev_rev ->
+                      Ok (Nonempty_list.cons (typed_p, c_e') cs_prev_rev)
+                else
+                  Error
+                    (TypeMismatch
+                       (t_out, t_c_e, Some "Match case expression type"))
               else
                 Error
                   (PatternTypeMismatch (pattern_to_plain_pattern p, t_in, p_t)))
             cs
           >>|
-          fun ( (t_out : vtype),
-                (cs_typed_rev :
-                  ((vtype * 'tag_p) pattern
-                  * (vtype * 'tag_e, vtype * 'tag_p) expr)
-                  Nonempty_list.t) )
-          -> Match ((t_out, v), e', Nonempty_list.rev cs_typed_rev)
+          fun (cs_typed_rev :
+                ((vtype * 'tag_p) pattern
+                * (vtype * 'tag_e, vtype * 'tag_p) expr)
+                Nonempty_list.t)
+          -> Match ((t_out, v), e', t_out, Nonempty_list.rev cs_typed_rev)
       | Constructor (v, c_name, e1) -> (
           type_expr ctx e1 >>= fun e1' ->
           let t1 = e_type e1' in

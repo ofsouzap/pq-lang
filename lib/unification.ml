@@ -94,7 +94,7 @@ let rec apply_to_expr ~(unifier : ('tag_e, 'tag_p) unifier) :
       Let (v, xname, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
   | App (v, e1, e2) ->
       App (v, apply_to_expr ~unifier e1, apply_to_expr ~unifier e2)
-  | Match (v, e, cases) ->
+  | Match (v, e, t2, cases) ->
       let cases' =
         Nonempty_list.map
           ~f:(fun (case_p, case_e) ->
@@ -109,5 +109,5 @@ let rec apply_to_expr ~(unifier : ('tag_e, 'tag_p) unifier) :
             (case_p, apply_to_expr ~unifier:unifier' case_e))
           cases
       in
-      Match (v, apply_to_expr ~unifier e, cases')
+      Match (v, apply_to_expr ~unifier e, t2, cases')
   | Constructor (v, name, e) -> Constructor (v, name, apply_to_expr ~unifier e)

@@ -56,6 +56,7 @@ type ('tag_e, 'tag_p) expr =
   | Match of
       'tag_e
       * ('tag_e, 'tag_p) expr
+      * vtype
       * ('tag_p pattern * ('tag_e, 'tag_p) expr) Nonempty_list.t
       (** Match expression *)
   (* Variant data types *)

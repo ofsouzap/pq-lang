@@ -265,7 +265,7 @@ struct
               | `NonRecursive -> new_store
             in
             eval ~type_ctx new_store closure.body)
-    | Match (_, e1, cs) -> (
+    | Match (_, e1, _, cs) -> (
         eval ~type_ctx store e1 >>= fun v1 ->
         let matched_c_e :
             ((varname * value) list * (ast_tag, pattern_tag) Ast.typed_expr)

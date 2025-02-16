@@ -125,7 +125,3 @@ end
 
 val unit_program_arbitrary_with_default_options :
   Unit_program_qcheck_testing.t QCheck.arbitrary
-
-module Unit_partial_evaluator : sig
-  include module type of Partial_evaluation.PartialEvaluator (UnitTag) (UnitTag)
-end

@@ -461,6 +461,3 @@ let unit_program_arbitrary_with_default_options =
       print = Unit_ast_qcheck_testing.PrintExprSource;
       shrink = { preserve_type = false };
     }
-
-module Unit_partial_evaluator =
-  Partial_evaluation.PartialEvaluator (UnitTag) (UnitTag)

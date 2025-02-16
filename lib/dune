@@ -14,7 +14,6 @@
   quotient_types
   custom_types
   program
-  partial_evaluation
   typing
   quotient_type_checking
   parsing_errors

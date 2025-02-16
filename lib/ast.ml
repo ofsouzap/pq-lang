@@ -33,6 +33,7 @@ type ('tag_e, 'tag_p) expr =
   | Match of
       'tag_e
       * ('tag_e, 'tag_p) expr
+      * vtype
       * ('tag_p pattern * ('tag_e, 'tag_p) expr) Nonempty_list.t
   | Constructor of 'tag_e * string * ('tag_e, 'tag_p) expr
 [@@deriving sexp, equal]
@@ -59,7 +60,7 @@ let expr_node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
   | Var (v, xname) -> (f v, Var (f v, xname))
   | Let (v, e1, e2, e3) -> (f v, Let (f v, e1, e2, e3))
   | App (v, e1, e2) -> (f v, App (f v, e1, e2))
-  | Match (v, e1, cs) -> (f v, Match (f v, e1, cs))
+  | Match (v, e1, t2, cs) -> (f v, Match (f v, e1, t2, cs))
   | Constructor (v, cname, e1) -> (f v, Constructor (f v, cname, e1))
 
 let expr_node_val (e : ('tag_e, 'tag_p) expr) : 'tag_e =
@@ -92,10 +93,11 @@ let rec fmap ~(f : 'tag_e1 -> 'tag_e2) (e : ('tag_e1, 'tag_p) expr) :
   | Var (a, vname) -> Var (f a, vname)
   | Let (a, xname, e1, e2) -> Let (f a, xname, fmap ~f e1, fmap ~f e2)
   | App (a, e1, e2) -> App (f a, fmap ~f e1, fmap ~f e2)
-  | Match (a, e, cs) ->
+  | Match (a, e, t2, cs) ->
       Match
         ( f a,
           fmap ~f e,
+          t2,
           Nonempty_list.map ~f:(fun (p, c_e) -> (p, fmap ~f c_e)) cs )
   | Constructor (a, cname, e) -> Constructor (f a, cname, fmap ~f e)
 
@@ -124,10 +126,11 @@ let rec fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (e : ('tag_e, 'tag_p1) expr) :
   | Let (v, name, e1, e2) ->
       Let (v, name, fmap_pattern ~f e1, fmap_pattern ~f e2)
   | App (v, e1, e2) -> App (v, fmap_pattern ~f e1, fmap_pattern ~f e2)
-  | Match (v, e, cs) ->
+  | Match (v, e, t2, cs) ->
       Match
         ( v,
           fmap_pattern ~f e,
+          t2,
           Nonempty_list.map
             ~f:(fun (p, c_e) -> (Pattern.fmap ~f p, fmap_pattern ~f c_e))
             cs )
@@ -156,7 +159,7 @@ let rec existing_names : ('tag_e, 'tag_p) expr -> StringSet.t = function
   | Let (_, name, e1, e2) ->
       Set.union (StringSet.singleton name)
         (Set.union (existing_names e1) (existing_names e2))
-  | Match (_, e, cases) ->
+  | Match (_, e, _, cases) ->
       let case_names (p, e) =
         Set.union (Pattern.existing_names p) (existing_names e)
       in
@@ -198,10 +201,11 @@ let rec expr_to_plain_expr (e : ('tag_e, 'tag_p) expr) : plain_expr =
   | Let (_, xname, e1, e2) ->
       Let ((), xname, expr_to_plain_expr e1, expr_to_plain_expr e2)
   | App (_, e1, e2) -> App ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Match (_, e, cs) ->
+  | Match (_, e, t2, cs) ->
       Match
         ( (),
           expr_to_plain_expr e,
+          t2,
           Nonempty_list.map
             ~f:(fun (p, c_e) ->
               (Pattern.fmap ~f:(fun _ -> ()) p, expr_to_plain_expr c_e))
@@ -265,10 +269,11 @@ let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
   | App (v, e1, e2) ->
       App
         (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
-  | Match (v, e, cases) ->
+  | Match (v, e, t2, cases) ->
       Match
         ( v,
           rename_var ~old_name ~new_name e,
+          t2,
           Nonempty_list.map cases ~f:(fun (case_p, case_e) ->
               ( case_p,
                 if
@@ -333,7 +338,7 @@ let ast_to_source_code ?(use_newlines : bool option) :
            in
            match e1 with _ -> default_repr)
        | App (_, e1, e2) -> convert e1 |.> write " " |.> convert e2
-       | Match (_, e, cs) ->
+       | Match (_, e, t2, cs) ->
            let convert_case ((p : 'tag_p pattern), (c_e : ('tag_e, 'tag_p) expr))
                : state -> state =
              write "| ("
@@ -349,7 +354,9 @@ let ast_to_source_code ?(use_newlines : bool option) :
            in
            write "match"
            |.> block (convert e)
-           |.> write "with" |.> block cases_converter |.> write "end"
+           |.> write "-> "
+           |.> write (vtype_to_source_code t2)
+           |.> write " with" |.> block cases_converter |.> write "end"
        | Constructor (_, cname, e) -> write cname |.> write " " |.> convert e)
     |> if bracketed then write ")" else Fn.id
   in
@@ -584,7 +591,7 @@ end = struct
       in
       list_size (int_range 1 4) case_and_pat_gen
       >|= Nonempty_list.from_list_unsafe
-      >|= fun cs -> Match (v, e1, cs)
+      >|= fun cs -> Match (v, e1, failwith "TODO", cs)
     and standard_rec_gen_cases
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
@@ -816,13 +823,14 @@ end = struct
     | App (v, e1, e2) ->
         binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
           (fun (v', e1', e2') -> App (v', e1', e2'))
-    | Match (v, e1, ps) ->
+    | Match (v, e1, t2, ps) ->
         (if preserve_type then empty else return e1)
         <+> ( (* Try shrinking each case expression *)
               QCheck.Shrink.list_elems
                 (fun (c_p, c_e) -> shrink opts c_e >|= fun c_e' -> (c_p, c_e'))
                 (Nonempty_list.to_list ps)
-            >|= fun ps' -> Match (v, e1, Nonempty_list.from_list_unsafe ps') )
+            >|= fun ps' -> Match (v, e1, t2, Nonempty_list.from_list_unsafe ps')
+            )
     | Constructor (v, c, e1) ->
         unop_shrink (v, e1) (fun (v', e1') -> Constructor (v', c, e1'))
 

@@ -163,7 +163,7 @@ expr:
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }  (* if e1 then e2 else e3 *)
   | LET l = LNAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
-  | MATCH e = expr WITH cs = match_cases END { Match ((), e, cs) }  (* match e with cs end *)
+  | MATCH e = expr ARROW return_t = vtype WITH cs = match_cases END { Match ((), e, return_t, cs) }  (* match e -> t with cs end *)
   | cname = UNAME e = expr { Constructor ((), cname, e) }  (* Cname e *)
 ;
 

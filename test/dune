@@ -8,7 +8,6 @@
   test_utils
   test_ast
   test_program
-  test_partial_evaluation
   test_typing
   test_quotient_type_checking
   test_lexer_parser
