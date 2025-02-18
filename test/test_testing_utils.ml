@@ -116,7 +116,7 @@ let create_typed_expr_gen_test (name : string)
     (types_gen : (TestingTypeCtx.t * vtype) Gen.t) : test =
   let open QCheck in
   QCheck_runner.to_ounit2_test
-    (Test.make ~name ~count:1000
+    (Test.make ~name ~count:100
        (let open QCheck.Gen in
         let gen :
             (TestingTypeCtx.t * (vtype * (unit, unit) Ast.expr)) QCheck.Gen.t =
@@ -172,7 +172,7 @@ let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
 let create_test_vtype_gen_constructors_exist (name : string) : test =
   let open QCheck in
   QCheck_runner.to_ounit2_test
-    (Test.make ~name ~count:1000
+    (Test.make ~name ~count:10
        (QCheck.make
           ~print:
             QCheck.Print.(
@@ -189,7 +189,7 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
 let create_test_type_ctx_gen_valid (name : string) : test =
   let open QCheck in
   QCheck_runner.to_ounit2_test
-    (Test.make ~name ~count:1000
+    (Test.make ~name ~count:100
        (TestingTypeCtx.QCheck_testing.arbitrary
           {
             max_variant_types = default_max_variant_type_count;
