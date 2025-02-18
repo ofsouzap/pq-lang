@@ -43,7 +43,8 @@ let manual_tests : test list =
     match res with Ok () -> () | Error err_msg -> assert_failure err_msg
   in
   List.map ~f:create_test
-    [ (* ("Trivial program", {|
+    [
+      ("Trivial program", {|
 1
 |}, `Valid);
       ( "Boom hierarchy list (empty count)",
@@ -330,20 +331,7 @@ end
 
 1
 |},
-        `Valid ); *) ]
-  |> fun _ ->
-  [
-    ( "Mini Thing" >:: fun _ ->
-      let string = {|
-(declare-const x Int)
-|} in
-      let ctx = Z3.mk_context [ ("model", "false") ] in
-      let ast_vec = Z3.SMT.parse_smtlib2_string ctx string [] [] [] [] in
-      let solver = Z3.Solver.mk_solver ctx None in
-      Z3.Solver.add solver (Z3.AST.ASTVector.to_expr_list ast_vec);
-      Z3.Solver.check solver [] |> function
-      | Z3.Solver.SATISFIABLE -> ()
-      | _ -> assert_failure "Unsat" );
-  ]
+        `Valid );
+    ]
 
 let suite = "Quotient type checking" >::: [ "Manual tests" >::: manual_tests ]
