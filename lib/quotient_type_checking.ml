@@ -1396,8 +1396,6 @@ module Smt = struct
   (** Check the satisifability of a given formula *)
   let check_satisfiability (formula : formula) : [ `Sat | `Unsat | `Unknown ] =
     let smtlib_string = LispBuilder.build ~use_newlines:true formula in
-    Debug_tools.Logger.debug (LispBuilder.build_hum formula);
-    Debug_tools.pause ();
     let ctx = Z3.mk_context [ ("model", "false") ] in
     let ast_vec = Z3.SMT.parse_smtlib2_string ctx smtlib_string [] [] [] [] in
     let solver = Z3.Solver.mk_solver ctx None in
