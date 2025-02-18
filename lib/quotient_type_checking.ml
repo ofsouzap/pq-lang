@@ -8,6 +8,8 @@ open Quotient_types
 open Custom_types
 open Program
 
+(* TODO - stop using LispBuilder, just use Core.Sexp instead *)
+
 module type LispBuilderSig = sig
   (** The type of a node in the builder *)
   type node =
@@ -92,14 +94,6 @@ type quotient_typing_error =
   | UndefinedCustomTypeName of string
       (** A custom type of the given name was referenced but isn't defined *)
 [@@deriving sexp, equal]
-
-module TagAst = struct
-  type t = ast_tag [@@deriving sexp, equal]
-end
-
-module TagPattern = struct
-  type t = pattern_tag [@@deriving sexp, equal]
-end
 
 (** Generate a fresh variable name, given a set of the currently-defined names
 *)
@@ -714,9 +708,6 @@ module Smt = struct
     let vt_unit_constructor_name : string =
       custom_special_name (`VariantTypeConstructor ("unit", "unit"))
 
-    let vt_unit : variant_type =
-      (vt_unit_name, [ (vt_unit_constructor_name, VTypeUnit) ])
-
     let vt_unit_val : string = custom_special_name (`Var "unit")
 
     let state_init (custom_types : tag_custom_type list) : t =
@@ -749,7 +740,6 @@ module Smt = struct
               find_root_base_type state (VTypeCustom qt.base_type_name))
       | _ -> Ok t
 
-    (* Once defining signatures, keep this private! *)
     let state_add_pair_type ((t1 : vtype), (t2 : vtype)) (state : t) :
         (t, quotient_typing_error) Result.t =
       let open Result in
@@ -950,12 +940,6 @@ module Smt = struct
       (* Add all used pair types to the state *)
       search_add_pair_types_used state defn.body >>| fun state ->
       { state with top_level_rev = VarDefn defn :: state.top_level_rev }
-
-    let get_bound_varnames (state : t) : StringSet.t =
-      List.fold state.top_level_rev ~init:StringSet.empty
-        ~f:(fun acc -> function
-        | VarDecl (xname, _) -> Set.add acc xname
-        | VarDefn defn -> Set.add acc defn.name)
   end
 
   module Assertion = struct
@@ -1579,6 +1563,7 @@ let rec check_expr ~(existing_names : StringSet.t)
 
 let check_program (prog : tag_program) : (unit, quotient_typing_error) Result.t
     =
+  (* TODO - make this take a checked program (from the Typing module's TypeChecker functor) as parameter instead of just a program *)
   let open Result in
   let open Smt.State in
   let existing_names = Program.existing_names prog in
