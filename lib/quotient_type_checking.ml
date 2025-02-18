@@ -113,10 +113,6 @@ let generate_fresh_varname ?(seed_name : string option)
   let new_name = loop 0 in
   (new_name, Set.add existing_names new_name)
 
-(* TODO - fix flat pattern conversion.
-Doesn't work for the set-addtwo.pq example code (matching a pair with multiple cases depending on the contents of the pair)
-Probably need to take a new approach, as flattening case-by-case doesn't work, as shown *)
-
 (** Provides functionality for flattened patterns in AST expressions *)
 module FlatPattern = struct
   type t =
