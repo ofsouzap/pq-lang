@@ -74,7 +74,7 @@ let test_cases_equality : test list =
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:100 ~name:"AST to source code"
+  Test.make ~count:1000 ~name:"AST to source code"
     unit_program_arbitrary_with_default_options (fun prog ->
       let e = prog.e in
       match run_frontend_string (ast_to_source_code e) with
