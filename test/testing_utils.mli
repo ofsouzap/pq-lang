@@ -35,6 +35,11 @@ val override_equal_exec_err :
 val override_equal_exec_res :
   Ast_executor.exec_res -> Ast_executor.exec_res -> bool
 
+(** A variation of the default typing error equality function, that ignores
+    error messages *)
+val override_equal_typing_error :
+  Typing.typing_error -> Typing.typing_error -> bool
+
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
   include Typing.TypingTypeContext

@@ -58,8 +58,8 @@ let test_cases_expr_typing : test list =
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
     | Error t_err, Error exp_err ->
-        assert_equal ~cmp:equal_typing_error ~printer:print_typing_error exp_err
-          t_err
+        assert_equal ~cmp:override_equal_typing_error
+          ~printer:print_typing_error exp_err t_err
   in
   List.map ~f:create_test
     [
@@ -68,32 +68,32 @@ let test_cases_expr_typing : test list =
       (None, Add ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
       ( None,
         Add ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       (None, Neg ((), IntLit ((), 3)), Ok VTypeInt);
       ( None,
         Neg ((), BoolLit ((), false)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       (None, Subtr ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
       ( None,
         Subtr ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       (None, Mult ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
       ( None,
         Mult ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       (None, BoolLit ((), true), Ok VTypeBool);
       (None, BNot ((), BoolLit ((), false)), Ok VTypeBool);
       ( None,
         BNot ((), IntLit ((), 3)),
-        Error (TypeMismatch (VTypeBool, VTypeInt)) );
+        Error (TypeMismatch (VTypeBool, VTypeInt, None)) );
       (None, BAnd ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
       ( None,
         BAnd ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeBool, VTypeInt)) );
+        Error (TypeMismatch (VTypeBool, VTypeInt, None)) );
       (None, BOr ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
       ( None,
         BOr ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeBool, VTypeInt)) );
+        Error (TypeMismatch (VTypeBool, VTypeInt, None)) );
       (None, Eq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( None,
         Eq ((), BoolLit ((), true), IntLit ((), 2)),
@@ -105,28 +105,28 @@ let test_cases_expr_typing : test list =
       (None, GtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( None,
         GtEq ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       (None, Gt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( None,
         Gt ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       (None, LtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( None,
         LtEq ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       (None, Lt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
       ( None,
         Lt ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
         Ok VTypeInt );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
-        Error (TypeMismatch (VTypeInt, VTypeBool)) );
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
         Ok VTypeInt );
@@ -138,6 +138,7 @@ let test_cases_expr_typing : test list =
         Match
           ( (),
             IntLit ((), 3),
+            VTypeBool,
             Nonempty_list.from_list_unsafe
               [ (PatName ((), "x", VTypeInt), BoolLit ((), true)) ] ),
         Ok VTypeBool );
@@ -145,6 +146,7 @@ let test_cases_expr_typing : test list =
         Match
           ( (),
             IntLit ((), 3),
+            VTypeInt,
             Nonempty_list.from_list_unsafe
               [ (PatName ((), "x", VTypeInt), Var ((), "x")) ] ),
         Ok VTypeInt );
@@ -152,6 +154,7 @@ let test_cases_expr_typing : test list =
         Match
           ( (),
             IntLit ((), 3),
+            VTypeBool,
             Nonempty_list.from_list_unsafe
               [
                 (PatName ((), "x", VTypeInt), BoolLit ((), true));
@@ -162,6 +165,7 @@ let test_cases_expr_typing : test list =
         Match
           ( (),
             IntLit ((), 3),
+            VTypeBool,
             Nonempty_list.from_list_unsafe
               [
                 (PatName ((), "x", VTypeInt), BoolLit ((), true));
@@ -170,16 +174,28 @@ let test_cases_expr_typing : test list =
         Error
           (PatternTypeMismatch
              (PatName ((), "y", VTypeBool), VTypeInt, VTypeBool)) );
+      ( (* Incorrect return type annotation *) None,
+        Match
+          ( (),
+            IntLit ((), 3),
+            VTypeInt,
+            Nonempty_list.from_list_unsafe
+              [
+                (PatName ((), "x", VTypeInt), BoolLit ((), true));
+                (PatName ((), "y", VTypeBool), BoolLit ((), true));
+              ] ),
+        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
       ( None,
         Match
           ( (),
             IntLit ((), 3),
+            VTypeBool,
             Nonempty_list.from_list_unsafe
               [
                 (PatName ((), "x", VTypeInt), BoolLit ((), true));
                 (PatName ((), "y", VTypeInt), IntLit ((), 5));
               ] ),
-        Error (TypeMismatch (VTypeBool, VTypeInt)) );
+        Error (TypeMismatch (VTypeBool, VTypeInt, None)) );
       ( (* Valid for constructor pattern *)
         Some
           (SetTypingTypeContext.create
@@ -200,6 +216,7 @@ let test_cases_expr_typing : test list =
                 "Cons",
                 Pair ((), IntLit ((), 3), Constructor ((), "Nil", UnitLit ()))
               ),
+            VTypeInt,
             Nonempty_list.from_list_unsafe
               [
                 ( PatConstructor ((), "Nil", PatName ((), "z", VTypeUnit)),
@@ -222,6 +239,7 @@ let test_cases_expr_typing : test list =
                 "Cons",
                 Pair ((), IntLit ((), 3), Constructor ((), "Nil", UnitLit ()))
               ),
+            VTypeInt,
             Nonempty_list.from_list_unsafe
               [
                 ( PatConstructor ((), "Nil", PatName ((), "z", VTypeUnit)),
@@ -255,7 +273,7 @@ let test_cases_expr_typing : test list =
                      ] );
                ]),
         Constructor ((), "Leaf", UnitLit ()),
-        Error (TypeMismatch (VTypeInt, VTypeUnit)) );
+        Error (TypeMismatch (VTypeInt, VTypeUnit, None)) );
       ( Some
           (SetTypingTypeContext.create
              ~custom_types:
@@ -354,8 +372,8 @@ let test_cases_typing_with_var_ctx : test list =
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
     | Error t_err, Error exp_err ->
-        assert_equal ~cmp:equal_typing_error ~printer:print_typing_error exp_err
-          t_err
+        assert_equal ~cmp:override_equal_typing_error
+          ~printer:print_typing_error exp_err t_err
   in
   List.map ~f:create_test
     [

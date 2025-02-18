@@ -75,6 +75,13 @@ let override_equal_exec_res (a : exec_res) (b : exec_res) : bool =
   | Error e1, Error e2 -> override_equal_exec_err e1 e2
   | _ -> equal_exec_res a b
 
+let override_equal_typing_error (a : Typing.typing_error)
+    (b : Typing.typing_error) : bool =
+  match (a, b) with
+  | TypeMismatch (ta1, ta2, _), TypeMismatch (tb1, tb2, _) ->
+      equal_vtype ta1 tb1 && equal_vtype ta2 tb2
+  | _ -> Typing.equal_typing_error a b
+
 module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 

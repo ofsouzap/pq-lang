@@ -219,6 +219,7 @@ let test_cases_match : basic_test_case list =
             Match
               ( (),
                 Var ((), "x"),
+                VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatName ((), "y", VTypeInt),
@@ -233,6 +234,7 @@ let test_cases_match : basic_test_case list =
             Match
               ( (),
                 Var ((), "x"),
+                VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatName ((), "y", VTypeBool),
@@ -248,6 +250,7 @@ let test_cases_match : basic_test_case list =
             Match
               ( (),
                 Var ((), "x"),
+                VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatPair
@@ -268,6 +271,7 @@ let test_cases_match : basic_test_case list =
             Match
               ( (),
                 Var ((), "x"),
+                VTypePair (VTypeBool, VTypeBool),
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatPair
@@ -290,6 +294,7 @@ let test_cases_match : basic_test_case list =
         Match
           ( (),
             Constructor ((), "BoolBox", BoolLit ((), true)),
+            VTypeBool,
             Nonempty_list.from_list_unsafe
               [
                 ( PatConstructor ((), "BoolBox", PatName ((), "x", VTypeBool)),
@@ -313,6 +318,7 @@ let test_cases_match : basic_test_case list =
                 "Cons",
                 Pair ((), IntLit ((), 7), Constructor ((), "Nil", UnitLit ()))
               ),
+            VTypeInt,
             Nonempty_list.from_list_unsafe
               [
                 ( PatConstructor ((), "Nil", PatName ((), "x", VTypeUnit)),

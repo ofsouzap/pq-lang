@@ -512,7 +512,7 @@ functor
           let t2 = e_type e2' in
           let t3 = e_type e3' in
           TypeCtx.find_common_root_type type_ctx t2 t3 >>= function
-          | None -> Error (failwith "TODO")
+          | None -> Error (TypeMismatch (t2, t3, Some "If branches"))
           | Some branch_t -> Ok (If ((branch_t, v), e1', e2', e3')))
       | Var (v, xname) -> (
           match VarCtx.find var_ctx xname with

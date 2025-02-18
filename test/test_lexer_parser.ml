@@ -289,10 +289,12 @@ let test_cases_match : test_case_no_variant_types list =
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( (* Simple match without leading pipe *)
-        "match x with (y : int) -> y end",
+        "match x -> int with (y : int) -> y end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           LNAME "y";
@@ -307,13 +309,16 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Simple match with leading pipe *)
-        "match x with | (y : int) -> y end",
+        "match x -> int with | (y : int) -> y end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           PIPE;
           LPAREN;
@@ -329,10 +334,11 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Match with compound inner expression *)
-        "match (1 + (if true then x else 4 end)) with (y : int) -> y end",
+        "match (1 + (if true then x else 4 end)) -> int with (y : int) -> y end",
         [
           MATCH;
           LPAREN;
@@ -348,6 +354,8 @@ let test_cases_match : test_case_no_variant_types list =
           END;
           RPAREN;
           RPAREN;
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           LNAME "y";
@@ -365,13 +373,16 @@ let test_cases_match : test_case_no_variant_types list =
                  ( (),
                    IntLit ((), 1),
                    If ((), BoolLit ((), true), Var ((), "x"), IntLit ((), 4)) ),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Match with multiple patterns *)
-        "match x with (y : int) -> y | (z : int) -> z end",
+        "match x -> int with (y : int) -> y | (z : int) -> z end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           LNAME "y";
@@ -394,16 +405,19 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
                    (PatName ((), "y", VTypeInt), Var ((), "y"));
                    (PatName ((), "z", VTypeInt), Var ((), "z"));
                  ] )) );
       ( (* Matching pair *)
-        "match x with ((y : int), (z : bool)) -> y end",
+        "match x -> int with ((y : int), (z : bool)) -> y end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           LPAREN;
@@ -426,6 +440,7 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
                    ( PatPair
@@ -435,11 +450,13 @@ let test_cases_match : test_case_no_variant_types list =
                      Var ((), "y") );
                  ] )) );
       ( (* Matching nested pair *)
-        "match x with ((y : bool), ((z1 : bool), (z2 : bool))) -> if y then z1 \
-         else z2 end end",
+        "match x -> bool with ((y : bool), ((z1 : bool), (z2 : bool))) -> if y \
+         then z1 else z2 end end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          BOOL;
           WITH;
           LPAREN;
           LPAREN;
@@ -476,6 +493,7 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeBool,
                Nonempty_list.from_list_unsafe
                  [
                    ( PatPair
@@ -488,11 +506,13 @@ let test_cases_match : test_case_no_variant_types list =
                      If ((), Var ((), "y"), Var ((), "z1"), Var ((), "z2")) );
                  ] )) );
       ( (* Matching variant data type constructor *)
-        "match x with (Nil (z : int)) -> 0 | (Cons ((h : int), (ts : \
+        "match x -> int with (Nil (z : int)) -> 0 | (Cons ((h : int), (ts : \
          int_list))) -> 1 end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           UNAME "Nil";
@@ -529,6 +549,7 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
                    ( PatConstructor ((), "Nil", PatName ((), "z", VTypeInt)),

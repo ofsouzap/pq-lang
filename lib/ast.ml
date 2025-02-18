@@ -504,6 +504,7 @@ end = struct
     let varname_gen = Varname.QCheck_testing.gen () in
     let rec varname_filter_type
         ( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : vtype),
           ((_ : int), (ctx : (string * vtype) list)),
           (_ : TagExpr.t) ) (tf : vtype -> bool) :
         (varname * vtype) Gen.t option =
@@ -517,6 +518,7 @@ end = struct
       | _ :: _ as varnames -> Some (varnames |> List.map ~f:return |> oneof)
     and gen_e_var_of_type
         (( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+           (_ : vtype),
            ((_ : int), (_ : (string * vtype) list)),
            (v : TagExpr.t) ) as param) (t : vtype) :
         (TagExpr.t, TagPat.t) expr Gen.t option =
@@ -526,6 +528,7 @@ end = struct
     and gen_e_if
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : vtype),
           ((d : int), (ctx : (string * vtype) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating an if-then-else expression *)
@@ -534,6 +537,7 @@ end = struct
     and gen_e_let_in
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : vtype),
           ((d : int), (ctx : (string * vtype) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating a let-in expression *)
@@ -543,6 +547,7 @@ end = struct
       >|= fun e2 -> Let (v, vname, e1, e2)
     and gen_e_app
         ( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : vtype),
           ((_ : int), (_ : (string * vtype) list)),
           (_ : TagExpr.t) ) (_ : vtype) :
         (TagExpr.t, TagPat.t) expr Gen.t option =
@@ -563,6 +568,7 @@ end = struct
     and gen_e_match
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (self_t : vtype),
           ((d : int), (ctx : (string * vtype) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating a match expression *)
@@ -591,46 +597,50 @@ end = struct
       in
       list_size (int_range 1 4) case_and_pat_gen
       >|= Nonempty_list.from_list_unsafe
-      >|= fun cs -> Match (v, e1, failwith "TODO", cs)
+      >|= fun cs -> Match (v, e1, self_t, cs)
     and standard_rec_gen_cases
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (self_t : vtype),
           ((d : int), (ctx : (string * vtype) list)),
           (v : TagExpr.t) ) (t : vtype) : (TagExpr.t, TagPat.t) expr Gen.t list
         =
       (* The standard recursive generator cases for some provided type *)
       [
-        gen_e_if (self, (d, ctx), v) (* If-then-else *);
-        gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-        gen_e_match (self, (d, ctx), v) (* Match *);
+        gen_e_if (self, self_t, (d, ctx), v) (* If-then-else *);
+        gen_e_let_in (self, self_t, (d, ctx), v) (* Let-in *);
+        gen_e_match (self, self_t, (d, ctx), v) (* Match *);
       ]
       @ Option.to_list
-          (gen_e_app (self, (d, ctx), v) t (* Function application *))
+          (gen_e_app (self, self_t, (d, ctx), v) t (* Function application *))
     and gen_unit (param : int * (string * vtype) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as unit *)
+      let t = VTypeUnit in
       fix
         (fun self (d, ctx) ->
           v_gen >>= fun v ->
           let base_cases =
             [ return (UnitLit v) ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) VTypeUnit)
+            @ Option.to_list
+                (gen_e_var_of_type (self, t, (d, ctx), v) VTypeUnit)
           in
           let rec_cases =
-            standard_rec_gen_cases (self, (d, ctx), v) VTypeUnit
+            standard_rec_gen_cases (self, t, (d, ctx), v) VTypeUnit
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen_int (param : int * (string * vtype) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as integer *)
+      let t = VTypeInt in
       fix
         (fun self (d, ctx) ->
           let self' = self (d - 1, ctx) in
           v_gen >>= fun v ->
           let base_cases =
             [ (nat >|= fun n -> IntLit (v, n)) ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) VTypeInt)
+            @ Option.to_list (gen_e_var_of_type (self, t, (d, ctx), v) VTypeInt)
           in
           let rec_cases =
             [
@@ -642,20 +652,22 @@ end = struct
               ( pair self' self' >|= fun (e1, e2) -> Mult (v, e1, e2)
               (* Multiplication *) );
             ]
-            @ standard_rec_gen_cases (self, (d, ctx), v) VTypeInt
+            @ standard_rec_gen_cases (self, t, (d, ctx), v) VTypeInt
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen_bool (param : int * (string * vtype) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as boolean *)
+      let t = VTypeBool in
       fix
         (fun self (d, ctx) ->
           let self' = self (d - 1, ctx) in
           v_gen >>= fun v ->
           let base_cases =
             [ (bool >|= fun n -> BoolLit (v, n)) ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) VTypeBool)
+            @ Option.to_list
+                (gen_e_var_of_type (self, t, (d, ctx), v) VTypeBool)
           in
           let rec_cases =
             [
@@ -682,7 +694,7 @@ end = struct
               >|= fun (e1, e2) -> LtEq (v, e1, e2)
               (* LTEQ *) );
             ]
-            @ standard_rec_gen_cases (self, (d, ctx), v) VTypeBool
+            @ standard_rec_gen_cases (self, t, (d, ctx), v) VTypeBool
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
@@ -699,9 +711,9 @@ end = struct
               ( pair (gen (d - 1, ctx) t1) (gen (d - 1, ctx) t2)
               >|= fun (e1, e2) -> Pair (v, e1, e2) );
             ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+            @ Option.to_list (gen_e_var_of_type (self, t, (d, ctx), v) t)
           in
-          let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
+          let rec_cases = standard_rec_gen_cases (self, t, (d, ctx), v) t in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen_variant ((vt_name, cs) : variant_type)
@@ -718,9 +730,9 @@ end = struct
                 gen (d - 1, ctx) c_t >|= fun e' -> Constructor (v, c_name, e')
               );
             ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+            @ Option.to_list (gen_e_var_of_type (self, t, (d, ctx), v) t)
           in
-          let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
+          let rec_cases = standard_rec_gen_cases (self, t, (d, ctx), v) t in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen ((d : int), (ctx : (string * vtype) list)) (t : vtype) :
