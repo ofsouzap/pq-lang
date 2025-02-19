@@ -13,7 +13,7 @@ let add_variant_type_definition_to_program (p : plain_program) (vt : variant_typ
     custom_types = (VariantType vt) :: p.custom_types;
   }
 
-let add_quotient_type_definition_to_program (p : plain_program) (qt : quotient_type) : plain_program =
+let add_quotient_type_definition_to_program (p : plain_program) (qt : plain_quotient_type) : plain_program =
   {
     p with
     custom_types = (QuotientType qt) :: p.custom_types;
@@ -70,9 +70,9 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 
 %type <(string * vtype) list> quotient_type_eqcons_bindings
 %type <plain_pattern * plain_expr> quotient_type_eqcons_body
-%type <quotient_type_eqcons> quotient_type_eqcons
-%type <quotient_type_eqcons list> quotient_type_definition_eqconss
-%type <quotient_type> quotient_type_definition
+%type <plain_quotient_type_eqcons> quotient_type_eqcons
+%type <plain_quotient_type_eqcons list> quotient_type_definition_eqconss
+%type <plain_quotient_type> quotient_type_definition
 
 %type <(string * vtype)> top_level_defn_param
 %type <plain_top_level_defn> top_level_defn
@@ -163,7 +163,7 @@ expr:
   | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }  (* if e1 then e2 else e3 *)
   | LET l = LNAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
   | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
-  | MATCH e = expr WITH cs = match_cases END { Match ((), e, cs) }  (* match e with cs end *)
+  | MATCH e = expr ARROW return_t = vtype WITH cs = match_cases END { Match ((), e, return_t, cs) }  (* match e -> t with cs end *)
   | cname = UNAME e = expr { Constructor ((), cname, e) }  (* Cname e *)
 ;
 
@@ -192,11 +192,11 @@ quotient_type_eqcons:
 
 quotient_type_definition_eqconss:
   | QUOTIENT eqcons = quotient_type_eqcons { [eqcons] }
-  | QUOTIENT eqcons = quotient_type_eqcons QUOTIENT eqconss_tail = quotient_type_definition_eqconss { eqcons :: eqconss_tail }
+  | QUOTIENT eqcons = quotient_type_eqcons eqconss_tail = quotient_type_definition_eqconss { eqcons :: eqconss_tail }
 ;
 
 quotient_type_definition:
-  | QTYPE name = LNAME ASSIGN vt_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name = vt_name; eqconss=eqconss } }
+  | QTYPE name = LNAME ASSIGN base_type_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name; eqconss=eqconss } }
 ;
 
 top_level_defn_param:

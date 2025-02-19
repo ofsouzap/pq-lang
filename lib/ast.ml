@@ -33,6 +33,7 @@ type ('tag_e, 'tag_p) expr =
   | Match of
       'tag_e
       * ('tag_e, 'tag_p) expr
+      * vtype
       * ('tag_p pattern * ('tag_e, 'tag_p) expr) Nonempty_list.t
   | Constructor of 'tag_e * string * ('tag_e, 'tag_p) expr
 [@@deriving sexp, equal]
@@ -59,7 +60,7 @@ let expr_node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
   | Var (v, xname) -> (f v, Var (f v, xname))
   | Let (v, e1, e2, e3) -> (f v, Let (f v, e1, e2, e3))
   | App (v, e1, e2) -> (f v, App (f v, e1, e2))
-  | Match (v, e1, cs) -> (f v, Match (f v, e1, cs))
+  | Match (v, e1, t2, cs) -> (f v, Match (f v, e1, t2, cs))
   | Constructor (v, cname, e1) -> (f v, Constructor (f v, cname, e1))
 
 let expr_node_val (e : ('tag_e, 'tag_p) expr) : 'tag_e =
@@ -92,10 +93,11 @@ let rec fmap ~(f : 'tag_e1 -> 'tag_e2) (e : ('tag_e1, 'tag_p) expr) :
   | Var (a, vname) -> Var (f a, vname)
   | Let (a, xname, e1, e2) -> Let (f a, xname, fmap ~f e1, fmap ~f e2)
   | App (a, e1, e2) -> App (f a, fmap ~f e1, fmap ~f e2)
-  | Match (a, e, cs) ->
+  | Match (a, e, t2, cs) ->
       Match
         ( f a,
           fmap ~f e,
+          t2,
           Nonempty_list.map ~f:(fun (p, c_e) -> (p, fmap ~f c_e)) cs )
   | Constructor (a, cname, e) -> Constructor (f a, cname, fmap ~f e)
 
@@ -124,14 +126,48 @@ let rec fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (e : ('tag_e, 'tag_p1) expr) :
   | Let (v, name, e1, e2) ->
       Let (v, name, fmap_pattern ~f e1, fmap_pattern ~f e2)
   | App (v, e1, e2) -> App (v, fmap_pattern ~f e1, fmap_pattern ~f e2)
-  | Match (v, e, cs) ->
+  | Match (v, e, t2, cs) ->
       Match
         ( v,
           fmap_pattern ~f e,
+          t2,
           Nonempty_list.map
             ~f:(fun (p, c_e) -> (Pattern.fmap ~f p, fmap_pattern ~f c_e))
             cs )
   | Constructor (v, name, e) -> Constructor (v, name, fmap_pattern ~f e)
+
+let rec existing_names : ('tag_e, 'tag_p) expr -> StringSet.t = function
+  | UnitLit _ | IntLit _ | BoolLit _ -> StringSet.empty
+  | Add (_, e1, e2)
+  | Subtr (_, e1, e2)
+  | Mult (_, e1, e2)
+  | BOr (_, e1, e2)
+  | BAnd (_, e1, e2)
+  | Pair (_, e1, e2)
+  | Eq (_, e1, e2)
+  | Gt (_, e1, e2)
+  | GtEq (_, e1, e2)
+  | Lt (_, e1, e2)
+  | LtEq (_, e1, e2)
+  | App (_, e1, e2) ->
+      Set.union (existing_names e1) (existing_names e2)
+  | Neg (_, e) | BNot (_, e) -> existing_names e
+  | If (_, e1, e2, e3) ->
+      Set.union (existing_names e1)
+        (Set.union (existing_names e2) (existing_names e3))
+  | Var (_, name) -> StringSet.singleton name
+  | Let (_, name, e1, e2) ->
+      Set.union (StringSet.singleton name)
+        (Set.union (existing_names e1) (existing_names e2))
+  | Match (_, e, _, cases) ->
+      let case_names (p, e) =
+        Set.union (Pattern.existing_names p) (existing_names e)
+      in
+      Set.union (existing_names e)
+        (Nonempty_list.fold cases ~init:StringSet.empty ~f:(fun acc case ->
+             Set.union acc (case_names case)))
+  | Constructor (_, name, e) ->
+      Set.union (StringSet.singleton name) (existing_names e)
 
 type plain_expr = (unit, unit) expr [@@deriving sexp, equal]
 
@@ -165,15 +201,97 @@ let rec expr_to_plain_expr (e : ('tag_e, 'tag_p) expr) : plain_expr =
   | Let (_, xname, e1, e2) ->
       Let ((), xname, expr_to_plain_expr e1, expr_to_plain_expr e2)
   | App (_, e1, e2) -> App ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Match (_, e, cs) ->
+  | Match (_, e, t2, cs) ->
       Match
         ( (),
           expr_to_plain_expr e,
+          t2,
           Nonempty_list.map
             ~f:(fun (p, c_e) ->
               (Pattern.fmap ~f:(fun _ -> ()) p, expr_to_plain_expr c_e))
             cs )
   | Constructor (_, cname, e) -> Constructor ((), cname, expr_to_plain_expr e)
+
+let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
+  | UnitLit _ as e -> e
+  | IntLit _ as e -> e
+  | BoolLit _ as e -> e
+  | Add (v, e1, e2) ->
+      Add
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Neg (v, e) -> Neg (v, rename_var ~old_name ~new_name e)
+  | Subtr (v, e1, e2) ->
+      Subtr
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Mult (v, e1, e2) ->
+      Mult
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | BNot (v, e) -> BNot (v, rename_var ~old_name ~new_name e)
+  | BOr (v, e1, e2) ->
+      BOr
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | BAnd (v, e1, e2) ->
+      BAnd
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Pair (v, e1, e2) ->
+      Pair
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Eq (v, e1, e2) ->
+      Eq
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Gt (v, e1, e2) ->
+      Gt
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | GtEq (v, e1, e2) ->
+      GtEq
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Lt (v, e1, e2) ->
+      Lt
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | LtEq (v, e1, e2) ->
+      LtEq
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | If (v, e1, e2, e3) ->
+      If
+        ( v,
+          rename_var ~old_name ~new_name e1,
+          rename_var ~old_name ~new_name e2,
+          rename_var ~old_name ~new_name e3 )
+  | Var (v, xname) ->
+      if equal_string old_name xname then Var (v, new_name) else Var (v, xname)
+  | Let (v, xname, e1, e2) ->
+      Let
+        ( v,
+          xname,
+          rename_var ~old_name ~new_name e1,
+          if equal_string xname old_name then e2
+          else rename_var ~old_name ~new_name e2 )
+  | App (v, e1, e2) ->
+      App
+        (v, rename_var ~old_name ~new_name e1, rename_var ~old_name ~new_name e2)
+  | Match (v, e, t2, cases) ->
+      Match
+        ( v,
+          rename_var ~old_name ~new_name e,
+          t2,
+          Nonempty_list.map cases ~f:(fun (case_p, case_e) ->
+              ( case_p,
+                if
+                  List.exists ~f:(equal_string old_name)
+                    (Pattern.defined_vars case_p |> List.map ~f:fst)
+                then case_e
+                else rename_var ~old_name ~new_name case_e )) )
+  | Constructor (v, name, e) ->
+      Constructor (v, name, rename_var ~old_name ~new_name e)
+
+let rec of_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
+    'tag_p pattern -> ('tag_e, 'tag_p) expr = function
+  | PatName (v, xname, _) -> Var (convert_tag v, xname)
+  | PatPair (v, p1, p2) ->
+      Pair
+        (convert_tag v, of_pattern ~convert_tag p1, of_pattern ~convert_tag p2)
+  | PatConstructor (v, cname, p) ->
+      Constructor (convert_tag v, cname, of_pattern ~convert_tag p)
 
 exception AstConverionFixError
 
@@ -220,7 +338,7 @@ let ast_to_source_code ?(use_newlines : bool option) :
            in
            match e1 with _ -> default_repr)
        | App (_, e1, e2) -> convert e1 |.> write " " |.> convert e2
-       | Match (_, e, cs) ->
+       | Match (_, e, t2, cs) ->
            let convert_case ((p : 'tag_p pattern), (c_e : ('tag_e, 'tag_p) expr))
                : state -> state =
              write "| ("
@@ -236,8 +354,10 @@ let ast_to_source_code ?(use_newlines : bool option) :
            in
            write "match"
            |.> block (convert e)
-           |.> write "with" |.> block cases_converter |.> write "end"
-       | Constructor (_, cname, e) -> write cname |.> convert e)
+           |.> write "-> "
+           |.> write (vtype_to_source_code t2)
+           |.> write " with" |.> block cases_converter |.> write "end"
+       | Constructor (_, cname, e) -> write cname |.> write " " |.> convert e)
     |> if bracketed then write ")" else Fn.id
   in
   SourceCodeBuilder.from_converter ~converter:(convert ~bracketed:false)
@@ -305,7 +425,7 @@ end = struct
     function
     | NoPrint -> None
     | PrintSexp (f_e, f_p) ->
-        Some (fun e -> sexp_of_expr f_e f_p e |> Sexp.to_string)
+        Some (fun e -> sexp_of_expr f_e f_p e |> Sexp.to_string_hum)
     | PrintExprSource -> Some (ast_to_source_code ~use_newlines:true)
 
   let get_ast_printer (p : ast_print_method) (e : (TagExpr.t, TagPat.t) expr) :
@@ -384,6 +504,7 @@ end = struct
     let varname_gen = Varname.QCheck_testing.gen () in
     let rec varname_filter_type
         ( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : vtype),
           ((_ : int), (ctx : (string * vtype) list)),
           (_ : TagExpr.t) ) (tf : vtype -> bool) :
         (varname * vtype) Gen.t option =
@@ -397,6 +518,7 @@ end = struct
       | _ :: _ as varnames -> Some (varnames |> List.map ~f:return |> oneof)
     and gen_e_var_of_type
         (( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+           (_ : vtype),
            ((_ : int), (_ : (string * vtype) list)),
            (v : TagExpr.t) ) as param) (t : vtype) :
         (TagExpr.t, TagPat.t) expr Gen.t option =
@@ -406,6 +528,7 @@ end = struct
     and gen_e_if
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : vtype),
           ((d : int), (ctx : (string * vtype) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating an if-then-else expression *)
@@ -414,6 +537,7 @@ end = struct
     and gen_e_let_in
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : vtype),
           ((d : int), (ctx : (string * vtype) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating a let-in expression *)
@@ -423,6 +547,7 @@ end = struct
       >|= fun e2 -> Let (v, vname, e1, e2)
     and gen_e_app
         ( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : vtype),
           ((_ : int), (_ : (string * vtype) list)),
           (_ : TagExpr.t) ) (_ : vtype) :
         (TagExpr.t, TagPat.t) expr Gen.t option =
@@ -443,6 +568,7 @@ end = struct
     and gen_e_match
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (self_t : vtype),
           ((d : int), (ctx : (string * vtype) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating a match expression *)
@@ -471,46 +597,50 @@ end = struct
       in
       list_size (int_range 1 4) case_and_pat_gen
       >|= Nonempty_list.from_list_unsafe
-      >|= fun cs -> Match (v, e1, cs)
+      >|= fun cs -> Match (v, e1, self_t, cs)
     and standard_rec_gen_cases
         ( (self :
             int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (self_t : vtype),
           ((d : int), (ctx : (string * vtype) list)),
           (v : TagExpr.t) ) (t : vtype) : (TagExpr.t, TagPat.t) expr Gen.t list
         =
       (* The standard recursive generator cases for some provided type *)
       [
-        gen_e_if (self, (d, ctx), v) (* If-then-else *);
-        gen_e_let_in (self, (d, ctx), v) (* Let-in *);
-        gen_e_match (self, (d, ctx), v) (* Match *);
+        gen_e_if (self, self_t, (d, ctx), v) (* If-then-else *);
+        gen_e_let_in (self, self_t, (d, ctx), v) (* Let-in *);
+        gen_e_match (self, self_t, (d, ctx), v) (* Match *);
       ]
       @ Option.to_list
-          (gen_e_app (self, (d, ctx), v) t (* Function application *))
+          (gen_e_app (self, self_t, (d, ctx), v) t (* Function application *))
     and gen_unit (param : int * (string * vtype) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as unit *)
+      let t = VTypeUnit in
       fix
         (fun self (d, ctx) ->
           v_gen >>= fun v ->
           let base_cases =
             [ return (UnitLit v) ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) VTypeUnit)
+            @ Option.to_list
+                (gen_e_var_of_type (self, t, (d, ctx), v) VTypeUnit)
           in
           let rec_cases =
-            standard_rec_gen_cases (self, (d, ctx), v) VTypeUnit
+            standard_rec_gen_cases (self, t, (d, ctx), v) VTypeUnit
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen_int (param : int * (string * vtype) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as integer *)
+      let t = VTypeInt in
       fix
         (fun self (d, ctx) ->
           let self' = self (d - 1, ctx) in
           v_gen >>= fun v ->
           let base_cases =
             [ (nat >|= fun n -> IntLit (v, n)) ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) VTypeInt)
+            @ Option.to_list (gen_e_var_of_type (self, t, (d, ctx), v) VTypeInt)
           in
           let rec_cases =
             [
@@ -522,20 +652,22 @@ end = struct
               ( pair self' self' >|= fun (e1, e2) -> Mult (v, e1, e2)
               (* Multiplication *) );
             ]
-            @ standard_rec_gen_cases (self, (d, ctx), v) VTypeInt
+            @ standard_rec_gen_cases (self, t, (d, ctx), v) VTypeInt
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen_bool (param : int * (string * vtype) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as boolean *)
+      let t = VTypeBool in
       fix
         (fun self (d, ctx) ->
           let self' = self (d - 1, ctx) in
           v_gen >>= fun v ->
           let base_cases =
             [ (bool >|= fun n -> BoolLit (v, n)) ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) VTypeBool)
+            @ Option.to_list
+                (gen_e_var_of_type (self, t, (d, ctx), v) VTypeBool)
           in
           let rec_cases =
             [
@@ -562,7 +694,7 @@ end = struct
               >|= fun (e1, e2) -> LtEq (v, e1, e2)
               (* LTEQ *) );
             ]
-            @ standard_rec_gen_cases (self, (d, ctx), v) VTypeBool
+            @ standard_rec_gen_cases (self, t, (d, ctx), v) VTypeBool
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
@@ -579,9 +711,9 @@ end = struct
               ( pair (gen (d - 1, ctx) t1) (gen (d - 1, ctx) t2)
               >|= fun (e1, e2) -> Pair (v, e1, e2) );
             ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+            @ Option.to_list (gen_e_var_of_type (self, t, (d, ctx), v) t)
           in
-          let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
+          let rec_cases = standard_rec_gen_cases (self, t, (d, ctx), v) t in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen_variant ((vt_name, cs) : variant_type)
@@ -598,9 +730,9 @@ end = struct
                 gen (d - 1, ctx) c_t >|= fun e' -> Constructor (v, c_name, e')
               );
             ]
-            @ Option.to_list (gen_e_var_of_type (self, (d, ctx), v) t)
+            @ Option.to_list (gen_e_var_of_type (self, t, (d, ctx), v) t)
           in
-          let rec_cases = standard_rec_gen_cases (self, (d, ctx), v) t in
+          let rec_cases = standard_rec_gen_cases (self, t, (d, ctx), v) t in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen ((d : int), (ctx : (string * vtype) list)) (t : vtype) :
@@ -703,13 +835,14 @@ end = struct
     | App (v, e1, e2) ->
         binop_shrink ~allow_return_subexpr:(not preserve_type) (v, e1, e2)
           (fun (v', e1', e2') -> App (v', e1', e2'))
-    | Match (v, e1, ps) ->
+    | Match (v, e1, t2, ps) ->
         (if preserve_type then empty else return e1)
         <+> ( (* Try shrinking each case expression *)
               QCheck.Shrink.list_elems
                 (fun (c_p, c_e) -> shrink opts c_e >|= fun c_e' -> (c_p, c_e'))
                 (Nonempty_list.to_list ps)
-            >|= fun ps' -> Match (v, e1, Nonempty_list.from_list_unsafe ps') )
+            >|= fun ps' -> Match (v, e1, t2, Nonempty_list.from_list_unsafe ps')
+            )
     | Constructor (v, c, e1) ->
         unop_shrink (v, e1) (fun (v', e1') -> Constructor (v', c, e1'))
 

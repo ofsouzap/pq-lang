@@ -1,23 +1,27 @@
 (library
  (public_name pq_lang.lib)
  (name pq_lang)
- (libraries core qcheck)
+ (libraries core qcheck z3)
  (modules
+  debug_tools
   utils
   vtype
   variant_types
   varname
   pattern
   ast
+  unification
   quotient_types
   custom_types
   program
   typing
+  quotient_type_checking
   parsing_errors
   parser
   lexer
   frontend
   ast_executor)
+ (private_modules debug_tools)
  (preprocess
   (pps ppx_jane)))
 

@@ -19,7 +19,7 @@ let test_cases_to_source_code_inv =
               (Unit_program_qcheck_testing.print PrintExprSource prog_out)
       | Error err ->
           Test.fail_reportf "Got frontend error: %s"
-            (err |> sexp_of_frontend_error |> Sexp.to_string))
+            (err |> sexp_of_frontend_error |> Sexp.to_string_hum))
 
 let suite =
   "Program" >::: [ QCheck_runner.to_ounit2_test test_cases_to_source_code_inv ]

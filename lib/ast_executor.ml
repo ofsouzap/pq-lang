@@ -87,24 +87,23 @@ type exec_err =
   | UnknownVariantTypeConstructor of string
 [@@deriving sexp, equal]
 
+let print_exec_err = function
+  | TypeContextCreationError terr ->
+      "[TYPE CONTEXT CREATION ERROR: " ^ Typing.print_typing_error terr ^ "]"
+  | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
+  | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
+  | MisplacedFixError -> "[MISPLACED FIX NODE]"
+  | FixApplicationError -> "[Fix APPLICATION ERROR]"
+  | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]"
+  | IncompleteMatchError -> "[INCOMPLETE MATCH]"
+  | UnknownVariantTypeConstructor x ->
+      "[UNKNOWN VARIANT TYPE CONSTRUCTOR: " ^ x ^ "]"
+
 type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
 
 let show_exec_res = function
-  | Ok v -> sexp_of_value v |> Sexp.to_string
-  | Error e -> (
-      match e with
-      | TypeContextCreationError terr ->
-          "[TYPE CONTEXT CREATION ERROR: "
-          ^ Typing.print_typing_error terr
-          ^ "]"
-      | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
-      | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
-      | MisplacedFixError -> "[MISPLACED FIX NODE]"
-      | FixApplicationError -> "[Fix APPLICATION ERROR]"
-      | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]"
-      | IncompleteMatchError -> "[INCOMPLETE MATCH]"
-      | UnknownVariantTypeConstructor x ->
-          "[UNKNOWN VARIANT TYPE CONSTRUCTOR: " ^ x ^ "]")
+  | Ok v -> sexp_of_value v |> Sexp.to_string_hum
+  | Error e -> print_exec_err e
 
 let rec match_pattern (p : 'tag_p pattern) (v : value) :
     (varname * value) list option =
@@ -263,7 +262,7 @@ struct
               | `NonRecursive -> new_store
             in
             eval ~type_ctx new_store closure.body)
-    | Match (_, e1, cs) -> (
+    | Match (_, e1, _, cs) -> (
         eval ~type_ctx store e1 >>= fun v1 ->
         let matched_c_e :
             ((varname * value) list * (ast_tag, pattern_tag) Ast.typed_expr)

@@ -2,7 +2,6 @@ open Variant_types
 open Vtype
 open Pattern
 open Ast
-open Quotient_types
 open Custom_types
 open Program
 
@@ -10,14 +9,22 @@ open Program
 type typing_error =
   | UndefinedVariable of string
       (** A variable was referenced that isn't defined in the scope *)
-  | TypeMismatch of vtype * vtype
+  | EqconsVariableNotInBindings of string * vtype
+      (** A variable-type pair was used that wasn't defined in an eqcons binding
+      *)
+  | TypeMismatch of vtype * vtype * string option
       (** An expression was expected to have the first type but had the second
       *)
+  | NoCommonRootType of vtype * vtype
+      (** The types given were expected to have a common root type but didn't *)
   | PatternTypeMismatch of plain_pattern * vtype * vtype
       (** A pattern was expected to have the first type but had the second *)
-  | EqConsBodyTypeMismatch of quotient_type_eqcons * vtype * vtype
-      (** The body of an equivalence constructor was expected to have the first
-          type but had the second *)
+  | EqConsBodyPatternTypeMismatch of plain_pattern * vtype * vtype
+      (** The pattern of an equivalence constructor body was expected to have
+          the first type but had the second *)
+  | EqConsBodyExprTypeMismatch of plain_expr * vtype * vtype
+      (** The expression of an equivalence constructor body was expected to have
+          the first type but had the second *)
   | EqualOperatorTypeMistmatch of vtype * vtype
       (** An application of the equality operation had a type mismatch as the
           operands had the specified types instead of compatible ones *)
@@ -50,10 +57,11 @@ module type TypingTypeContext = sig
   val empty : t
 
   (** Creates a typing context using the provided values *)
-  val create : custom_types:custom_type list -> (t, typing_error) Result.t
+  val create :
+    custom_types:('tag_e, 'tag_p) custom_type list -> (t, typing_error) Result.t
 
   (** Looks up a type definition, by name, in the context *)
-  val find_type_defn_by_name : t -> string -> custom_type option
+  val find_type_defn_by_name : t -> string -> plain_custom_type option
 
   (** Check whether a type definition exists in the context, by name *)
   val type_defn_exists : t -> string -> bool
@@ -64,7 +72,15 @@ module type TypingTypeContext = sig
     t -> string -> (variant_type * variant_type_constructor) option
 
   (** Get a list of the variant types defined in the context *)
-  val type_defns_to_list : t -> custom_type list
+  val type_defns_to_ordered_list : t -> plain_custom_type list
+
+  (** Check if the first custom type (given by name) is a descendant (by
+      quotienting) of the second (also given by name) *)
+  val is_quotient_descendant :
+    t -> vtype -> vtype -> (bool, typing_error) Result.t
+
+  val find_common_root_type :
+    t -> vtype -> vtype -> (vtype option, typing_error) Result.t
 end
 
 (** Typing context of types using a simple set-based approach *)
@@ -93,6 +109,9 @@ module type TypingVarContext = sig
 
   (** Check whether a variable exists in the context, by name *)
   val exists : t -> string -> bool
+
+  (** Convert the context to a list of variable-type pairs *)
+  val to_list : t -> (string * vtype) list
 end
 
 (** Typing context of variables using a simple list-based approach *)

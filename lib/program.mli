@@ -24,14 +24,34 @@ val top_level_defn_to_source_code :
 (** A program, consisting of any number of custom type definitions, top-level
     definitions and an expression to evaluate *)
 type ('tag_e, 'tag_p) program = {
-  custom_types : custom_type list;
+  custom_types : ('tag_e, 'tag_p) custom_type list;
   top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
   e : ('tag_e, 'tag_p) expr;
 }
 [@@deriving sexp, equal]
 
+(** A program with typing information *)
+type ('tag_e, 'tag_p) typed_program = (vtype * 'tag_e, vtype * 'tag_p) program
+[@@deriving sexp, equal]
+
 (** A program with no tagging *)
 type plain_program = (unit, unit) program [@@deriving sexp, equal]
+
+(** Map a function onto the tags of expression nodes in a program *)
+val fmap_expr :
+  f:('tag_e1 -> 'tag_e2) ->
+  ('tag_e1, 'tag_p) program ->
+  ('tag_e2, 'tag_p) program
+
+(** Map a function onto the tags of pattern nodes in a program *)
+val fmap_pattern :
+  f:('tag_p1 -> 'tag_p2) ->
+  ('tag_e, 'tag_p1) program ->
+  ('tag_e, 'tag_p2) program
+
+(** Get all the names used (defined or referenced) in a program. Includes
+    variable names, defined type names, variant type constructor names, etc. *)
+val existing_names : ('tag_e, 'tag_p) program -> StringSet.t
 
 (** Convert a program into source code *)
 val program_to_source_code :

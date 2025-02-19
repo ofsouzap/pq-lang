@@ -24,7 +24,7 @@ let program_pred_or_zero (x : int) =
   sprintf
     {|
 let rec f (p : int * (int * int)) : int =
-  match p with
+  match p -> int with
   | ((x : int), ((acc : int), (pred : int))) ->
     if x == acc
     then
@@ -61,7 +61,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
   | Error err ->
       failwith
         (sprintf "Error in frontend: %s"
-           (err |> Frontend.sexp_of_frontend_error |> Sexp.to_string))
+           (err |> Frontend.sexp_of_frontend_error |> Sexp.to_string_hum))
 
 let suite =
   "Interpreting Integration Tests"
@@ -73,8 +73,8 @@ let suite =
              "let x = 4 in (x + 1, if false then x else x * 2 end) end",
              Ok (Pair (Int 5, Int 8)) );
            ( "Program Match Pairs",
-             "let p = (true, 1) in match p with | ((b : bool), (x : int)) -> \
-              if b then x else 0 end end end",
+             "let p = (true, 1) in match p -> int with | ((b : bool), (x : \
+              int)) -> if b then x else 0 end end end",
              Ok (Int 1) );
            ("Program Pred-or-Zero-a", program_pred_or_zero 0, Ok (Int 0));
            ("Program Pred-or-Zero-a", program_pred_or_zero 5, Ok (Int 4));
@@ -85,7 +85,7 @@ type int_list =
   | Cons of (int * int_list)
 
 let rec sum_int_list (xs : int_list) : int =
-  match xs with
+  match xs -> int with
   | Nil (x : unit) -> 0
   | Cons ((h : int), (ts : int_list)) -> h + sum_int_list ts
   end
@@ -113,4 +113,19 @@ in
 end
 |},
              Ok Unit );
+           ( "Program using first-class functions",
+             {|
+let f (x : int) : int =
+  x + 1
+end
+
+let apply (p : ((int -> int) * int)) : int =
+  match p -> int with
+  | ((f : int -> int), (x : int)) -> f x
+  end
+end
+
+apply (f, 5)
+|},
+             Ok (Int 6) );
          ]

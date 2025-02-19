@@ -8,7 +8,7 @@ type vtype =
   | VTypePair of vtype * vtype
   | VTypeFun of vtype * vtype
   | VTypeCustom of string
-[@@deriving sexp, equal]
+[@@deriving sexp, equal, compare]
 
 let rec vtype_to_source_code = function
   | VTypeUnit -> "unit"

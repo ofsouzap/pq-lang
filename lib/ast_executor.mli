@@ -92,6 +92,9 @@ type exec_err =
           name *)
 [@@deriving sexp, equal]
 
+(** Print human-readable string representation of an execution error *)
+val print_exec_err : exec_err -> string
+
 (** The result of executing an AST *)
 type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
 

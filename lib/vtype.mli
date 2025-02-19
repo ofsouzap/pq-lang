@@ -10,7 +10,7 @@ type vtype =
   | VTypeCustom of string
       (** Custom types (ie. either variant or quotient types) specified by name
       *)
-[@@deriving sexp, equal]
+[@@deriving sexp, equal, compare]
 
 (** Convert a vtype to a string representation compatible with the source code
 *)

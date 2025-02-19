@@ -20,7 +20,7 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
     ~init:Ast_executor.empty_store
 
-let type_expr ?(custom_types : custom_type list option)
+let type_expr ?(custom_types : plain_custom_type list option)
     ?(top_level_defns : (unit, unit) top_level_defn list option)
     (e : Ast.plain_expr) : (unit, unit) SimpleTypeChecker.typed_program =
   match
@@ -204,7 +204,7 @@ let test_cases_variables : basic_test_case list =
 let test_cases_match : basic_test_case list =
   let open Ast in
   let mapf
-      ( (custom_types : custom_type list option),
+      ( (custom_types : plain_custom_type list option),
         (x : plain_expr),
         (y : exec_res) ) : basic_test_case =
     (ast_to_source_code x, type_expr ?custom_types x, y)
@@ -219,6 +219,7 @@ let test_cases_match : basic_test_case list =
             Match
               ( (),
                 Var ((), "x"),
+                VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatName ((), "y", VTypeInt),
@@ -233,6 +234,7 @@ let test_cases_match : basic_test_case list =
             Match
               ( (),
                 Var ((), "x"),
+                VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatName ((), "y", VTypeBool),
@@ -248,6 +250,7 @@ let test_cases_match : basic_test_case list =
             Match
               ( (),
                 Var ((), "x"),
+                VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatPair
@@ -268,6 +271,7 @@ let test_cases_match : basic_test_case list =
             Match
               ( (),
                 Var ((), "x"),
+                VTypePair (VTypeBool, VTypeBool),
                 Nonempty_list.from_list_unsafe
                   [
                     ( PatPair
@@ -290,6 +294,7 @@ let test_cases_match : basic_test_case list =
         Match
           ( (),
             Constructor ((), "BoolBox", BoolLit ((), true)),
+            VTypeBool,
             Nonempty_list.from_list_unsafe
               [
                 ( PatConstructor ((), "BoolBox", PatName ((), "x", VTypeBool)),
@@ -313,6 +318,7 @@ let test_cases_match : basic_test_case list =
                 "Cons",
                 Pair ((), IntLit ((), 7), Constructor ((), "Nil", UnitLit ()))
               ),
+            VTypeInt,
             Nonempty_list.from_list_unsafe
               [
                 ( PatConstructor ((), "Nil", PatName ((), "x", VTypeUnit)),

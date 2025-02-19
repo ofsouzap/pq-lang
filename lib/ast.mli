@@ -56,6 +56,7 @@ type ('tag_e, 'tag_p) expr =
   | Match of
       'tag_e
       * ('tag_e, 'tag_p) expr
+      * vtype
       * ('tag_p pattern * ('tag_e, 'tag_p) expr) Nonempty_list.t
       (** Match expression *)
   (* Variant data types *)
@@ -79,6 +80,10 @@ val fmap :
 val fmap_pattern :
   f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) expr -> ('tag_e, 'tag_p2) expr
 
+(** Get all the names used (defined or referenced) in an expression. Includes
+    variable names, variant type constructor names, etc. *)
+val existing_names : ('tag_e, 'tag_p) expr -> StringSet.t
+
 (** An expression in the language without any tagging data *)
 type plain_expr = (unit, unit) expr [@@deriving sexp, equal]
 
@@ -91,6 +96,17 @@ type plain_typed_expr = (unit, unit) typed_expr [@@deriving sexp, equal]
 
 (** Delete an AST's tagging data to form a plain AST *)
 val expr_to_plain_expr : ('tag_e, 'tag_p) expr -> plain_expr
+
+(** Rename a variable in an expression *)
+val rename_var :
+  old_name:varname ->
+  new_name:varname ->
+  ('tag_e, 'tag_p) expr ->
+  ('tag_e, 'tag_p) expr
+
+(** Create a possibly-open expression from a pattern *)
+val of_pattern :
+  convert_tag:('tag_p -> 'tag_e) -> 'tag_p pattern -> ('tag_e, 'tag_p) expr
 
 exception AstConverionFixError
 

@@ -289,10 +289,12 @@ let test_cases_match : test_case_no_variant_types list =
     ~f:(fun (x, y, z) -> (x, x, y, z))
     [
       ( (* Simple match without leading pipe *)
-        "match x with (y : int) -> y end",
+        "match x -> int with (y : int) -> y end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           LNAME "y";
@@ -307,13 +309,16 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Simple match with leading pipe *)
-        "match x with | (y : int) -> y end",
+        "match x -> int with | (y : int) -> y end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           PIPE;
           LPAREN;
@@ -329,10 +334,11 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Match with compound inner expression *)
-        "match (1 + (if true then x else 4 end)) with (y : int) -> y end",
+        "match (1 + (if true then x else 4 end)) -> int with (y : int) -> y end",
         [
           MATCH;
           LPAREN;
@@ -348,6 +354,8 @@ let test_cases_match : test_case_no_variant_types list =
           END;
           RPAREN;
           RPAREN;
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           LNAME "y";
@@ -365,13 +373,16 @@ let test_cases_match : test_case_no_variant_types list =
                  ( (),
                    IntLit ((), 1),
                    If ((), BoolLit ((), true), Var ((), "x"), IntLit ((), 4)) ),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Match with multiple patterns *)
-        "match x with (y : int) -> y | (z : int) -> z end",
+        "match x -> int with (y : int) -> y | (z : int) -> z end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           LNAME "y";
@@ -394,16 +405,19 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
                    (PatName ((), "y", VTypeInt), Var ((), "y"));
                    (PatName ((), "z", VTypeInt), Var ((), "z"));
                  ] )) );
       ( (* Matching pair *)
-        "match x with ((y : int), (z : bool)) -> y end",
+        "match x -> int with ((y : int), (z : bool)) -> y end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           LPAREN;
@@ -426,6 +440,7 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
                    ( PatPair
@@ -435,11 +450,13 @@ let test_cases_match : test_case_no_variant_types list =
                      Var ((), "y") );
                  ] )) );
       ( (* Matching nested pair *)
-        "match x with ((y : bool), ((z1 : bool), (z2 : bool))) -> if y then z1 \
-         else z2 end end",
+        "match x -> bool with ((y : bool), ((z1 : bool), (z2 : bool))) -> if y \
+         then z1 else z2 end end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          BOOL;
           WITH;
           LPAREN;
           LPAREN;
@@ -476,6 +493,7 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeBool,
                Nonempty_list.from_list_unsafe
                  [
                    ( PatPair
@@ -488,11 +506,13 @@ let test_cases_match : test_case_no_variant_types list =
                      If ((), Var ((), "y"), Var ((), "z1"), Var ((), "z2")) );
                  ] )) );
       ( (* Matching variant data type constructor *)
-        "match x with (Nil (z : int)) -> 0 | (Cons ((h : int), (ts : \
+        "match x -> int with (Nil (z : int)) -> 0 | (Cons ((h : int), (ts : \
          int_list))) -> 1 end",
         [
           MATCH;
           LNAME "x";
+          ARROW;
+          INT;
           WITH;
           LPAREN;
           UNAME "Nil";
@@ -529,6 +549,7 @@ let test_cases_match : test_case_no_variant_types list =
           (Match
              ( (),
                Var ((), "x"),
+               VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
                    ( PatConstructor ((), "Nil", PatName ((), "z", VTypeInt)),
@@ -694,7 +715,7 @@ let test_cases_quotient_type_defn : test_case_full_prog list =
   [
     ( "Single variable binding",
       {|
-        type int_box = Int of int
+type int_box = Int of int
 
 qtype int_boxed
   = int_box
@@ -758,14 +779,14 @@ qtype int_boxed
         } );
     ( "Multiple variable bindings",
       {|
-        type tree = Leaf of int | Node of tree * tree
+          type tree = Leaf of int | Node of tree * tree
 
-qtype mobile
-  = tree
-  |/ (l : tree) -> (r : tree) => Node ((l : tree), (r : tree)) == (Node (r, l))
+  qtype mobile
+    = tree
+    |/ (l : tree) -> (r : tree) => Node ((l : tree), (r : tree)) == (Node (r, l))
 
-1
-|},
+  1
+  |},
       [
         TYPE;
         LNAME "tree";
@@ -854,6 +875,124 @@ qtype mobile
                               ( (),
                                 "Node",
                                 Pair ((), Var ((), "r"), Var ((), "l")) ) );
+                      };
+                    ];
+                };
+            ];
+          top_level_defns = [];
+          e = IntLit ((), 1);
+        } );
+    ( "Multiple eqconss",
+      {|
+type my_t = Int of int | Pair of my_t * my_t
+
+qtype my_qt
+  = my_t
+  |/ (x : int) => Int (x : int) == (x)
+  |/ (x : int) => Pair (Int (x : int), Int (x : int)) == (x)
+
+1
+|},
+      [
+        TYPE;
+        LNAME "my_t";
+        ASSIGN;
+        UNAME "Int";
+        OF;
+        INT;
+        PIPE;
+        UNAME "Pair";
+        OF;
+        LNAME "my_t";
+        STAR;
+        LNAME "my_t";
+        QTYPE;
+        LNAME "my_qt";
+        ASSIGN;
+        LNAME "my_t";
+        QUOTIENT;
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        BIG_ARROW;
+        UNAME "Int";
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        EQUATE;
+        LPAREN;
+        LNAME "x";
+        RPAREN;
+        QUOTIENT;
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        BIG_ARROW;
+        UNAME "Pair";
+        LPAREN;
+        UNAME "Int";
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        COMMA;
+        UNAME "Int";
+        LPAREN;
+        LNAME "x";
+        COLON;
+        INT;
+        RPAREN;
+        RPAREN;
+        EQUATE;
+        LPAREN;
+        LNAME "x";
+        RPAREN;
+        INTLIT 1;
+      ],
+      Ok
+        {
+          custom_types =
+            [
+              VariantType
+                ( "my_t",
+                  [
+                    ("Int", VTypeInt);
+                    ("Pair", VTypePair (VTypeCustom "my_t", VTypeCustom "my_t"));
+                  ] );
+              QuotientType
+                {
+                  name = "my_qt";
+                  base_type_name = "my_t";
+                  eqconss =
+                    [
+                      {
+                        bindings = [ ("x", VTypeInt) ];
+                        body =
+                          ( PatConstructor
+                              ((), "Int", PatName ((), "x", VTypeInt)),
+                            Var ((), "x") );
+                      };
+                      {
+                        bindings = [ ("x", VTypeInt) ];
+                        body =
+                          ( PatConstructor
+                              ( (),
+                                "Pair",
+                                PatPair
+                                  ( (),
+                                    PatConstructor
+                                      ((), "Int", PatName ((), "x", VTypeInt)),
+                                    PatConstructor
+                                      ((), "Int", PatName ((), "x", VTypeInt))
+                                  ) ),
+                            Var ((), "x") );
                       };
                     ];
                 };

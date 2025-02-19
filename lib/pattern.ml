@@ -29,6 +29,27 @@ let rec fmap ~(f : 'a -> 'b) : 'a pattern -> 'b pattern = function
   | PatPair (v, p1, p2) -> PatPair (f v, fmap ~f p1, fmap ~f p2)
   | PatConstructor (v, cname, p) -> PatConstructor (f v, cname, fmap ~f p)
 
+let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
+  | PatName (v, xname, xtype) ->
+      PatName
+        (v, (if equal_string xname old_name then new_name else xname), xtype)
+  | PatPair (v, p1, p2) ->
+      PatPair
+        (v, rename_var ~old_name ~new_name p1, rename_var ~old_name ~new_name p2)
+  | PatConstructor (v, cname, p) ->
+      PatConstructor (v, cname, rename_var ~old_name ~new_name p)
+
+let rec existing_names : 'a pattern -> StringSet.t = function
+  | PatName (_, xname, _) -> StringSet.singleton xname
+  | PatPair (_, p1, p2) -> Set.union (existing_names p1) (existing_names p2)
+  | PatConstructor (_, c_name, p) ->
+      Set.union (StringSet.singleton c_name) (existing_names p)
+
+let rec defined_vars : 'a pattern -> (varname * vtype) list = function
+  | PatName (_, xname, xtype) -> [ (xname, xtype) ]
+  | PatPair (_, p1, p2) -> defined_vars p1 @ defined_vars p2
+  | PatConstructor (_, _, p) -> defined_vars p
+
 let rec pattern_to_source_code = function
   | PatName (_, xname, t) -> sprintf "%s : (%s)" xname (vtype_to_source_code t)
   | PatPair (_, p1, p2) ->

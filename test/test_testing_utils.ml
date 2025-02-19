@@ -13,7 +13,7 @@ let vtype_gen_no_fun (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.gen
     {
       variant_types =
-        TestingTypeCtx.type_defns_to_list type_ctx
+        TestingTypeCtx.type_defns_to_ordered_list type_ctx
         |> List.filter_map ~f:(function
              | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
@@ -26,7 +26,7 @@ let vtype_arb_no_fun_type (type_ctx : TestingTypeCtx.t) =
   Vtype.QCheck_testing.arbitrary
     {
       variant_types =
-        TestingTypeCtx.type_defns_to_list type_ctx
+        TestingTypeCtx.type_defns_to_ordered_list type_ctx
         |> List.filter_map ~f:(function
              | VariantType (vt_name, _) -> Some vt_name
              | QuotientType _ -> None)
@@ -66,7 +66,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
             | None -> "None"
             | Some (type_ctx, e, e_shrunk) ->
                 sprintf "[type ctx: %s]\n\ne = %s\n\ne_shrunk = %s"
-                  (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
+                  (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string_hum)
                   (ast_to_source_code ~use_newlines:true e)
                   (ast_to_source_code ~use_newlines:true e_shrunk))
           ~shrink:
@@ -107,10 +107,10 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                              (vtype_to_source_code e_shrunk_type)
                      | Error err ->
                          Test.fail_reportf "Typing error for shrunk e: %s"
-                           (err |> sexp_of_typing_error |> Sexp.to_string))
+                           (err |> sexp_of_typing_error |> Sexp.to_string_hum))
                  | Error err ->
                      Test.fail_reportf "Typing error for original e: %s"
-                       (err |> sexp_of_typing_error |> Sexp.to_string)))))
+                       (err |> sexp_of_typing_error |> Sexp.to_string_hum)))))
 
 let create_typed_expr_gen_test (name : string)
     (types_gen : (TestingTypeCtx.t * vtype) Gen.t) : test =
@@ -125,7 +125,7 @@ let create_typed_expr_gen_test (name : string)
             {
               t = Some (Unit_ast_qcheck_testing.vtype_to_gen_vtype_unsafe t);
               variant_types =
-                TestingTypeCtx.type_defns_to_list type_ctx
+                TestingTypeCtx.type_defns_to_ordered_list type_ctx
                 |> List.filter_map ~f:(function
                      | VariantType vt -> Some vt
                      | QuotientType _ -> None);
@@ -139,7 +139,7 @@ let create_typed_expr_gen_test (name : string)
         QCheck.make
           ~print:(fun (type_ctx, (t, e)) ->
             sprintf "[type ctx: %s]\n[type: %s]\n%s"
-              (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string)
+              (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string_hum)
               (vtype_to_source_code t)
               (ast_to_source_code ~use_newlines:true e))
           ~shrink:
