@@ -123,10 +123,7 @@ let test_cases_expr_typing : test list =
         Ok VTypeInt );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
-      ( None,
-        If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
+        Error (NoCommonRootType (VTypeInt, VTypeBool)) );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
         Ok VTypeInt );

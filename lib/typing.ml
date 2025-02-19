@@ -127,12 +127,7 @@ module type TypingTypeContext = sig
     t -> string -> (variant_type * variant_type_constructor) option
 
   val type_defns_to_ordered_list : t -> plain_custom_type list
-
-  val is_quotient_descendant :
-    t -> vtype -> vtype -> (bool, typing_error) Result.t
-
-  val find_common_root_type :
-    t -> vtype -> vtype -> (vtype option, typing_error) Result.t
+  val subtype : t -> vtype -> vtype -> (bool, typing_error) Result.t
 end
 
 module SetTypingTypeContext : TypingTypeContext = struct
@@ -189,73 +184,40 @@ module SetTypingTypeContext : TypingTypeContext = struct
       ~f:(fun ct_name -> find_type_defn_by_name ctx ct_name |> Option.value_exn)
       ctx.custom_types_order
 
-  let rec is_quotient_descendant (ctx : t) (t1 : vtype) (t2 : vtype) :
+  let rec subtype (ctx : t) (t1 : vtype) (t2 : vtype) :
       (bool, typing_error) Result.t =
     let open Result in
     match (t1, t2) with
-    | VTypeCustom ct1_name, VTypeCustom ct2_name -> (
-        find_type_defn_by_name ctx ct1_name
-        |> Result.of_option ~error:(UndefinedTypeName ct1_name)
+    | VTypeInt, VTypeInt | VTypeBool, VTypeBool | VTypeUnit, VTypeUnit ->
+        Ok true
+    | VTypeInt, _ | VTypeBool, _ | VTypeUnit, _ -> Ok false
+    | VTypePair (t1a, t1b), VTypePair (t2a, t2b) ->
+        subtype ctx t1a t2a >>= fun t1a_subtype ->
+        subtype ctx t1b t2b >>= fun t1b_subtype ->
+        Ok (t1a_subtype && t1b_subtype)
+    | VTypePair _, _ -> Ok false
+    | VTypeFun (t1a, t1b), VTypeFun (t2a, t2b) ->
+        subtype ctx t2a t1a >>= fun t2a_subtype ->
+        subtype ctx t1b t2b >>= fun t1b_subtype ->
+        Ok (t2a_subtype && t1b_subtype)
+    | VTypeFun _, _ -> Ok false
+    | VTypeCustom c1_name, VTypeCustom c2_name -> (
+        find_type_defn_by_name ctx c1_name
+        |> Result.of_option ~error:(UndefinedTypeName c1_name)
         >>= fun ct1 ->
-        find_type_defn_by_name ctx ct2_name
-        |> Result.of_option ~error:(UndefinedTypeName ct2_name)
+        find_type_defn_by_name ctx c2_name
+        |> Result.of_option ~error:(UndefinedTypeName c2_name)
         >>= fun ct2 ->
         match (ct1, ct2) with
-        | VariantType _, QuotientType _ -> Ok false
-        | VariantType vt1, VariantType vt2 -> Ok (equal_variant_type vt1 vt2)
-        | QuotientType qt1, VariantType vt2 ->
-            is_quotient_descendant ctx (VTypeCustom qt1.base_type_name)
-              (VTypeCustom (fst vt2))
+        | VariantType (vt1_name, _), VariantType (vt2_name, _) ->
+            Ok (equal_string vt1_name vt2_name)
+        | VariantType _, QuotientType qt2 ->
+            subtype ctx t1 (VTypeCustom qt2.base_type_name)
         | QuotientType qt1, QuotientType qt2 ->
-            if equal_quotient_type equal_unit equal_unit qt1 qt2 then Ok true
-            else
-              is_quotient_descendant ctx (VTypeCustom qt1.base_type_name)
-                (VTypeCustom qt2.name))
-    | VTypePair (t11, t12), VTypePair (t21, t22) ->
-        is_quotient_descendant ctx t11 t21 >>= fun first ->
-        is_quotient_descendant ctx t12 t22 >>| fun second -> first && second
-    | VTypeFun (t11, t12), VTypeFun (t21, t22) ->
-        is_quotient_descendant ctx t11 t21 >>= fun first ->
-        (* Note that this part is the other way round to usual *)
-        is_quotient_descendant ctx t22 t12 >>| fun second -> first && second
-    | _ -> Ok (equal_vtype t1 t2)
-
-  let rec find_common_root_type (ctx : t) (t1 : vtype) (t2 : vtype) :
-      (vtype option, typing_error) Result.t =
-    let open Result in
-    match (t1, t2) with
-    | VTypeCustom ct1_name, VTypeCustom ct2_name -> (
-        find_type_defn_by_name ctx ct1_name
-        |> Result.of_option ~error:(UndefinedTypeName ct1_name)
-        >>= fun ct1 ->
-        find_type_defn_by_name ctx ct2_name
-        |> Result.of_option ~error:(UndefinedTypeName ct2_name)
-        >>= fun ct2 ->
-        match (ct1, ct2) with
-        | VariantType vt1, VariantType vt2 ->
-            if equal_variant_type vt1 vt2 then Ok (Some t1) else Ok None
-        | QuotientType qt1, QuotientType qt2 ->
-            if equal_quotient_type equal_unit equal_unit qt1 qt2 then
-              Ok (Some t1)
-            else
-              find_common_root_type ctx (VTypeCustom qt1.base_type_name)
-                (VTypeCustom qt2.name)
-        | VariantType vt, QuotientType qt | QuotientType qt, VariantType vt ->
-            find_common_root_type ctx (VTypeCustom qt.base_type_name)
-              (VTypeCustom (fst vt)))
-    | VTypePair (t11, t12), VTypePair (t21, t22) ->
-        find_common_root_type ctx t11 t21 >>= fun t1 ->
-        find_common_root_type ctx t12 t22 >>= fun t2 ->
-        Ok
-          Option.(
-            t1 >>= fun t1 ->
-            t2 >>| fun t2 -> VTypePair (t1, t2))
-    | ( VTypeFun _,
-        VTypeFun _
-        (* TODO - for now, I won't try figure out how to implement this for function types. this is for another time *)
-      )
-    | _ ->
-        if equal_vtype t1 t2 then Ok (Some t1) else Ok None
+            if equal_string qt1.name qt2.name then Ok true
+            else subtype ctx t1 (VTypeCustom qt2.base_type_name)
+        | QuotientType _, VariantType _ -> Ok false)
+    | VTypeCustom _, _ -> Ok false
 end
 
 module type TypingVarContext = sig
@@ -352,6 +314,7 @@ functor
         (orig_p : 'tag_p pattern) :
         ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t =
       let open Result in
+      let ( <: ) = TypeCtx.subtype type_ctx in
       match orig_p with
       | PatName (v, x_name, x_t) ->
           check_vtype type_ctx x_t >>= fun () ->
@@ -374,10 +337,7 @@ functor
           | Some ((vt_name, _), (_, c_t)) ->
               type_pattern ctx p >>= fun (p_typed, var_ctx_from_p) ->
               let p_t = pattern_node_val p_typed |> fst in
-              (* Check if the subpattern's determined type is valid for the expected constructor's argument type.
-                For non-quotient type cases, this is just an equality check *)
-              TypeCtx.is_quotient_descendant type_ctx p_t c_t
-              >>= fun subpattern_type_matches ->
+              c_t <: p_t >>= fun subpattern_type_matches ->
               if subpattern_type_matches then
                 Ok
                   ( PatConstructor ((VTypeCustom vt_name, v), c_name, p_typed),
@@ -390,14 +350,15 @@ functor
         (orig_e : ('tag_e, 'tag_p) expr) :
         (('tag_e, 'tag_p) typed_expr, typing_error) Result.t =
       let open Result in
+      let ( <: ) = TypeCtx.subtype type_ctx in
       let e_type (e : (vtype * 'tag_e, vtype * 'tag_p) expr) : vtype =
         e |> expr_node_val |> fst
       in
       let be_of_type ?(msg : string option) (exp : vtype)
           (e : (vtype * 'tag_e, vtype * 'tag_p) expr) :
           ((vtype * 'tag_e, vtype * 'tag_p) expr, typing_error) Result.t =
-        if equal_vtype exp (e_type e) then Ok e
-        else Error (TypeMismatch (exp, e_type e, msg))
+        e_type e <: exp >>= fun types_valid ->
+        if types_valid then Ok e else Error (TypeMismatch (exp, e_type e, msg))
       in
       let type_binop ?(msg : string option)
           (recomp :
@@ -504,16 +465,19 @@ functor
           type_int_compare ~msg:"LtEq node"
             (fun e1' e2' -> LtEq ((VTypeBool, v), e1', e2'))
             e1 e2
-      | If (v, e1, e2, e3) -> (
+      | If (v, e1, e2, e3) ->
           type_expr ctx e1 >>= fun e1' ->
           be_of_type ~msg:"If cond node" VTypeBool e1' >>= fun _ ->
           type_expr ctx e2 >>= fun e2' ->
           type_expr ctx e3 >>= fun e3' ->
           let t2 = e_type e2' in
           let t3 = e_type e3' in
-          TypeCtx.find_common_root_type type_ctx t2 t3 >>= function
-          | None -> Error (TypeMismatch (t2, t3, Some "If branches"))
-          | Some branch_t -> Ok (If ((branch_t, v), e1', e2', e3')))
+          t2 <: t3 >>= fun t2_sub_t3 ->
+          t3 <: t2 >>= fun t3_sub_t2 ->
+          (if t2_sub_t3 then Ok t3
+           else if t3_sub_t2 then Ok t2
+           else Error (NoCommonRootType (t2, t3)))
+          >>= fun t_out -> Ok (If ((t_out, v), e1', e2', e3'))
       | Var (v, xname) -> (
           match VarCtx.find var_ctx xname with
           | Some t -> Ok (Var ((t, v), xname))
@@ -531,8 +495,7 @@ functor
           let t2 = e_type e2' in
           match t1 with
           | VTypeFun (t11, t12) ->
-              TypeCtx.is_quotient_descendant type_ctx t11 t2
-              >>= fun arg_type_valid ->
+              t2 <: t11 >>= fun arg_type_valid ->
               if arg_type_valid then Ok (App ((t12, v), e1', e2'))
               else
                 Error
@@ -558,15 +521,13 @@ functor
               >>= fun (typed_p, p_ctx) ->
               let p_t : vtype = pattern_node_val typed_p |> fst in
               (* Check the pattern's type *)
-              TypeCtx.find_common_root_type type_ctx p_t t_in
-              >>= fun pattern_input_common_type ->
-              if Option.is_some pattern_input_common_type then
+              p_t <: t_in >>= fun pattern_type_valid ->
+              if pattern_type_valid then
                 let case_ctx = VarCtx.append var_ctx p_ctx in
                 (* Then, type the case's expression using the extended context *)
                 type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
                 let t_c_e = e_type c_e' in
-                TypeCtx.is_quotient_descendant type_ctx t_out t_c_e
-                >>= fun case_t_compatible ->
+                t_c_e <: t_out >>= fun case_t_compatible ->
                 if case_t_compatible then
                   match acc with
                   | First () -> Ok (Nonempty_list.singleton (typed_p, c_e'))
@@ -592,11 +553,8 @@ functor
           match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
           | None -> Error (UndefinedVariantTypeConstructor c_name)
           | Some ((vt_name, _), (_, c_t)) ->
-              (* Check if the subexpressions's determined type is valid for the expected constructor's argument type.
-                For non-quotient type cases, this is just an equality check *)
-              TypeCtx.is_quotient_descendant type_ctx t1 c_t
-              >>= fun subexpr_type_matches ->
-              if subexpr_type_matches then
+              c_t <: t1 >>= fun subexpr_type_valid ->
+              if subexpr_type_valid then
                 Ok (Constructor ((VTypeCustom vt_name, v), c_name, e1'))
               else Error (TypeMismatch (c_t, t1, Some "Constructor argument")))
 
@@ -651,6 +609,7 @@ functor
         (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) :
         (('tag_e, 'tag_p) typed_quotient_type_eqcons, typing_error) Result.t =
       let open Result in
+      let ( <: ) = TypeCtx.subtype type_ctx in
       let quotient_type = VTypeCustom quotient_type_name in
       let body_pattern, body_expr = eqcons.body in
       (* Create a variable context from only the bindings *)
@@ -674,18 +633,16 @@ functor
       (* Type the expression, with the bindings' variable context *)
       type_expr (type_ctx, bindings_var_ctx) body_expr >>= fun typed_body ->
       let pattern_t = typed_pattern |> pattern_node_val |> fst in
-      let body_expr_t = typed_body |> expr_node_val |> fst in
-      TypeCtx.is_quotient_descendant type_ctx quotient_type pattern_t
-      >>= fun pattern_t_valid ->
+      let expr_t = typed_body |> expr_node_val |> fst in
+      pattern_t <: quotient_type >>= fun pattern_t_valid ->
       if pattern_t_valid then
-        TypeCtx.find_common_root_type type_ctx quotient_type body_expr_t
-        >>= fun body_expr_t_common_root ->
-        if Option.is_some body_expr_t_common_root then
+        expr_t <: quotient_type >>= fun expr_t_valid ->
+        if expr_t_valid then
           Ok { eqcons with body = (typed_pattern, typed_body) }
         else
           Error
             (EqConsBodyExprTypeMismatch
-               (expr_to_plain_expr body_expr, quotient_type, body_expr_t))
+               (expr_to_plain_expr body_expr, quotient_type, expr_t))
       else
         Error
           (EqConsBodyPatternTypeMismatch
@@ -719,6 +676,7 @@ functor
       type_custom_types ~type_ctx prog.custom_types
       >>= fun custom_types_typed ->
       check_type_ctx type_ctx >>= fun type_ctx ->
+      let ( <: ) = TypeCtx.subtype type_ctx in
       List.fold_result (* Check the top-level definitions *)
         ~init:{ defns_rev = []; defns_var_ctx = VarCtx.empty }
         ~f:(fun acc defn ->
@@ -739,8 +697,7 @@ functor
             in
             type_expr (type_ctx, body_var_ctx) defn.body >>= fun typed_body ->
             let typed_body_t = typed_body |> expr_node_val |> fst in
-            TypeCtx.is_quotient_descendant type_ctx defn.return_t typed_body_t
-            >>= fun return_t_valid ->
+            typed_body_t <: defn.return_t >>= fun return_t_valid ->
             if return_t_valid then
               let defn_t = VTypeFun (snd defn.param, defn.return_t) in
               Ok
