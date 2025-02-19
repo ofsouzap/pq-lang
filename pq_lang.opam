@@ -7,7 +7,7 @@ license: "MIT"
 homepage: "https://github.com/ofsouzap/pq-lang"
 bug-reports: "https://github.com/ofsouzap/pq-lang/issues"
 depends: [
-  "ocaml" {>= "5.3.0"}
+  "ocaml" {>= "5.2.0"}
   "dune" {>= "3.11"}
   "core" {>= "v0.16.2"}
   "menhir" {>= "20240715"}

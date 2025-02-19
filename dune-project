@@ -20,7 +20,7 @@
  (synopsis "ML-like language with quotient types")
  (depends
   (ocaml
-   (>= "5.3.0"))
+   (>= "5.2.0"))
   dune
   (core
    (>= "v0.16.2"))
