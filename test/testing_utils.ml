@@ -135,73 +135,40 @@ end = struct
           >>| fun c -> (vt, c)
       | QuotientType _ -> None)
 
-  let rec is_quotient_descendant (ctx : t) (t1 : vtype) (t2 : vtype) :
+  let rec subtype (ctx : t) (t1 : vtype) (t2 : vtype) :
       (bool, typing_error) Result.t =
     let open Result in
     match (t1, t2) with
-    | VTypeCustom ct1_name, VTypeCustom ct2_name -> (
-        find_type_defn_by_name ctx ct1_name
-        |> Result.of_option ~error:(UndefinedTypeName ct1_name)
+    | VTypeInt, VTypeInt | VTypeBool, VTypeBool | VTypeUnit, VTypeUnit ->
+        Ok true
+    | VTypeInt, _ | VTypeBool, _ | VTypeUnit, _ -> Ok false
+    | VTypePair (t1a, t1b), VTypePair (t2a, t2b) ->
+        subtype ctx t1a t2a >>= fun t1a_subtype ->
+        subtype ctx t1b t2b >>= fun t1b_subtype ->
+        Ok (t1a_subtype && t1b_subtype)
+    | VTypePair _, _ -> Ok false
+    | VTypeFun (t1a, t1b), VTypeFun (t2a, t2b) ->
+        subtype ctx t2a t1a >>= fun t2a_subtype ->
+        subtype ctx t1b t2b >>= fun t1b_subtype ->
+        Ok (t2a_subtype && t1b_subtype)
+    | VTypeFun _, _ -> Ok false
+    | VTypeCustom c1_name, VTypeCustom c2_name -> (
+        find_type_defn_by_name ctx c1_name
+        |> Result.of_option ~error:(UndefinedTypeName c1_name)
         >>= fun ct1 ->
-        find_type_defn_by_name ctx ct2_name
-        |> Result.of_option ~error:(UndefinedTypeName ct2_name)
+        find_type_defn_by_name ctx c2_name
+        |> Result.of_option ~error:(UndefinedTypeName c2_name)
         >>= fun ct2 ->
         match (ct1, ct2) with
-        | VariantType _, QuotientType _ -> Ok false
-        | VariantType vt1, VariantType vt2 -> Ok (equal_variant_type vt1 vt2)
-        | QuotientType qt1, VariantType vt2 ->
-            is_quotient_descendant ctx (VTypeCustom qt1.base_type_name)
-              (VTypeCustom (fst vt2))
+        | VariantType (vt1_name, _), VariantType (vt2_name, _) ->
+            Ok (equal_string vt1_name vt2_name)
+        | VariantType _, QuotientType qt2 ->
+            subtype ctx t1 (VTypeCustom qt2.base_type_name)
         | QuotientType qt1, QuotientType qt2 ->
-            if equal_quotient_type equal_unit equal_unit qt1 qt2 then Ok true
-            else
-              is_quotient_descendant ctx (VTypeCustom qt1.base_type_name)
-                (VTypeCustom qt2.name))
-    | VTypePair (t11, t12), VTypePair (t21, t22) ->
-        is_quotient_descendant ctx t11 t21 >>= fun first ->
-        is_quotient_descendant ctx t12 t22 >>| fun second -> first && second
-    | VTypeFun (t11, t12), VTypeFun (t21, t22) ->
-        is_quotient_descendant ctx t11 t21 >>= fun first ->
-        (* Note that this part is the other way round to usual *)
-        is_quotient_descendant ctx t22 t12 >>| fun second -> first && second
-    | _ -> Ok (equal_vtype t1 t2)
-
-  let rec find_common_root_type (ctx : t) (t1 : vtype) (t2 : vtype) :
-      (vtype option, typing_error) Result.t =
-    let open Result in
-    match (t1, t2) with
-    | VTypeCustom ct1_name, VTypeCustom ct2_name -> (
-        find_type_defn_by_name ctx ct1_name
-        |> Result.of_option ~error:(UndefinedTypeName ct1_name)
-        >>= fun ct1 ->
-        find_type_defn_by_name ctx ct2_name
-        |> Result.of_option ~error:(UndefinedTypeName ct2_name)
-        >>= fun ct2 ->
-        match (ct1, ct2) with
-        | VariantType vt1, VariantType vt2 ->
-            if equal_variant_type vt1 vt2 then Ok (Some t1) else Ok None
-        | QuotientType qt1, QuotientType qt2 ->
-            if equal_quotient_type equal_unit equal_unit qt1 qt2 then
-              Ok (Some t1)
-            else
-              find_common_root_type ctx (VTypeCustom qt1.base_type_name)
-                (VTypeCustom qt2.name)
-        | VariantType vt, QuotientType qt | QuotientType qt, VariantType vt ->
-            find_common_root_type ctx (VTypeCustom qt.base_type_name)
-              (VTypeCustom (fst vt)))
-    | VTypePair (t11, t12), VTypePair (t21, t22) ->
-        find_common_root_type ctx t11 t21 >>= fun t1 ->
-        find_common_root_type ctx t12 t22 >>= fun t2 ->
-        Ok
-          Option.(
-            t1 >>= fun t1 ->
-            t2 >>| fun t2 -> VTypePair (t1, t2))
-    | ( VTypeFun _,
-        VTypeFun _
-        (* TODO - for now, I won't try figure out how to implement this for function types. this is for another time *)
-      )
-    | _ ->
-        if equal_vtype t1 t2 then Ok (Some t1) else Ok None
+            if equal_string qt1.name qt2.name then Ok true
+            else subtype ctx t1 (VTypeCustom qt2.base_type_name)
+        | QuotientType _, VariantType _ -> Ok false)
+    | VTypeCustom _, _ -> Ok false
 
   let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
 
