@@ -31,3 +31,6 @@ _opam/
 # Example code for my reference
 _code_examples
 _example_code_files*/
+
+# VSCode Files
+.vscode/
