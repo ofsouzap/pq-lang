@@ -126,14 +126,14 @@ end) : sig
     max_variant_type_constructors : int;
     max_top_level_defns : int;
     allow_fun_types : bool;
-    ast_type : vtype option;
+    body_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
   }
 
   type arb_options = {
     gen : gen_options;
-    print : Expr.QCheck_testing(TagExpr)(TagPat).ast_print_method;
+    print : Expr.QCheck_testing(TagExpr)(TagPat).expr_print_method;
     shrink : Expr.QCheck_testing(TagExpr)(TagPat).shrink_options;
   }
 
@@ -150,14 +150,14 @@ end) : sig
       with type t = (TagExpr.t, TagPat.t) program
        and type gen_options := gen_options
        and type print_options =
-        Expr.QCheck_testing(TagExpr)(TagPat).ast_print_method
+        Expr.QCheck_testing(TagExpr)(TagPat).expr_print_method
        and type shrink_options =
         Expr.QCheck_testing(TagExpr)(TagPat).shrink_options
        and type arb_options := arb_options
 end = struct
   type t = (TagExpr.t, TagPat.t) program
 
-  module Ast_qcheck_testing = Expr.QCheck_testing (TagExpr) (TagPat)
+  module Expr_qcheck_testing = Expr.QCheck_testing (TagExpr) (TagPat)
 
   type gen_options = {
     mrd : int;
@@ -165,13 +165,13 @@ end = struct
     max_variant_type_constructors : int;
     max_top_level_defns : int;
     allow_fun_types : bool;
-    ast_type : vtype option;
+    body_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
   }
 
-  type print_options = Ast_qcheck_testing.ast_print_method
-  type shrink_options = Ast_qcheck_testing.shrink_options
+  type print_options = Expr_qcheck_testing.expr_print_method
+  type shrink_options = Expr_qcheck_testing.shrink_options
 
   type arb_options = {
     gen : gen_options;
@@ -246,9 +246,9 @@ end = struct
         { variant_types = variant_type_names; allow_fun_types = false; mrd }
     in
     pair vtype_gen vtype_gen >>= fun (param_t, return_t) ->
-    Ast_qcheck_testing.gen
+    Expr_qcheck_testing.gen
       {
-        t = Some (Ast_qcheck_testing.vtype_to_gen_vtype_unsafe return_t);
+        t = Some (Expr_qcheck_testing.vtype_to_gen_vtype_unsafe return_t);
         variant_types;
         top_level_defns;
         v_gen = expr_v_gen;
@@ -302,11 +302,11 @@ end = struct
            custom_types)
       ~max_top_level_defns:opts.max_top_level_defns ~mrd:opts.mrd
     >>= fun top_level_defns ->
-    Ast_qcheck_testing.gen
+    Expr_qcheck_testing.gen
       {
         t =
           Option.(
-            opts.ast_type >>| Ast_qcheck_testing.vtype_to_gen_vtype_unsafe);
+            opts.body_type >>| Expr_qcheck_testing.vtype_to_gen_vtype_unsafe);
         variant_types =
           List.filter_map
             ~f:(function VariantType vt -> Some vt | QuotientType _ -> None)
@@ -325,7 +325,7 @@ end = struct
    fun prog ->
     sprintf "[type definitions: %s]\n%s"
       QCheck.Print.(
-        let open Ast_qcheck_testing in
+        let open Expr_qcheck_testing in
         let ct_to_string ct =
           match print_method with
           | NoPrint -> ""
@@ -336,12 +336,12 @@ end = struct
           | PrintExprSource -> custom_type_name ct
         in
         list (fun ct -> ct |> ct_to_string) prog.custom_types)
-      (Ast_qcheck_testing.print print_method prog.e)
+      (Expr_qcheck_testing.print print_method prog.e)
 
   let shrink (opts : shrink_options) : t QCheck.Shrink.t =
     let open QCheck.Iter in
     fun prog ->
-      Ast_qcheck_testing.shrink opts prog.e >|= fun e' -> { prog with e = e' }
+      Expr_qcheck_testing.shrink opts prog.e >|= fun e' -> { prog with e = e' }
 
   let arbitrary (opts : arb_options) : t QCheck.arbitrary =
     QCheck.make ~print:(print opts.print) ~shrink:(shrink opts.shrink)

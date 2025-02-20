@@ -71,7 +71,7 @@ module QCheck_testing : functor
     max_variant_type_constructors : int;
     max_top_level_defns : int;
     allow_fun_types : bool;
-    ast_type : vtype option;
+    body_type : vtype option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
   }
@@ -86,7 +86,7 @@ module QCheck_testing : functor
 
   type arb_options = {
     gen : gen_options;
-    print : Expr.QCheck_testing(TagExpr)(TagPat).ast_print_method;
+    print : Expr.QCheck_testing(TagExpr)(TagPat).expr_print_method;
     shrink : Expr.QCheck_testing(TagExpr)(TagPat).shrink_options;
   }
 
@@ -95,7 +95,7 @@ module QCheck_testing : functor
       with type t = (TagExpr.t, TagPat.t) program
        and type gen_options := gen_options
        and type print_options =
-        Expr.QCheck_testing(TagExpr)(TagPat).ast_print_method
+        Expr.QCheck_testing(TagExpr)(TagPat).expr_print_method
        and type shrink_options =
         Expr.QCheck_testing(TagExpr)(TagPat).shrink_options
        and type arb_options := arb_options

@@ -125,7 +125,7 @@ module QCheck_testing : functor
    end)
   -> sig
   (** The printing method for an Expr representation of a program *)
-  type ast_print_method =
+  type expr_print_method =
     | NoPrint  (** Don't print the Expr *)
     | PrintSexp of (TagExpr.t -> Sexp.t) * (TagPat.t -> Sexp.t)
         (** Print the sexp of the Expr, using the provided sexp_of_ functions
@@ -136,16 +136,17 @@ module QCheck_testing : functor
 
   (** Take an Expr printing method and return a function that implements the
       printing method. Returns None if no printing is specified. *)
-  val get_ast_printer_opt :
-    ast_print_method -> ((TagExpr.t, TagPat.t) expr -> string) option
+  val get_expr_printer_opt :
+    expr_print_method -> ((TagExpr.t, TagPat.t) expr -> string) option
 
   (** Take an Expr printing method and return a function that implements the
       printing method. Returns a function always returning the empty string if
       no printing is specified. *)
-  val get_ast_printer : ast_print_method -> (TagExpr.t, TagPat.t) expr -> string
+  val get_expr_printer :
+    expr_print_method -> (TagExpr.t, TagPat.t) expr -> string
 
   (** A default Expr printing method *)
-  val default_ast_print_method : ast_print_method
+  val default_expr_print_method : expr_print_method
 
   type gen_vtype =
     | GenVTypeUnit
@@ -169,7 +170,7 @@ module QCheck_testing : functor
 
   type arb_options = {
     gen : gen_options;
-    print : ast_print_method;
+    print : expr_print_method;
     shrink : shrink_options;
   }
 
@@ -177,7 +178,7 @@ module QCheck_testing : functor
     QCheck_testing_sig
       with type t = (TagExpr.t, TagPat.t) expr
        and type gen_options := gen_options
-       and type print_options = ast_print_method
+       and type print_options = expr_print_method
        and type shrink_options := shrink_options
        and type arb_options := arb_options
 end

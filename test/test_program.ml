@@ -15,7 +15,7 @@ let test_cases_to_source_code_inv =
             Test.fail_reportf
               "Got different Program. Expected:\n\n%s\n\nActual:\n\n%s"
               (Unit_program_qcheck_testing.print
-                 Unit_ast_qcheck_testing.PrintExprSource prog)
+                 Unit_expr_qcheck_testing.PrintExprSource prog)
               (Unit_program_qcheck_testing.print PrintExprSource prog_out)
       | Error err ->
           Test.fail_reportf "Got frontend error: %s"

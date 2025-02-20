@@ -6,7 +6,7 @@ open Variant_types
 open Varname
 
 (** The data that the executor tags the interpreted Expr with *)
-type ast_tag = unit [@@deriving sexp, equal]
+type expr_tag = unit [@@deriving sexp, equal]
 
 (** The data that the executor tags the interpreted Expr patterns with *)
 type pattern_tag = unit [@@deriving sexp, equal]
@@ -15,7 +15,7 @@ type pattern_tag = unit [@@deriving sexp, equal]
 type closure_props = {
   param : varname * vtype;  (** The function's parameter's name and type *)
   out_type : vtype;  (** The output type of the function *)
-  body : (ast_tag, pattern_tag) Expr.typed_expr;
+  body : (expr_tag, pattern_tag) Expr.typed_expr;
       (** The body of the function *)
   store : store;  (** The store to use when executing the function *)
   recursive : [ `Recursive of varname | `NonRecursive ];

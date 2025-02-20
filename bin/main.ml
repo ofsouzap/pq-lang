@@ -21,7 +21,7 @@ let () =
       |> Program.fmap_pattern ~f:(fun (t, ()) ->
              ({ t } : Quotient_type_checking.pattern_tag))
       |> Program.fmap_expr ~f:(fun (t, ()) ->
-             ({ t } : Quotient_type_checking.ast_tag)))
+             ({ t } : Quotient_type_checking.expr_tag)))
     |> Result.map_error ~f:(fun err ->
            sprintf "Quotient type checking error: %s"
              (err |> Quotient_type_checking.sexp_of_quotient_typing_error

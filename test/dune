@@ -6,7 +6,7 @@
   test_pq_lang
   test_testing_utils
   test_utils
-  test_ast
+  test_expr
   test_program
   test_typing
   test_quotient_type_checking

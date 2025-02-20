@@ -412,7 +412,7 @@ module UnitTag = struct
   let equal = equal_unit
 end
 
-module Unit_ast_qcheck_testing = Expr.QCheck_testing (UnitTag) (UnitTag)
+module Unit_expr_qcheck_testing = Expr.QCheck_testing (UnitTag) (UnitTag)
 module Unit_program_qcheck_testing = Program.QCheck_testing (UnitTag) (UnitTag)
 
 let unit_program_arbitrary_with_default_options =
@@ -427,10 +427,10 @@ let unit_program_arbitrary_with_default_options =
           max_top_level_defns = default_max_top_level_defns_count;
           allow_fun_types =
             (* TODO - until function-typed expression works better *) false;
-          ast_type = None;
+          body_type = None;
           expr_v_gen = QCheck.Gen.unit;
           pat_v_gen = QCheck.Gen.unit;
         };
-      print = Unit_ast_qcheck_testing.PrintExprSource;
+      print = Unit_expr_qcheck_testing.PrintExprSource;
       shrink = { preserve_type = false };
     }

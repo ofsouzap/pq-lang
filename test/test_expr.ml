@@ -8,10 +8,10 @@ let test_cases_equality : test list =
   let create_positive_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (Unit_ast_qcheck_testing.print
+        (Unit_expr_qcheck_testing.print
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            x)
-        (Unit_ast_qcheck_testing.print
+        (Unit_expr_qcheck_testing.print
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            y)
     in
@@ -20,10 +20,10 @@ let test_cases_equality : test list =
   let create_negative_test ((x : plain_expr), (y : plain_expr)) =
     let name =
       sprintf "%s =? %s"
-        (Unit_ast_qcheck_testing.print
+        (Unit_expr_qcheck_testing.print
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            x)
-        (Unit_ast_qcheck_testing.print
+        (Unit_expr_qcheck_testing.print
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            y)
     in
@@ -83,10 +83,10 @@ let test_cases_to_source_code_inv =
           else
             Test.fail_reportf
               "Got different Expr. Expected:\n\n%s\n\nActual:\n\n%s"
-              (Unit_ast_qcheck_testing.print
+              (Unit_expr_qcheck_testing.print
                  (PrintSexp (sexp_of_unit, sexp_of_unit))
                  e)
-              (Unit_ast_qcheck_testing.print
+              (Unit_expr_qcheck_testing.print
                  (PrintSexp (sexp_of_unit, sexp_of_unit))
                  prog.e)
       | Error err ->
@@ -131,7 +131,7 @@ functor
                       default_max_variant_type_constructor_count;
                     max_top_level_defns = default_max_top_level_defns_count;
                     allow_fun_types = false;
-                    ast_type = None;
+                    body_type = None;
                     expr_v_gen = QCheck.get_gen Tag.arb;
                     pat_v_gen = QCheck.Gen.unit;
                   };
@@ -178,7 +178,7 @@ functor
                       default_max_variant_type_constructor_count;
                     max_top_level_defns = default_max_top_level_defns_count;
                     allow_fun_types = false;
-                    ast_type = None;
+                    body_type = None;
                     expr_v_gen = QCheck.get_gen Tag1.arb;
                     pat_v_gen = QCheck.Gen.unit;
                   };

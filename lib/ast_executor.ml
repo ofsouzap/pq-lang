@@ -6,13 +6,13 @@ open Varname
 open Pattern
 open Program
 
-type ast_tag = unit [@@deriving sexp, equal]
+type expr_tag = unit [@@deriving sexp, equal]
 type pattern_tag = unit [@@deriving sexp, equal]
 
 type closure_props = {
   param : varname * vtype;
   out_type : vtype;
-  body : (ast_tag, pattern_tag) Expr.typed_expr;
+  body : (expr_tag, pattern_tag) Expr.typed_expr;
   store : store;
   recursive : [ `Recursive of varname | `NonRecursive ];
 }
@@ -154,7 +154,7 @@ struct
   (** Evaluate a subexpression, then apply a continuation function to the result
       if it an integer and give a typing error otherwise *)
   let rec eval_apply_to_int ~(type_ctx : TypeCtx.t) (store : store)
-      (x : (ast_tag, pattern_tag) Expr.typed_expr) (cnt : int -> exec_res) :
+      (x : (expr_tag, pattern_tag) Expr.typed_expr) (cnt : int -> exec_res) :
       exec_res =
     let open Result in
     eval ~type_ctx store x >>= apply_to_int cnt
@@ -162,7 +162,7 @@ struct
   (** Evaluate a subexpression, then apply a continuation function to the result
       if it an boolean and give a typing error otherwise *)
   and eval_apply_to_bool ~(type_ctx : TypeCtx.t) (store : store)
-      (x : (ast_tag, pattern_tag) Expr.typed_expr) (cnt : bool -> exec_res) :
+      (x : (expr_tag, pattern_tag) Expr.typed_expr) (cnt : bool -> exec_res) :
       exec_res =
     let open Result in
     eval ~type_ctx store x >>= apply_to_bool cnt
@@ -170,14 +170,14 @@ struct
   (** Evaluate a subexpression, then apply a continuation function to the result
       if it an function and give a typing error otherwise *)
   and eval_apply_to_closure ~(type_ctx : TypeCtx.t) (store : store)
-      (x : (ast_tag, pattern_tag) Expr.typed_expr)
+      (x : (expr_tag, pattern_tag) Expr.typed_expr)
       (cnt : closure_props -> exec_res) : exec_res =
     let open Result in
     eval ~type_ctx store x >>= apply_to_closure cnt
 
   (** Evaluate an Expr subtree *)
   and eval ~(type_ctx : TypeCtx.t) (store : store)
-      (e : (ast_tag, pattern_tag) Expr.typed_expr) : exec_res =
+      (e : (expr_tag, pattern_tag) Expr.typed_expr) : exec_res =
     let open Result in
     match e with
     | UnitLit _ -> Ok Unit
@@ -265,7 +265,7 @@ struct
     | Match (_, e1, _, cs) -> (
         eval ~type_ctx store e1 >>= fun v1 ->
         let matched_c_e :
-            ((varname * value) list * (ast_tag, pattern_tag) Expr.typed_expr)
+            ((varname * value) list * (expr_tag, pattern_tag) Expr.typed_expr)
             option =
           Nonempty_list.fold ~init:None
             ~f:(fun acc (p, c_e) ->

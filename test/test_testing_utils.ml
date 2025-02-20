@@ -48,7 +48,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
           let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
           let e = prog.e in
           let shrinks : ('tag_e, 'tag_p) expr Iter.t =
-            Unit_ast_qcheck_testing.shrink { preserve_type = true } e
+            Unit_expr_qcheck_testing.shrink { preserve_type = true } e
           in
           let shrinks_list_opt : ('tag_e, 'tag_p) expr list =
             let xs = ref [] in
@@ -73,7 +73,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
             QCheck.Shrink.(
               option
                 (triple nil nil
-                   (Unit_ast_qcheck_testing.shrink { preserve_type = true })))
+                   (Unit_expr_qcheck_testing.shrink { preserve_type = true })))
           gen)
        (function
          | None -> true
@@ -121,9 +121,9 @@ let create_typed_expr_gen_test (name : string)
         let gen :
             (TestingTypeCtx.t * (vtype * (unit, unit) Expr.expr)) QCheck.Gen.t =
           types_gen >>= fun (type_ctx, t) ->
-          Unit_ast_qcheck_testing.gen
+          Unit_expr_qcheck_testing.gen
             {
-              t = Some (Unit_ast_qcheck_testing.vtype_to_gen_vtype_unsafe t);
+              t = Some (Unit_expr_qcheck_testing.vtype_to_gen_vtype_unsafe t);
               variant_types =
                 TestingTypeCtx.type_defns_to_ordered_list type_ctx
                 |> List.filter_map ~f:(function
@@ -146,7 +146,7 @@ let create_typed_expr_gen_test (name : string)
             QCheck.Shrink.(
               pair nil
                 (pair nil
-                   (Unit_ast_qcheck_testing.shrink { preserve_type = true })))
+                   (Unit_expr_qcheck_testing.shrink { preserve_type = true })))
           gen)
        (fun (type_ctx, (t, e)) ->
          match TestingTypeChecker.check_type_ctx type_ctx with

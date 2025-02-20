@@ -6,7 +6,7 @@ let () =
     >::: [
            Test_testing_utils.suite;
            Test_utils.suite;
-           Test_ast.suite;
+           Test_expr.suite;
            Test_program.suite;
            Test_lexer_parser.suite;
            Test_ast_executor.suite;

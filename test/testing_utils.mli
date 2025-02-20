@@ -120,7 +120,7 @@ module UnitTag : sig
   val equal : t -> t -> bool
 end
 
-module Unit_ast_qcheck_testing : sig
+module Unit_expr_qcheck_testing : sig
   include module type of Expr.QCheck_testing (UnitTag) (UnitTag)
 end
 

@@ -479,9 +479,9 @@ let test_cases_arb_compound_expr_typing : test list =
   let open QCheck.Gen in
   let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : vtype) :
       (unit, unit) expr Gen.t =
-    Unit_ast_qcheck_testing.gen
+    Unit_expr_qcheck_testing.gen
       {
-        t = Some (Unit_ast_qcheck_testing.vtype_to_gen_vtype_unsafe t);
+        t = Some (Unit_expr_qcheck_testing.vtype_to_gen_vtype_unsafe t);
         variant_types =
           TestingTypeCtx.type_defns_to_ordered_list type_ctx
           |> List.filter_map ~f:(function

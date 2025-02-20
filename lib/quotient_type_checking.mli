@@ -20,27 +20,27 @@ end
 
 module LispBuilder : LispBuilderSig
 
-type ast_tag = { t : Vtype.vtype } [@@deriving sexp, equal]
+type expr_tag = { t : Vtype.vtype } [@@deriving sexp, equal]
 type pattern_tag = { t : Vtype.vtype } [@@deriving sexp, equal]
 type tag_pattern = pattern_tag Pattern.pattern [@@deriving sexp, equal]
-type tag_expr = (ast_tag, pattern_tag) Expr.expr [@@deriving sexp, equal]
+type tag_expr = (expr_tag, pattern_tag) Expr.expr [@@deriving sexp, equal]
 
-val pattern_tag_to_ast_tag : pattern_tag -> ast_tag
+val pattern_tag_to_expr_tag : pattern_tag -> expr_tag
 
-type tag_unifier = (ast_tag, pattern_tag) Unification.unifier
+type tag_unifier = (expr_tag, pattern_tag) Unification.unifier
 [@@deriving sexp, equal]
 
 type tag_quotient_type_eqcons =
-  (ast_tag, pattern_tag) Quotient_types.quotient_type_eqcons
+  (expr_tag, pattern_tag) Quotient_types.quotient_type_eqcons
 [@@deriving sexp, equal]
 
-type tag_quotient_type = (ast_tag, pattern_tag) Quotient_types.quotient_type
+type tag_quotient_type = (expr_tag, pattern_tag) Quotient_types.quotient_type
 [@@deriving sexp, equal]
 
-type tag_custom_type = (ast_tag, pattern_tag) Custom_types.custom_type
+type tag_custom_type = (expr_tag, pattern_tag) Custom_types.custom_type
 [@@deriving sexp, equal]
 
-type tag_program = (ast_tag, pattern_tag) Program.program
+type tag_program = (expr_tag, pattern_tag) Program.program
 [@@deriving sexp, equal]
 
 type quotient_typing_error =
@@ -64,32 +64,32 @@ module FlatPattern : sig
   type flat_pattern = t [@@deriving sexp, equal]
 
   type flat_expr =
-    | UnitLit of ast_tag
-    | IntLit of ast_tag * int
-    | Add of ast_tag * flat_expr * flat_expr
-    | Neg of ast_tag * flat_expr
-    | Subtr of ast_tag * flat_expr * flat_expr
-    | Mult of ast_tag * flat_expr * flat_expr
-    | BoolLit of ast_tag * bool
-    | BNot of ast_tag * flat_expr
-    | BOr of ast_tag * flat_expr * flat_expr
-    | BAnd of ast_tag * flat_expr * flat_expr
-    | Pair of ast_tag * flat_expr * flat_expr
-    | Eq of ast_tag * flat_expr * flat_expr
-    | Gt of ast_tag * flat_expr * flat_expr
-    | GtEq of ast_tag * flat_expr * flat_expr
-    | Lt of ast_tag * flat_expr * flat_expr
-    | LtEq of ast_tag * flat_expr * flat_expr
-    | If of ast_tag * flat_expr * flat_expr * flat_expr
-    | Var of ast_tag * string
-    | Let of ast_tag * string * flat_expr * flat_expr
-    | App of ast_tag * flat_expr * flat_expr
+    | UnitLit of expr_tag
+    | IntLit of expr_tag * int
+    | Add of expr_tag * flat_expr * flat_expr
+    | Neg of expr_tag * flat_expr
+    | Subtr of expr_tag * flat_expr * flat_expr
+    | Mult of expr_tag * flat_expr * flat_expr
+    | BoolLit of expr_tag * bool
+    | BNot of expr_tag * flat_expr
+    | BOr of expr_tag * flat_expr * flat_expr
+    | BAnd of expr_tag * flat_expr * flat_expr
+    | Pair of expr_tag * flat_expr * flat_expr
+    | Eq of expr_tag * flat_expr * flat_expr
+    | Gt of expr_tag * flat_expr * flat_expr
+    | GtEq of expr_tag * flat_expr * flat_expr
+    | Lt of expr_tag * flat_expr * flat_expr
+    | LtEq of expr_tag * flat_expr * flat_expr
+    | If of expr_tag * flat_expr * flat_expr * flat_expr
+    | Var of expr_tag * string
+    | Let of expr_tag * string * flat_expr * flat_expr
+    | App of expr_tag * flat_expr * flat_expr
     | Match of
-        ast_tag
+        expr_tag
         * flat_expr
         * Vtype.vtype
         * (flat_pattern * flat_expr) Utils.Nonempty_list.t
-    | Constructor of ast_tag * string * flat_expr
+    | Constructor of expr_tag * string * flat_expr
   [@@deriving sexp, equal]
 
   type flat_top_level_defn = {
@@ -109,7 +109,7 @@ module FlatPattern : sig
   [@@deriving sexp, equal]
 
   val flat_pattern_node_val : flat_pattern -> pattern_tag
-  val flat_node_val : flat_expr -> ast_tag
+  val flat_node_val : flat_expr -> expr_tag
   val defined_vars : t -> (string * Vtype.vtype) list
 
   val expr_rename_var :
@@ -117,7 +117,7 @@ module FlatPattern : sig
 
   val to_non_flat_pattern : t -> tag_pattern
 
-  val of_ast :
+  val of_expr :
     existing_names:Utils.StringSet.t ->
     tag_expr ->
     (Utils.StringSet.t * flat_expr, quotient_typing_error) result

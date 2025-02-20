@@ -368,16 +368,18 @@ module QCheck_testing (TagExpr : sig
 end) (TagPat : sig
   type t
 end) : sig
-  type ast_print_method =
+  type expr_print_method =
     | NoPrint
     | PrintSexp of (TagExpr.t -> Sexp.t) * (TagPat.t -> Sexp.t)
     | PrintExprSource
 
-  val get_ast_printer_opt :
-    ast_print_method -> ((TagExpr.t, TagPat.t) expr -> string) option
+  val get_expr_printer_opt :
+    expr_print_method -> ((TagExpr.t, TagPat.t) expr -> string) option
 
-  val get_ast_printer : ast_print_method -> (TagExpr.t, TagPat.t) expr -> string
-  val default_ast_print_method : ast_print_method
+  val get_expr_printer :
+    expr_print_method -> (TagExpr.t, TagPat.t) expr -> string
+
+  val default_expr_print_method : expr_print_method
 
   type gen_vtype =
     | GenVTypeUnit
@@ -401,7 +403,7 @@ end) : sig
 
   type arb_options = {
     gen : gen_options;
-    print : ast_print_method;
+    print : expr_print_method;
     shrink : shrink_options;
   }
 
@@ -409,30 +411,30 @@ end) : sig
     QCheck_testing_sig
       with type t = (TagExpr.t, TagPat.t) expr
        and type gen_options := gen_options
-       and type print_options = ast_print_method
+       and type print_options = expr_print_method
        and type shrink_options := shrink_options
        and type arb_options := arb_options
 end = struct
   module TagPatternQCheckTesting = Pattern.QCheck_testing (TagPat)
 
-  type ast_print_method =
+  type expr_print_method =
     | NoPrint
     | PrintSexp of (TagExpr.t -> Sexp.t) * (TagPat.t -> Sexp.t)
     | PrintExprSource
 
-  let get_ast_printer_opt :
-      ast_print_method -> ((TagExpr.t, TagPat.t) expr -> string) option =
+  let get_expr_printer_opt :
+      expr_print_method -> ((TagExpr.t, TagPat.t) expr -> string) option =
     function
     | NoPrint -> None
     | PrintSexp (f_e, f_p) ->
         Some (fun e -> sexp_of_expr f_e f_p e |> Sexp.to_string_hum)
     | PrintExprSource -> Some (to_source_code ~use_newlines:true)
 
-  let get_ast_printer (p : ast_print_method) (e : (TagExpr.t, TagPat.t) expr) :
-      string =
-    match get_ast_printer_opt p with None -> "" | Some f -> f e
+  let get_expr_printer (p : expr_print_method) (e : (TagExpr.t, TagPat.t) expr)
+      : string =
+    match get_expr_printer_opt p with None -> "" | Some f -> f e
 
-  let default_ast_print_method : ast_print_method = PrintExprSource
+  let default_expr_print_method : expr_print_method = PrintExprSource
 
   type t = (TagExpr.t, TagPat.t) expr
 
@@ -469,7 +471,7 @@ end = struct
     mrd : int;
   }
 
-  type print_options = ast_print_method
+  type print_options = expr_print_method
   type shrink_options = { preserve_type : bool }
 
   type arb_options = {
@@ -767,7 +769,7 @@ end = struct
     | Some t -> gen (initial_opts.mrd, []) (gen_vtype_to_vtype t)
     | None -> gen_any_of_type (initial_opts.mrd, []) >|= snd
 
-  let print : print_options -> t QCheck.Print.t = get_ast_printer
+  let print : print_options -> t QCheck.Print.t = get_expr_printer
 
   let rec shrink (opts : shrink_options) : t QCheck.Shrink.t =
     let open QCheck.Iter in
