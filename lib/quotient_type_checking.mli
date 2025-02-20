@@ -30,11 +30,10 @@ val pattern_tag_to_expr_tag : pattern_tag -> expr_tag
 type tag_unifier = (expr_tag, pattern_tag) Unification.unifier
 [@@deriving sexp, equal]
 
-type tag_quotient_type_eqcons =
-  (expr_tag, pattern_tag) Quotient_types.quotient_type_eqcons
+type tag_quotient_type_eqcons = (expr_tag, pattern_tag) QuotientType.eqcons
 [@@deriving sexp, equal]
 
-type tag_quotient_type = (expr_tag, pattern_tag) Quotient_types.quotient_type
+type tag_quotient_type = (expr_tag, pattern_tag) QuotientType.t
 [@@deriving sexp, equal]
 
 type tag_custom_type = (expr_tag, pattern_tag) Custom_types.custom_type

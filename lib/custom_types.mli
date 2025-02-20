@@ -1,13 +1,12 @@
 open Utils
 open Vtype
 open Variant_types
-open Quotient_types
 
 (** A user-defined type. Either a variant type definition or a quotient type
     definition *)
 type ('tag_e, 'tag_p) custom_type =
   | VariantType of variant_type
-  | QuotientType of ('tag_e, 'tag_p) quotient_type
+  | QuotientType of ('tag_e, 'tag_p) QuotientType.t
 [@@deriving sexp, equal]
 
 type plain_custom_type = (unit, unit) custom_type [@@deriving sexp, equal]

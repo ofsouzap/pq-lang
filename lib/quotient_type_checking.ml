@@ -4,7 +4,6 @@ open Vtype
 open Variant_types
 open Varname
 open Expr
-open Quotient_types
 open Custom_types
 open Program
 
@@ -70,10 +69,10 @@ let pattern_tag_to_expr_tag (v : pattern_tag) : expr_tag =
 type tag_unifier = (expr_tag, pattern_tag) Unification.unifier
 [@@deriving sexp, equal]
 
-type tag_quotient_type_eqcons = (expr_tag, pattern_tag) quotient_type_eqcons
+type tag_quotient_type_eqcons = (expr_tag, pattern_tag) QuotientType.eqcons
 [@@deriving sexp, equal]
 
-type tag_quotient_type = (expr_tag, pattern_tag) quotient_type
+type tag_quotient_type = (expr_tag, pattern_tag) QuotientType.t
 [@@deriving sexp, equal]
 
 type tag_custom_type = (expr_tag, pattern_tag) custom_type
@@ -1409,15 +1408,16 @@ let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
     eqcons.bindings
   |> fun (existing_names, renames_list, acc_bindings_rev) ->
   ( existing_names,
-    {
-      bindings = List.rev acc_bindings_rev;
-      body =
-        List.fold ~init:eqcons.body
-          ~f:(fun (p, e) (old_name, new_name) ->
-            ( Pattern.rename_var ~old_name ~new_name p,
-              Expr.rename_var ~old_name ~new_name e ))
-          renames_list;
-    } )
+    QuotientType.
+      {
+        bindings = List.rev acc_bindings_rev;
+        body =
+          List.fold ~init:eqcons.body
+            ~f:(fun (p, e) (old_name, new_name) ->
+              ( Pattern.rename_var ~old_name ~new_name p,
+                Expr.rename_var ~old_name ~new_name e ))
+            renames_list;
+      } )
 
 let perform_quotient_match_check ~(existing_names : StringSet.t)
     ~(quotient_type : tag_quotient_type) ~(match_node_v : expr_tag)

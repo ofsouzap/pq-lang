@@ -4,7 +4,6 @@ open Pq_lang
 open Utils
 open Pattern
 open Expr
-open Quotient_types
 open Program
 open Parser
 open Frontend

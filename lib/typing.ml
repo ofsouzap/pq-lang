@@ -4,7 +4,6 @@ open Variant_types
 open Vtype
 open Pattern
 open Expr
-open Quotient_types
 open Custom_types
 open Program
 
@@ -606,8 +605,8 @@ functor
       >>= acc_to_checked_type_ctx
 
     let type_eqcons ~(type_ctx : TypeCtx.t) ~(quotient_type_name : string)
-        (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) :
-        (('tag_e, 'tag_p) typed_quotient_type_eqcons, typing_error) Result.t =
+        (eqcons : ('tag_e, 'tag_p) QuotientType.eqcons) :
+        (('tag_e, 'tag_p) QuotientType.typed_eqcons, typing_error) Result.t =
       let open Result in
       let ( <: ) = TypeCtx.subtype type_ctx in
       let quotient_type = VTypeCustom quotient_type_name in

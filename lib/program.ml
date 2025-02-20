@@ -4,7 +4,6 @@ open Vtype
 open Varname
 open Variant_types
 open Expr
-open Quotient_types
 open Custom_types
 
 (** A top-level function definition *)
@@ -82,7 +81,7 @@ let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
     (List.fold ~init:StringSet.empty
        ~f:(fun acc -> function
          | VariantType vt -> Variant_types.existing_names vt |> Set.union acc
-         | QuotientType qt -> Quotient_types.existing_names qt |> Set.union acc)
+         | QuotientType qt -> QuotientType.existing_names qt |> Set.union acc)
        prog.custom_types)
     (Set.union
        (List.fold ~init:StringSet.empty
@@ -101,7 +100,7 @@ let program_to_source_code ?(use_newlines : bool option)
     List.map
       ~f:(function
         | VariantType vt -> variant_type_to_source_code vt
-        | QuotientType qt -> quotient_type_to_source_code ~use_newlines qt)
+        | QuotientType qt -> QuotientType.to_source_code ~use_newlines qt)
       prog.custom_types
   in
   let top_level_defns_str : string list =

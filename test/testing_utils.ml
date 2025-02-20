@@ -4,7 +4,6 @@ open Utils
 open Vtype
 open Variant_types
 open Pattern
-open Quotient_types
 open Custom_types
 open Typing
 open Parser
@@ -85,7 +84,7 @@ module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
   val add_variant : t -> variant_type -> t
-  val add_quotient : t -> ('tag_e, 'tag_p) quotient_type -> t
+  val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
   val from_list : ('tag_e, 'tag_p) custom_type list -> t
   val variant_gen_opt : t -> variant_type QCheck.Gen.t option
   val sexp_of_t : t -> Sexp.t
@@ -171,8 +170,8 @@ end = struct
 
   let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
 
-  let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) quotient_type) : t =
-    QuotientType (to_plain_quotient_type qt) :: ctx
+  let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) QuotientType.t) : t =
+    QuotientType (QuotientType.to_plain_quotient_type qt) :: ctx
 
   let type_defns_to_ordered_list = Fn.id
   let from_list = List.map ~f:to_plain_custom_type
@@ -263,7 +262,7 @@ end = struct
       let print_variant_type : variant_type QCheck.Print.t =
         QCheck.Print.(pair Fn.id (list print_variant_type_constructor))
       in
-      let print_quotient_type_eqcons : plain_quotient_type_eqcons QCheck.Print.t
+      let print_quotient_type_eqcons : QuotientType.plain_eqcons QCheck.Print.t
           =
         let open QCheck.Print in
         fun eqcons ->
@@ -273,7 +272,7 @@ end = struct
                (Expr.to_source_code ~use_newlines:false)
                eqcons.body)
       in
-      let print_quotient_type : plain_quotient_type QCheck.Print.t =
+      let print_quotient_type : QuotientType.plain_t QCheck.Print.t =
        fun qt ->
         sprintf "{name=%s; base_type_name=%s; eqconss=%s}" qt.name
           qt.base_type_name

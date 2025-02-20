@@ -3,7 +3,6 @@ open Pq_lang
 open Utils
 open Vtype
 open Variant_types
-open Quotient_types
 open Custom_types
 open Typing
 
@@ -48,7 +47,7 @@ module TestingTypeCtx : sig
   val add_variant : t -> variant_type -> t
 
   (** Add a quotient type to the type context *)
-  val add_quotient : t -> ('tag_e, 'tag_p) quotient_type -> t
+  val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
 
   (** Creates a type from a list *)
   val from_list : ('tag_e, 'tag_p) custom_type list -> t

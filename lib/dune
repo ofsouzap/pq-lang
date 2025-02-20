@@ -11,7 +11,7 @@
   pattern
   expr
   unification
-  quotient_types
+  quotientType
   custom_types
   program
   typing

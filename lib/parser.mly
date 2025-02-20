@@ -4,7 +4,6 @@ open Vtype
 open Variant_types
 open Pattern
 open Expr
-open Quotient_types
 open Program
 
 let add_variant_type_definition_to_program (p : plain_program) (vt : variant_type) : plain_program =
@@ -13,7 +12,7 @@ let add_variant_type_definition_to_program (p : plain_program) (vt : variant_typ
     custom_types = (VariantType vt) :: p.custom_types;
   }
 
-let add_quotient_type_definition_to_program (p : plain_program) (qt : plain_quotient_type) : plain_program =
+let add_quotient_type_definition_to_program (p : plain_program) (qt : QuotientType.plain_t) : plain_program =
   {
     p with
     custom_types = (QuotientType qt) :: p.custom_types;
@@ -70,9 +69,9 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 
 %type <(string * vtype) list> quotient_type_eqcons_bindings
 %type <plain_pattern * plain_expr> quotient_type_eqcons_body
-%type <plain_quotient_type_eqcons> quotient_type_eqcons
-%type <plain_quotient_type_eqcons list> quotient_type_definition_eqconss
-%type <plain_quotient_type> quotient_type_definition
+%type <QuotientType.plain_eqcons> quotient_type_eqcons
+%type <QuotientType.plain_eqcons list> quotient_type_definition_eqconss
+%type <QuotientType.plain_t> quotient_type_definition
 
 %type <(string * vtype)> top_level_defn_param
 %type <plain_top_level_defn> top_level_defn
@@ -187,7 +186,7 @@ quotient_type_eqcons_body:
 ;
 
 quotient_type_eqcons:
-  | bs = quotient_type_eqcons_bindings BIG_ARROW body = quotient_type_eqcons_body { { bindings=bs; body=body } }
+  | bs = quotient_type_eqcons_bindings BIG_ARROW body = quotient_type_eqcons_body { QuotientType.{ bindings=bs; body=body } }
 ;
 
 quotient_type_definition_eqconss:
@@ -196,7 +195,7 @@ quotient_type_definition_eqconss:
 ;
 
 quotient_type_definition:
-  | QTYPE name = LNAME ASSIGN base_type_name = LNAME eqconss = quotient_type_definition_eqconss { { name; base_type_name; eqconss=eqconss } }
+  | QTYPE name = LNAME ASSIGN base_type_name = LNAME eqconss = quotient_type_definition_eqconss { QuotientType.{ name; base_type_name; eqconss=eqconss } }
 ;
 
 top_level_defn_param:
