@@ -12,7 +12,7 @@
   expr
   unification
   quotientType
-  custom_types
+  customType
   program
   typing
   quotient_type_checking

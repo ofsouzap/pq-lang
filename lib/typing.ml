@@ -3,7 +3,6 @@ open Utils
 open Vtype
 open Pattern
 open Expr
-open Custom_types
 open Program
 
 type typing_error =
@@ -116,34 +115,35 @@ module type TypingTypeContext = sig
   val empty : t
 
   val create :
-    custom_types:('tag_e, 'tag_p) custom_type list -> (t, typing_error) Result.t
+    custom_types:('tag_e, 'tag_p) CustomType.t list ->
+    (t, typing_error) Result.t
 
-  val find_type_defn_by_name : t -> string -> plain_custom_type option
+  val find_type_defn_by_name : t -> string -> CustomType.plain_t option
   val type_defn_exists : t -> string -> bool
 
   val find_variant_type_with_constructor :
     t -> string -> (VariantType.t * VariantType.constructor) option
 
-  val type_defns_to_ordered_list : t -> plain_custom_type list
+  val type_defns_to_ordered_list : t -> CustomType.plain_t list
   val subtype : t -> vtype -> vtype -> (bool, typing_error) Result.t
 end
 
 module SetTypingTypeContext : TypingTypeContext = struct
   type t = {
-    custom_types : plain_custom_type StringMap.t;
+    custom_types : CustomType.plain_t StringMap.t;
     custom_types_order : string list;
   }
 
   let empty : t = { custom_types = StringMap.empty; custom_types_order = [] }
 
-  let create ~(custom_types : ('tag_e, 'tag_p) custom_type list) :
+  let create ~(custom_types : ('tag_e, 'tag_p) CustomType.t list) :
       (t, typing_error) Result.t =
     let type_defns_map_or_err =
       custom_types
-      |> List.map ~f:to_plain_custom_type
+      |> List.map ~f:CustomType.to_plain_custom_type
       |> StringMap.of_list_with_key ~get_key:(function
            | VariantType (vt_name, _) -> vt_name
-           | QuotientType qt -> qt.name)
+           | CustomType.QuotientType qt -> qt.name)
     in
     match type_defns_map_or_err with
     | `Duplicate_key dup_name -> Error (DuplicateTypeNameDefinition dup_name)
@@ -152,11 +152,11 @@ module SetTypingTypeContext : TypingTypeContext = struct
           {
             custom_types = type_defns_map;
             custom_types_order =
-              List.map ~f:(fun ct -> custom_type_name ct) custom_types;
+              List.map ~f:(fun ct -> CustomType.name ct) custom_types;
           }
 
   let find_type_defn_by_name (ctx : t) :
-      string -> ('tag_e, 'tag_p) custom_type option =
+      string -> ('tag_e, 'tag_p) CustomType.t option =
     Map.find ctx.custom_types
 
   let type_defn_exists (ctx : t) (vt_name : string) : bool =
@@ -165,7 +165,7 @@ module SetTypingTypeContext : TypingTypeContext = struct
   let find_variant_type_with_constructor (ctx : t) (c_name : string) :
       (VariantType.t * VariantType.constructor) option =
     Map.fold_until ctx.custom_types ~init:()
-      ~f:(fun ~key:_ ~(data : ('tag_e, 'tag_p) custom_type) () ->
+      ~f:(fun ~key:_ ~(data : ('tag_e, 'tag_p) CustomType.t) () ->
         match data with
         | VariantType ((_, cs) as vt) -> (
             let search_res =
@@ -174,10 +174,11 @@ module SetTypingTypeContext : TypingTypeContext = struct
             match search_res with
             | None -> Continue ()
             | Some c -> Stop (Some (vt, c)))
-        | QuotientType _ -> Continue ())
+        | CustomType.QuotientType _ -> Continue ())
       ~finish:(fun () -> None)
 
-  let type_defns_to_ordered_list (ctx : t) : ('tag_e, 'tag_p) custom_type list =
+  let type_defns_to_ordered_list (ctx : t) : ('tag_e, 'tag_p) CustomType.t list
+      =
     List.map
       ~f:(fun ct_name -> find_type_defn_by_name ctx ct_name |> Option.value_exn)
       ctx.custom_types_order
@@ -211,10 +212,10 @@ module SetTypingTypeContext : TypingTypeContext = struct
             Ok (equal_string vt1_name vt2_name)
         | VariantType _, QuotientType qt2 ->
             subtype ctx t1 (VTypeCustom qt2.base_type_name)
-        | QuotientType qt1, QuotientType qt2 ->
+        | CustomType.QuotientType qt1, QuotientType qt2 ->
             if equal_string qt1.name qt2.name then Ok true
             else subtype ctx t1 (VTypeCustom qt2.base_type_name)
-        | QuotientType _, VariantType _ -> Ok false)
+        | CustomType.QuotientType _, VariantType _ -> Ok false)
     | VTypeCustom _, _ -> Ok false
 end
 
@@ -559,7 +560,7 @@ functor
     type ('tag_e, 'tag_p) checking_type_ctx_acc = {
       types : StringSet.t;
       constructors : StringSet.t;
-      type_defns_list : ('tag_e, 'tag_p) custom_type list;
+      type_defns_list : ('tag_e, 'tag_p) CustomType.t list;
     }
 
     let check_type_ctx (ctx_in : TypeCtx.t) :
@@ -576,7 +577,7 @@ functor
             constructors = StringSet.empty;
             type_defns_list = [];
           } ~f:(fun acc td ->
-          let td_name = custom_type_name td in
+          let td_name = CustomType.name td in
           if Set.mem acc.types td_name then
             Error (DuplicateTypeNameDefinition td_name)
           else
@@ -595,7 +596,7 @@ functor
                           acc with
                           constructors = Set.add acc.constructors c_name;
                         })
-            | QuotientType qt ->
+            | CustomType.QuotientType qt ->
                 (* First, check that the base type is an existing type *)
                 if Set.mem acc.types qt.base_type_name then Ok acc
                 else Error (UndefinedTypeName qt.base_type_name))
@@ -647,18 +648,18 @@ functor
              (pattern_to_plain_pattern body_pattern, quotient_type, pattern_t))
 
     let type_custom_types ~(type_ctx : TypeCtx.t)
-        (custom_types : ('tag_e, 'tag_p) custom_type list) =
+        (custom_types : ('tag_e, 'tag_p) CustomType.t list) =
       let open Result in
       List.map
         ~f:(function
-          | VariantType vt -> VariantType vt |> Ok
-          | QuotientType qt ->
+          | VariantType vt -> CustomType.VariantType vt |> Ok
+          | CustomType.QuotientType qt ->
               List.map
                 ~f:(type_eqcons ~type_ctx ~quotient_type_name:qt.name)
                 qt.eqconss
               |> Result.all
               >>| fun eqconss ->
-              { qt with eqconss } |> fun qt' -> QuotientType qt')
+              { qt with eqconss } |> fun qt' -> CustomType.QuotientType qt')
         custom_types
       |> Result.all
 

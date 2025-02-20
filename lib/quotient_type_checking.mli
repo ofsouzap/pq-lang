@@ -36,7 +36,7 @@ type tag_quotient_type_eqcons = (expr_tag, pattern_tag) QuotientType.eqcons
 type tag_quotient_type = (expr_tag, pattern_tag) QuotientType.t
 [@@deriving sexp, equal]
 
-type tag_custom_type = (expr_tag, pattern_tag) Custom_types.custom_type
+type tag_custom_type = (expr_tag, pattern_tag) CustomType.t
 [@@deriving sexp, equal]
 
 type tag_program = (expr_tag, pattern_tag) Program.program

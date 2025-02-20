@@ -3,7 +3,6 @@ open Utils
 open Vtype
 open Varname
 open Expr
-open Custom_types
 
 (** A top-level function definition *)
 type ('tag_e, 'tag_p) top_level_defn = {
@@ -36,7 +35,7 @@ let top_level_defn_to_source_code ~(use_newlines : bool) :
   SourceCodeBuilder.from_converter ~converter:convert ~use_newlines
 
 type ('tag_e, 'tag_p) program = {
-  custom_types : ('tag_e, 'tag_p) custom_type list;
+  custom_types : ('tag_e, 'tag_p) CustomType.t list;
   top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
   e : ('tag_e, 'tag_p) expr;
 }
@@ -50,7 +49,7 @@ type plain_program = (unit, unit) program [@@deriving sexp, equal]
 let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) program) :
     ('tag_e2, 'tag_p) program =
   {
-    custom_types = List.map ~f:(Custom_types.fmap_expr ~f) prog.custom_types;
+    custom_types = List.map ~f:(CustomType.fmap_expr ~f) prog.custom_types;
     top_level_defns =
       List.map
         ~f:(fun defn ->
@@ -62,7 +61,7 @@ let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) program) :
 let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) program) :
     ('tag_e, 'tag_p2) program =
   {
-    custom_types = List.map ~f:(Custom_types.fmap_pattern ~f) prog.custom_types;
+    custom_types = List.map ~f:(CustomType.fmap_pattern ~f) prog.custom_types;
     top_level_defns =
       List.map
         ~f:(fun defn ->
@@ -80,7 +79,8 @@ let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
     (List.fold ~init:StringSet.empty
        ~f:(fun acc -> function
          | VariantType vt -> VariantType.existing_names vt |> Set.union acc
-         | QuotientType qt -> QuotientType.existing_names qt |> Set.union acc)
+         | CustomType.QuotientType qt ->
+             QuotientType.existing_names qt |> Set.union acc)
        prog.custom_types)
     (Set.union
        (List.fold ~init:StringSet.empty
@@ -99,7 +99,8 @@ let program_to_source_code ?(use_newlines : bool option)
     List.map
       ~f:(function
         | VariantType vt -> VariantType.to_source_code vt
-        | QuotientType qt -> QuotientType.to_source_code ~use_newlines qt)
+        | CustomType.QuotientType qt ->
+            QuotientType.to_source_code ~use_newlines qt)
       prog.custom_types
   in
   let top_level_defns_str : string list =
@@ -185,14 +186,17 @@ end = struct
 
   let gen_type_defns_list ~(max_variant_types : int)
       ~(max_variant_type_constructors : int) ~(allow_fun_types : bool)
-      ~(mrd : int) : ('tag_e, 'tag_p) custom_type list QCheck.Gen.t =
+      ~(mrd : int) : ('tag_e, 'tag_p) CustomType.t list QCheck.Gen.t =
     (* TODO - allow this to generate quotient types too *)
     let open QCheck.Gen in
     int_range 0 max_variant_types >>= fun (n : int) ->
     fix
       (fun self ((n : int), (acc : gen_variant_types_list_acc)) ->
         if n <= 0 then
-          return (List.map ~f:(fun vt -> VariantType vt) acc.variant_types)
+          return
+            (List.map
+               ~f:(fun vt -> CustomType.VariantType vt)
+               acc.variant_types)
         else
           VariantType.QCheck_testing.gen
             {
@@ -296,7 +300,8 @@ end = struct
       ~pat_v_gen:opts.pat_v_gen
       ~variant_types:
         (List.filter_map
-           ~f:(function VariantType vt -> Some vt | QuotientType _ -> None)
+           ~f:(function
+             | VariantType vt -> Some vt | CustomType.QuotientType _ -> None)
            custom_types)
       ~max_top_level_defns:opts.max_top_level_defns ~mrd:opts.mrd
     >>= fun top_level_defns ->
@@ -307,7 +312,8 @@ end = struct
             opts.body_type >>| Expr_qcheck_testing.vtype_to_gen_vtype_unsafe);
         variant_types =
           List.filter_map
-            ~f:(function VariantType vt -> Some vt | QuotientType _ -> None)
+            ~f:(function
+              | VariantType vt -> Some vt | CustomType.QuotientType _ -> None)
             custom_types;
         top_level_defns =
           List.map
@@ -329,9 +335,9 @@ end = struct
           | NoPrint -> ""
           | PrintSexp (sexp_of_expr_tag, sexp_of_pat_tag) ->
               ct
-              |> sexp_of_custom_type sexp_of_expr_tag sexp_of_pat_tag
+              |> CustomType.sexp_of_t sexp_of_expr_tag sexp_of_pat_tag
               |> Sexp.to_string_hum
-          | PrintExprSource -> custom_type_name ct
+          | PrintExprSource -> CustomType.name ct
         in
         list (fun ct -> ct |> ct_to_string) prog.custom_types)
       (Expr_qcheck_testing.print print_method prog.e)

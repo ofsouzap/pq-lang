@@ -4,7 +4,6 @@ open Pq_lang
 open Utils
 open Vtype
 open Pattern
-open Custom_types
 open Program
 open Typing
 open Program_executor
@@ -19,7 +18,7 @@ let make_store (vars : (string * Program_executor.value) list) :
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
     ~init:Program_executor.empty_store
 
-let type_expr ?(custom_types : plain_custom_type list option)
+let type_expr ?(custom_types : CustomType.plain_t list option)
     ?(top_level_defns : (unit, unit) top_level_defn list option)
     (e : Expr.plain_expr) : (unit, unit) SimpleTypeChecker.typed_program =
   match
@@ -203,7 +202,7 @@ let test_cases_variables : basic_test_case list =
 let test_cases_match : basic_test_case list =
   let open Expr in
   let mapf
-      ( (custom_types : plain_custom_type list option),
+      ( (custom_types : CustomType.plain_t list option),
         (x : plain_expr),
         (y : exec_res) ) : basic_test_case =
     (Expr.to_source_code x, type_expr ?custom_types x, y)
@@ -282,8 +281,8 @@ let test_cases_match : basic_test_case list =
         Ok (Pair (Bool true, Bool true)) );
       ( Some
           [
-            VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-            VariantType
+            CustomType.VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+            CustomType.VariantType
               ( "int_list",
                 [
                   ("Nil", VTypeUnit);
@@ -302,8 +301,8 @@ let test_cases_match : basic_test_case list =
         Ok (Bool true) );
       ( Some
           [
-            VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-            VariantType
+            CustomType.VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+            CustomType.VariantType
               ( "int_list",
                 [
                   ("Nil", VTypeUnit);
@@ -340,7 +339,8 @@ let test_cases_constructor : basic_test_case list =
       ((variant_types : VariantType.t list), (y : plain_expr), (z : exec_res)) =
     ( Expr.to_source_code y,
       type_expr
-        ~custom_types:(List.map ~f:(fun vt -> VariantType vt) variant_types)
+        ~custom_types:
+          (List.map ~f:(fun vt -> CustomType.VariantType vt) variant_types)
         y,
       z )
   in

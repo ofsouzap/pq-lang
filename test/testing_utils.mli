@@ -2,7 +2,6 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
-open Custom_types
 open Typing
 
 (** A default maximum number of defined variant types *)
@@ -49,7 +48,7 @@ module TestingTypeCtx : sig
   val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
 
   (** Creates a type from a list *)
-  val from_list : ('tag_e, 'tag_p) custom_type list -> t
+  val from_list : ('tag_e, 'tag_p) CustomType.t list -> t
 
   (** If there are any defined variant types, get a generator for a random one
       of them *)

@@ -5,7 +5,6 @@ open Pq_lang
 open Utils
 open Vtype
 open Expr
-open Custom_types
 open Typing
 open Testing_utils
 
@@ -15,8 +14,8 @@ let vtype_gen_no_fun (type_ctx : TestingTypeCtx.t) =
       variant_types =
         TestingTypeCtx.type_defns_to_ordered_list type_ctx
         |> List.filter_map ~f:(function
-             | VariantType (vt_name, _) -> Some vt_name
-             | QuotientType _ -> None)
+             | CustomType.VariantType (vt_name, _) -> Some vt_name
+             | CustomType.QuotientType _ -> None)
         |> StringSet.of_list;
       allow_fun_types = false;
       mrd = default_max_gen_rec_depth;
@@ -28,8 +27,8 @@ let vtype_arb_no_fun_type (type_ctx : TestingTypeCtx.t) =
       variant_types =
         TestingTypeCtx.type_defns_to_ordered_list type_ctx
         |> List.filter_map ~f:(function
-             | VariantType (vt_name, _) -> Some vt_name
-             | QuotientType _ -> None)
+             | CustomType.VariantType (vt_name, _) -> Some vt_name
+             | CustomType.QuotientType _ -> None)
         |> StringSet.of_list;
       allow_fun_types = false;
       mrd = default_max_gen_rec_depth;
@@ -127,8 +126,8 @@ let create_typed_expr_gen_test (name : string)
               variant_types =
                 TestingTypeCtx.type_defns_to_ordered_list type_ctx
                 |> List.filter_map ~f:(function
-                     | VariantType vt -> Some vt
-                     | QuotientType _ -> None);
+                     | CustomType.VariantType vt -> Some vt
+                     | CustomType.QuotientType _ -> None);
               top_level_defns = [] (* TODO - have this arbitrary too *);
               v_gen = QCheck.Gen.unit;
               pat_v_gen = QCheck.Gen.unit;

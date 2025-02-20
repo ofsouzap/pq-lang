@@ -3,7 +3,6 @@ open Utils
 open Vtype
 open Varname
 open Expr
-open Custom_types
 open Program
 
 (* TODO - stop using LispBuilder, just use Core.Sexp instead *)
@@ -74,7 +73,7 @@ type tag_quotient_type_eqcons = (expr_tag, pattern_tag) QuotientType.eqcons
 type tag_quotient_type = (expr_tag, pattern_tag) QuotientType.t
 [@@deriving sexp, equal]
 
-type tag_custom_type = (expr_tag, pattern_tag) custom_type
+type tag_custom_type = (expr_tag, pattern_tag) CustomType.t
 [@@deriving sexp, equal]
 
 type tag_program = (expr_tag, pattern_tag) program [@@deriving sexp, equal]
@@ -734,11 +733,11 @@ module Smt = struct
       match t with
       | VTypeCustom ct_name -> (
           List.find state.custom_types ~f:(fun x_ct ->
-              equal_string (custom_type_name x_ct) ct_name)
+              equal_string (CustomType.name x_ct) ct_name)
           |> Result.of_option ~error:(UndefinedCustomTypeName ct_name)
           >>= function
           | VariantType (vt_name, _) -> Ok (VTypeCustom vt_name)
-          | QuotientType qt ->
+          | CustomType.QuotientType qt ->
               find_root_base_type state (VTypeCustom qt.base_type_name))
       | _ -> Ok t
 
@@ -807,7 +806,7 @@ module Smt = struct
           if
             List.exists state.custom_types ~f:(function
               | VariantType _ -> false
-              | QuotientType qt -> equal_string qt.name ct_name)
+              | CustomType.QuotientType qt -> equal_string qt.name ct_name)
           then Some (custom_special_name (`EqualityFunction ct_name))
           else None
       | _ -> None
@@ -1195,7 +1194,7 @@ module Smt = struct
         List.fold_result state.custom_types ~init:(existing_names, [])
           ~f:(fun (existing_names, (acc_rev : node list list)) -> function
           | VariantType _ -> Ok (existing_names, acc_rev)
-          | QuotientType qt ->
+          | CustomType.QuotientType qt ->
               let t = VTypeCustom qt.name in
               let eq_fun_name =
                 State.state_get_vtype_special_eq_fun_name state t
@@ -1219,7 +1218,7 @@ module Smt = struct
                     | VTypeCustom ct_name ->
                         List.find_map state.custom_types ~f:(function
                           | VariantType _ -> None
-                          | QuotientType qt ->
+                          | CustomType.QuotientType qt ->
                               if equal_string ct_name qt.name then Some qt
                               else None)
                     | _ -> None)
@@ -1583,7 +1582,7 @@ let check_program (prog : tag_program) : (unit, quotient_typing_error) Result.t
     List.fold ~init:state
       ~f:(fun state -> function
         | VariantType vt -> state_add_variant_type vt state
-        | QuotientType _ -> state)
+        | CustomType.QuotientType _ -> state)
       flat_prog.custom_types
   in
   (* Check the top-level definitions and add them to the state *)

@@ -1,7 +1,6 @@
 open Vtype
 open Pattern
 open Expr
-open Custom_types
 open Program
 
 (** Typing errors *)
@@ -57,10 +56,11 @@ module type TypingTypeContext = sig
 
   (** Creates a typing context using the provided values *)
   val create :
-    custom_types:('tag_e, 'tag_p) custom_type list -> (t, typing_error) Result.t
+    custom_types:('tag_e, 'tag_p) CustomType.t list ->
+    (t, typing_error) Result.t
 
   (** Looks up a type definition, by name, in the context *)
-  val find_type_defn_by_name : t -> string -> plain_custom_type option
+  val find_type_defn_by_name : t -> string -> CustomType.plain_t option
 
   (** Check whether a type definition exists in the context, by name *)
   val type_defn_exists : t -> string -> bool
@@ -71,7 +71,7 @@ module type TypingTypeContext = sig
     t -> string -> (VariantType.t * VariantType.constructor) option
 
   (** Get a list of the variant types defined in the context *)
-  val type_defns_to_ordered_list : t -> plain_custom_type list
+  val type_defns_to_ordered_list : t -> CustomType.plain_t list
 
   (** Check if one type is a subtype of another *)
   val subtype : t -> vtype -> vtype -> (bool, typing_error) Result.t

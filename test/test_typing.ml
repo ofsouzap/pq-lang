@@ -5,7 +5,6 @@ open Utils
 open Vtype
 open Pattern
 open Expr
-open Custom_types
 open Typing
 open Testing_utils
 
@@ -28,8 +27,8 @@ let vtype_gen type_ctx =
       variant_types =
         TestingTypeCtx.type_defns_to_ordered_list type_ctx
         |> List.filter_map ~f:(function
-             | VariantType (vt_name, _) -> Some vt_name
-             | QuotientType _ -> None)
+             | CustomType.VariantType (vt_name, _) -> Some vt_name
+             | CustomType.QuotientType _ -> None)
         |> StringSet.of_list;
       mrd = default_max_gen_rec_depth;
       allow_fun_types = false;
@@ -485,8 +484,8 @@ let test_cases_arb_compound_expr_typing : test list =
         variant_types =
           TestingTypeCtx.type_defns_to_ordered_list type_ctx
           |> List.filter_map ~f:(function
-               | VariantType vt -> Some vt
-               | QuotientType _ -> None);
+               | CustomType.VariantType vt -> Some vt
+               | CustomType.QuotientType _ -> None);
         top_level_defns = (* TODO - have arbitrary TLDs *) [];
         v_gen = QCheck.Gen.unit;
         pat_v_gen = QCheck.Gen.unit;

@@ -2,7 +2,6 @@ open Utils
 open Vtype
 open Varname
 open Expr
-open Custom_types
 
 (** A top-level function definition *)
 type ('tag_e, 'tag_p) top_level_defn = {
@@ -23,7 +22,7 @@ val top_level_defn_to_source_code :
 (** A program, consisting of any number of custom type definitions, top-level
     definitions and an expression to evaluate *)
 type ('tag_e, 'tag_p) program = {
-  custom_types : ('tag_e, 'tag_p) custom_type list;
+  custom_types : ('tag_e, 'tag_p) CustomType.t list;
   top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
   e : ('tag_e, 'tag_p) expr;
 }
