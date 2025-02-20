@@ -353,7 +353,7 @@ functor
       let open Result in
       let ( <: ) = TypeCtx.subtype type_ctx in
       let e_type (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t) : Vtype.t =
-        e |> Expr.expr_node_val |> fst
+        e |> Expr.node_val |> fst
       in
       let be_of_type ?(msg : string option) (exp : Vtype.t)
           (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t) :
@@ -635,7 +635,7 @@ functor
       (* Type the expression, with the bindings' variable context *)
       type_expr (type_ctx, bindings_var_ctx) body_expr >>= fun typed_body ->
       let pattern_t = typed_pattern |> Pattern.node_val |> fst in
-      let expr_t = typed_body |> expr_node_val |> fst in
+      let expr_t = typed_body |> Expr.node_val |> fst in
       pattern_t <: quotient_type >>= fun pattern_t_valid ->
       if pattern_t_valid then
         expr_t <: quotient_type >>= fun expr_t_valid ->
@@ -644,7 +644,7 @@ functor
         else
           Error
             (EqConsBodyExprTypeMismatch
-               (expr_to_plain_expr body_expr, quotient_type, expr_t))
+               (Expr.to_plain_expr body_expr, quotient_type, expr_t))
       else
         Error
           (EqConsBodyPatternTypeMismatch
@@ -698,7 +698,7 @@ functor
               else Fn.id
             in
             type_expr (type_ctx, body_var_ctx) defn.body >>= fun typed_body ->
-            let typed_body_t = typed_body |> expr_node_val |> fst in
+            let typed_body_t = typed_body |> Expr.node_val |> fst in
             typed_body_t <: defn.return_t >>= fun return_t_valid ->
             if return_t_valid then
               let defn_t = Vtype.VTypeFun (snd defn.param, defn.return_t) in

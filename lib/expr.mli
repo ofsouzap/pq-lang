@@ -53,11 +53,11 @@ type ('tag_e, 'tag_p) t =
 [@@deriving sexp, equal]
 
 (** Extract the value attached to a single node of a tagged Expr expression *)
-val expr_node_val : ('tag_e, 'tag_p) t -> 'tag_e
+val node_val : ('tag_e, 'tag_p) t -> 'tag_e
 
 (** Map a function onto the value of a single node of a tagged Expr expression
 *)
-val expr_node_map_val :
+val node_map_val :
   f:('tag_e -> 'tag_e) -> ('tag_e, 'tag_p) t -> ('tag_e, 'tag_p) t
 
 (** Map a function onto all values in an entire tagged Expr expression *)
@@ -82,7 +82,7 @@ type ('a, 'b) typed_t = (Vtype.t * 'a, Vtype.t * 'b) t [@@deriving sexp, equal]
 type plain_typed_t = (unit, unit) typed_t [@@deriving sexp, equal]
 
 (** Delete an Expr's tagging data to form a plain Expr *)
-val expr_to_plain_expr : ('tag_e, 'tag_p) t -> plain_t
+val to_plain_expr : ('tag_e, 'tag_p) t -> plain_t
 
 (** Rename a variable in an expression *)
 val rename_var :

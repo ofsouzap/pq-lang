@@ -88,7 +88,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                      e
                  with
                  | Ok e_typed -> (
-                     let e_type = e_typed |> Expr.expr_node_val |> fst in
+                     let e_type = e_typed |> Expr.node_val |> fst in
                      match
                        TestingTypeChecker.type_expr
                          (type_ctx, TestingVarCtx.empty)
@@ -96,7 +96,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                      with
                      | Ok e_shrunk_typed ->
                          let e_shrunk_type =
-                           e_shrunk_typed |> Expr.expr_node_val |> fst
+                           e_shrunk_typed |> Expr.node_val |> fst
                          in
                          if Vtype.equal e_type e_shrunk_type then true
                          else
@@ -157,7 +157,7 @@ let create_typed_expr_gen_test (name : string)
                TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
              with
              | Ok e_typed ->
-                 let et = e_typed |> Expr.expr_node_val |> fst in
+                 let et = e_typed |> Expr.node_val |> fst in
                  Vtype.equal t et
              | Error _ -> false)))
 

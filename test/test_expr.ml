@@ -101,7 +101,7 @@ let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
     (fun (x, prog) ->
       let e_raw = prog.e in
       let e = fmap ~f:(const x) e_raw in
-      type_eq (expr_node_val e) x)
+      type_eq (Expr.node_val e) x)
 
 module SingleTagged_tests =
 functor
@@ -141,8 +141,8 @@ functor
         (fun (f_, prog) ->
           let e = prog.e in
           let f = QCheck.Fn.apply f_ in
-          let e' = expr_node_map_val ~f e in
-          Tag.eq (expr_node_val e') (e |> expr_node_val |> f))
+          let e' = Expr.node_map_val ~f e in
+          Tag.eq (Expr.node_val e') (e |> Expr.node_val |> f))
   end
 
 module DoubleTagged_tests =
@@ -189,7 +189,7 @@ functor
           let e = prog.e in
           let f = QCheck.Fn.apply f_ in
           let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
-          Tag2.eq (expr_node_val e') (f x))
+          Tag2.eq (Expr.node_val e') (f x))
   end
 
 module Unit_singletagged_tests = SingleTagged_tests (struct

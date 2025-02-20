@@ -50,7 +50,7 @@ let test_cases_expr_typing : test list =
     let out = Typing.type_expr ~type_ctx e in
     match (out, t) with
     | Ok e_typed, Ok exp_t ->
-        let out_t = e_typed |> Expr.expr_node_val |> fst in
+        let out_t = e_typed |> Expr.node_val |> fst in
         assert_equal ~cmp:Vtype.equal ~printer:Vtype.to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
@@ -390,7 +390,7 @@ let test_cases_typing_with_var_ctx : test list =
     in
     match (out, t) with
     | Ok e_typed, Ok exp_t ->
-        let out_t = e_typed |> expr_node_val |> fst in
+        let out_t = e_typed |> Expr.node_val |> fst in
         assert_equal ~cmp:Vtype.equal ~printer:Vtype.to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
@@ -548,7 +548,7 @@ let test_cases_arb_compound_expr_typing : test list =
                  TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
                with
                | Ok e_typed ->
-                   let t = e_typed |> expr_node_val |> fst in
+                   let t = e_typed |> Expr.node_val |> fst in
                    Vtype.equal exp_t t
                | Error _ -> false)))
   in
@@ -748,8 +748,8 @@ let test_cases_typing_maintains_structure : test =
                TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
              with
              | Ok e_typed ->
-                 let plain_e = expr_to_plain_expr e in
-                 let plain_typed_e = e_typed |> expr_to_plain_expr in
+                 let plain_e = Expr.to_plain_expr e in
+                 let plain_typed_e = e_typed |> Expr.to_plain_expr in
                  Expr.equal_plain_t plain_e plain_typed_e
              | Error _ -> false)))
 

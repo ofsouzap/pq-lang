@@ -31,7 +31,7 @@ type ('tag_e, 'tag_p) t =
   | Constructor of 'tag_e * string * ('tag_e, 'tag_p) t
 [@@deriving sexp, equal]
 
-let expr_node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
+let node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
     ('tag_e, 'tag_p) t -> 'tag_e * ('tag_e, 'tag_p) t = function
   | UnitLit v -> (f v, UnitLit (f v))
   | IntLit (v, x) -> (f v, IntLit (f v, x))
@@ -56,12 +56,12 @@ let expr_node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
   | Match (v, e1, t2, cs) -> (f v, Match (f v, e1, t2, cs))
   | Constructor (v, cname, e1) -> (f v, Constructor (f v, cname, e1))
 
-let expr_node_val (e : ('tag_e, 'tag_p) t) : 'tag_e =
-  expr_node_map_val_with_result ~f:Fn.id e |> fst
+let node_val (e : ('tag_e, 'tag_p) t) : 'tag_e =
+  node_map_val_with_result ~f:Fn.id e |> fst
 
-let expr_node_map_val ~(f : 'tag_e -> 'tag_e) :
+let node_map_val ~(f : 'tag_e -> 'tag_e) :
     ('tag_e, 'tag_p) t -> ('tag_e, 'tag_p) t =
-  Fn.compose snd (expr_node_map_val_with_result ~f)
+  Fn.compose snd (node_map_val_with_result ~f)
 
 let rec fmap ~(f : 'tag_e1 -> 'tag_e2) (e : ('tag_e1, 'tag_p) t) :
     ('tag_e2, 'tag_p) t =
@@ -166,41 +166,39 @@ type plain_t = (unit, unit) t [@@deriving sexp, equal]
 type ('a, 'b) typed_t = (Vtype.t * 'a, Vtype.t * 'b) t [@@deriving sexp, equal]
 type plain_typed_t = (unit, unit) typed_t [@@deriving sexp, equal]
 
-let rec expr_to_plain_expr (e : ('tag_e, 'tag_p) t) : plain_t =
+let rec to_plain_expr (e : ('tag_e, 'tag_p) t) : plain_t =
   match e with
   | UnitLit _ -> UnitLit ()
   | IntLit (_, i) -> IntLit ((), i)
-  | Add (_, e1, e2) -> Add ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Neg (_, e) -> Neg ((), expr_to_plain_expr e)
-  | Subtr (_, e1, e2) -> Subtr ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Mult (_, e1, e2) -> Mult ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
+  | Add (_, e1, e2) -> Add ((), to_plain_expr e1, to_plain_expr e2)
+  | Neg (_, e) -> Neg ((), to_plain_expr e)
+  | Subtr (_, e1, e2) -> Subtr ((), to_plain_expr e1, to_plain_expr e2)
+  | Mult (_, e1, e2) -> Mult ((), to_plain_expr e1, to_plain_expr e2)
   | BoolLit (_, b) -> BoolLit ((), b)
-  | BNot (_, e) -> BNot ((), expr_to_plain_expr e)
-  | BOr (_, e1, e2) -> BOr ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | BAnd (_, e1, e2) -> BAnd ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Pair (_, e1, e2) -> Pair ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Eq (_, e1, e2) -> Eq ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Gt (_, e1, e2) -> Gt ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | GtEq (_, e1, e2) -> GtEq ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | Lt (_, e1, e2) -> Lt ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | LtEq (_, e1, e2) -> LtEq ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
+  | BNot (_, e) -> BNot ((), to_plain_expr e)
+  | BOr (_, e1, e2) -> BOr ((), to_plain_expr e1, to_plain_expr e2)
+  | BAnd (_, e1, e2) -> BAnd ((), to_plain_expr e1, to_plain_expr e2)
+  | Pair (_, e1, e2) -> Pair ((), to_plain_expr e1, to_plain_expr e2)
+  | Eq (_, e1, e2) -> Eq ((), to_plain_expr e1, to_plain_expr e2)
+  | Gt (_, e1, e2) -> Gt ((), to_plain_expr e1, to_plain_expr e2)
+  | GtEq (_, e1, e2) -> GtEq ((), to_plain_expr e1, to_plain_expr e2)
+  | Lt (_, e1, e2) -> Lt ((), to_plain_expr e1, to_plain_expr e2)
+  | LtEq (_, e1, e2) -> LtEq ((), to_plain_expr e1, to_plain_expr e2)
   | If (_, e1, e2, e3) ->
-      If
-        ((), expr_to_plain_expr e1, expr_to_plain_expr e2, expr_to_plain_expr e3)
+      If ((), to_plain_expr e1, to_plain_expr e2, to_plain_expr e3)
   | Var (_, vname) -> Var ((), vname)
-  | Let (_, xname, e1, e2) ->
-      Let ((), xname, expr_to_plain_expr e1, expr_to_plain_expr e2)
-  | App (_, e1, e2) -> App ((), expr_to_plain_expr e1, expr_to_plain_expr e2)
+  | Let (_, xname, e1, e2) -> Let ((), xname, to_plain_expr e1, to_plain_expr e2)
+  | App (_, e1, e2) -> App ((), to_plain_expr e1, to_plain_expr e2)
   | Match (_, e, t2, cs) ->
       Match
         ( (),
-          expr_to_plain_expr e,
+          to_plain_expr e,
           t2,
           Nonempty_list.map
             ~f:(fun (p, c_e) ->
-              (Pattern.fmap ~f:(fun _ -> ()) p, expr_to_plain_expr c_e))
+              (Pattern.fmap ~f:(fun _ -> ()) p, to_plain_expr c_e))
             cs )
-  | Constructor (_, cname, e) -> Constructor ((), cname, expr_to_plain_expr e)
+  | Constructor (_, cname, e) -> Constructor ((), cname, to_plain_expr e)
 
 let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
   | UnitLit _ as e -> e
