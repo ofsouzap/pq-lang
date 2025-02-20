@@ -3,7 +3,6 @@ open OUnit2
 open QCheck
 open Pq_lang
 open Utils
-open Expr
 open Typing
 open Testing_utils
 
@@ -39,16 +38,18 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
     (Test.make ~name ~count:100
        (let open QCheck.Gen in
         let gen :
-            (TestingTypeCtx.t * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr)
+            (TestingTypeCtx.t
+            * ('tag_e, 'tag_p) Expr.t
+            * ('tag_e, 'tag_p) Expr.t)
             option
             Gen.t =
           get_gen unit_program_arbitrary_with_default_options >>= fun prog ->
           let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
           let e = prog.e in
-          let shrinks : ('tag_e, 'tag_p) expr Iter.t =
+          let shrinks : ('tag_e, 'tag_p) Expr.t Iter.t =
             Unit_expr_qcheck_testing.shrink { preserve_type = true } e
           in
-          let shrinks_list_opt : ('tag_e, 'tag_p) expr list =
+          let shrinks_list_opt : ('tag_e, 'tag_p) Expr.t list =
             let xs = ref [] in
             shrinks (fun x -> xs := x :: !xs);
             !xs
@@ -117,8 +118,7 @@ let create_typed_expr_gen_test (name : string)
     (Test.make ~name ~count:1000
        (let open QCheck.Gen in
         let gen :
-            (TestingTypeCtx.t * (Vtype.t * (unit, unit) Expr.expr)) QCheck.Gen.t
-            =
+            (TestingTypeCtx.t * (Vtype.t * (unit, unit) Expr.t)) QCheck.Gen.t =
           types_gen >>= fun (type_ctx, t) ->
           Unit_expr_qcheck_testing.gen
             {

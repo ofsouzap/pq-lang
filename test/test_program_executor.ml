@@ -2,6 +2,7 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
+open Expr
 open Program
 open Typing
 open Program_executor
@@ -18,7 +19,7 @@ let make_store (vars : (string * Program_executor.value) list) :
 
 let type_expr ?(custom_types : CustomType.plain_t list option)
     ?(top_level_defns : (unit, unit) top_level_defn list option)
-    (e : Expr.plain_expr) : (unit, unit) SimpleTypeChecker.typed_program =
+    (e : Expr.plain_t) : (unit, unit) SimpleTypeChecker.typed_program =
   match
     type_program
       {
@@ -35,8 +36,7 @@ let type_expr ?(custom_types : CustomType.plain_t list option)
            (print_typing_error err))
 
 let test_cases_unit_value : basic_test_case list =
-  let open Expr in
-  let mapf ((x : plain_expr), (y : value)) =
+  let mapf ((x : Expr.plain_t), (y : value)) =
     (Expr.to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
@@ -46,8 +46,7 @@ let test_cases_unit_value : basic_test_case list =
     ]
 
 let test_cases_arithmetic : basic_test_case list =
-  let open Expr in
-  let mapf ((x : plain_expr), (y : int)) =
+  let mapf ((x : Expr.plain_t), (y : int)) =
     (Expr.to_source_code x, type_expr x, Ok (Int y))
   in
   List.map ~f:mapf
@@ -79,8 +78,7 @@ let test_cases_arithmetic : basic_test_case list =
     ]
 
 let test_cases_booleans : basic_test_case list =
-  let open Expr in
-  let mapf ((x : plain_expr), (y : bool)) =
+  let mapf ((x : Expr.plain_t), (y : bool)) =
     (Expr.to_source_code x, type_expr x, Ok (Bool y))
   in
   List.map ~f:mapf
@@ -104,13 +102,12 @@ let test_cases_booleans : basic_test_case list =
     ]
 
 let test_cases_pairs : basic_test_case list =
-  let open Expr in
-  let mapf ((x : plain_expr), (y : value)) =
+  let mapf ((x : Expr.plain_t), (y : value)) =
     (Expr.to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
     [
-      ( Pair ((), IntLit ((), 1), BoolLit ((), true)),
+      ( Expr.Pair ((), IntLit ((), 1), BoolLit ((), true)),
         Program_executor.Pair (Int 1, Bool true) );
       ( Pair
           ( (),
@@ -120,8 +117,7 @@ let test_cases_pairs : basic_test_case list =
     ]
 
 let test_cases_integer_comparisons : basic_test_case list =
-  let open Expr in
-  let mapf ((x : plain_expr), (y : bool)) =
+  let mapf ((x : Expr.plain_t), (y : bool)) =
     (Expr.to_source_code x, type_expr x, Ok (Bool y))
   in
   List.map ~f:mapf
@@ -149,8 +145,7 @@ let test_cases_integer_comparisons : basic_test_case list =
     ]
 
 let test_cases_control_flow : basic_test_case list =
-  let open Expr in
-  let mapf ((x : plain_expr), (y : exec_res)) =
+  let mapf ((x : Expr.plain_t), (y : exec_res)) =
     (Expr.to_source_code x, type_expr x, y)
   in
   List.map ~f:mapf
@@ -172,8 +167,7 @@ let test_cases_control_flow : basic_test_case list =
     ]
 
 let test_cases_variables : basic_test_case list =
-  let open Expr in
-  let mapf ((x : plain_expr), (y : exec_res)) =
+  let mapf ((x : Expr.plain_t), (y : exec_res)) =
     (Expr.to_source_code x, type_expr x, y)
   in
   List.map ~f:mapf
@@ -198,10 +192,9 @@ let test_cases_variables : basic_test_case list =
     ]
 
 let test_cases_match : basic_test_case list =
-  let open Expr in
   let mapf
       ( (custom_types : CustomType.plain_t list option),
-        (x : plain_expr),
+        (x : Expr.plain_t),
         (y : exec_res) ) : basic_test_case =
     (Expr.to_source_code x, type_expr ?custom_types x, y)
   in
@@ -335,9 +328,9 @@ let test_cases_match : basic_test_case list =
     ]
 
 let test_cases_constructor : basic_test_case list =
-  let open Expr in
   let mapf
-      ((variant_types : VariantType.t list), (y : plain_expr), (z : exec_res)) =
+      ((variant_types : VariantType.t list), (y : Expr.plain_t), (z : exec_res))
+      =
     ( Expr.to_source_code y,
       type_expr
         ~custom_types:

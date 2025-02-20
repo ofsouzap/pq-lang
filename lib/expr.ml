@@ -2,41 +2,37 @@ open Core
 open Utils
 open Varname
 
-type ('tag_e, 'tag_p) expr =
+type ('tag_e, 'tag_p) t =
   | UnitLit of 'tag_e
   | IntLit of 'tag_e * int
-  | Add of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | Neg of 'tag_e * ('tag_e, 'tag_p) expr
-  | Subtr of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | Mult of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | Add of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | Neg of 'tag_e * ('tag_e, 'tag_p) t
+  | Subtr of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | Mult of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
   | BoolLit of 'tag_e * bool
-  | BNot of 'tag_e * ('tag_e, 'tag_p) expr
-  | BOr of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | BAnd of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | Pair of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | Eq of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | Gt of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | GtEq of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | Lt of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | LtEq of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | If of
-      'tag_e
-      * ('tag_e, 'tag_p) expr
-      * ('tag_e, 'tag_p) expr
-      * ('tag_e, 'tag_p) expr
+  | BNot of 'tag_e * ('tag_e, 'tag_p) t
+  | BOr of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | BAnd of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | Pair of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | Eq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | Gt of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | GtEq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | Lt of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | LtEq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | If of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
   | Var of 'tag_e * string
-  | Let of 'tag_e * string * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-  | App of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | Let of 'tag_e * string * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+  | App of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
   | Match of
       'tag_e
-      * ('tag_e, 'tag_p) expr
+      * ('tag_e, 'tag_p) t
       * Vtype.t
-      * ('tag_p Pattern.t * ('tag_e, 'tag_p) expr) Nonempty_list.t
-  | Constructor of 'tag_e * string * ('tag_e, 'tag_p) expr
+      * ('tag_p Pattern.t * ('tag_e, 'tag_p) t) Nonempty_list.t
+  | Constructor of 'tag_e * string * ('tag_e, 'tag_p) t
 [@@deriving sexp, equal]
 
 let expr_node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
-    ('tag_e, 'tag_p) expr -> 'tag_e * ('tag_e, 'tag_p) expr = function
+    ('tag_e, 'tag_p) t -> 'tag_e * ('tag_e, 'tag_p) t = function
   | UnitLit v -> (f v, UnitLit (f v))
   | IntLit (v, x) -> (f v, IntLit (f v, x))
   | Add (v, e1, e2) -> (f v, Add (f v, e1, e2))
@@ -60,15 +56,15 @@ let expr_node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
   | Match (v, e1, t2, cs) -> (f v, Match (f v, e1, t2, cs))
   | Constructor (v, cname, e1) -> (f v, Constructor (f v, cname, e1))
 
-let expr_node_val (e : ('tag_e, 'tag_p) expr) : 'tag_e =
+let expr_node_val (e : ('tag_e, 'tag_p) t) : 'tag_e =
   expr_node_map_val_with_result ~f:Fn.id e |> fst
 
 let expr_node_map_val ~(f : 'tag_e -> 'tag_e) :
-    ('tag_e, 'tag_p) expr -> ('tag_e, 'tag_p) expr =
+    ('tag_e, 'tag_p) t -> ('tag_e, 'tag_p) t =
   Fn.compose snd (expr_node_map_val_with_result ~f)
 
-let rec fmap ~(f : 'tag_e1 -> 'tag_e2) (e : ('tag_e1, 'tag_p) expr) :
-    ('tag_e2, 'tag_p) expr =
+let rec fmap ~(f : 'tag_e1 -> 'tag_e2) (e : ('tag_e1, 'tag_p) t) :
+    ('tag_e2, 'tag_p) t =
   match e with
   | UnitLit a -> UnitLit (f a)
   | IntLit (a, i) -> IntLit (f a, i)
@@ -98,8 +94,8 @@ let rec fmap ~(f : 'tag_e1 -> 'tag_e2) (e : ('tag_e1, 'tag_p) expr) :
           Nonempty_list.map ~f:(fun (p, c_e) -> (p, fmap ~f c_e)) cs )
   | Constructor (a, cname, e) -> Constructor (f a, cname, fmap ~f e)
 
-let rec fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (e : ('tag_e, 'tag_p1) expr) :
-    ('tag_e, 'tag_p2) expr =
+let rec fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (e : ('tag_e, 'tag_p1) t) :
+    ('tag_e, 'tag_p2) t =
   match e with
   | UnitLit v -> UnitLit v
   | IntLit (v, i) -> IntLit (v, i)
@@ -133,7 +129,7 @@ let rec fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (e : ('tag_e, 'tag_p1) expr) :
             cs )
   | Constructor (v, name, e) -> Constructor (v, name, fmap_pattern ~f e)
 
-let rec existing_names : ('tag_e, 'tag_p) expr -> StringSet.t = function
+let rec existing_names : ('tag_e, 'tag_p) t -> StringSet.t = function
   | UnitLit _ | IntLit _ | BoolLit _ -> StringSet.empty
   | Add (_, e1, e2)
   | Subtr (_, e1, e2)
@@ -166,14 +162,11 @@ let rec existing_names : ('tag_e, 'tag_p) expr -> StringSet.t = function
   | Constructor (_, name, e) ->
       Set.union (StringSet.singleton name) (existing_names e)
 
-type plain_expr = (unit, unit) expr [@@deriving sexp, equal]
+type plain_t = (unit, unit) t [@@deriving sexp, equal]
+type ('a, 'b) typed_t = (Vtype.t * 'a, Vtype.t * 'b) t [@@deriving sexp, equal]
+type plain_typed_t = (unit, unit) typed_t [@@deriving sexp, equal]
 
-type ('a, 'b) typed_expr = (Vtype.t * 'a, Vtype.t * 'b) expr
-[@@deriving sexp, equal]
-
-type plain_typed_expr = (unit, unit) typed_expr [@@deriving sexp, equal]
-
-let rec expr_to_plain_expr (e : ('tag_e, 'tag_p) expr) : plain_expr =
+let rec expr_to_plain_expr (e : ('tag_e, 'tag_p) t) : plain_t =
   match e with
   | UnitLit _ -> UnitLit ()
   | IntLit (_, i) -> IntLit ((), i)
@@ -282,7 +275,7 @@ let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
       Constructor (v, name, rename_var ~old_name ~new_name e)
 
 let rec of_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
-    'tag_p Pattern.t -> ('tag_e, 'tag_p) expr = function
+    'tag_p Pattern.t -> ('tag_e, 'tag_p) t = function
   | PatName (v, xname, _) -> Var (convert_tag v, xname)
   | PatPair (v, p1, p2) ->
       Pair
@@ -292,9 +285,9 @@ let rec of_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
 
 exception ExprConverionFixError
 
-let to_source_code ?(use_newlines : bool option) :
-    ('tag_e, 'tag_p) expr -> string =
-  let rec convert ?(bracketed : bool option) (orig_e : ('tag_e, 'tag_p) expr)
+let to_source_code ?(use_newlines : bool option) : ('tag_e, 'tag_p) t -> string
+    =
+  let rec convert ?(bracketed : bool option) (orig_e : ('tag_e, 'tag_p) t)
       (p : SourceCodeBuilder.state) : SourceCodeBuilder.state =
     let open SourceCodeBuilder in
     let bracketed = Option.value bracketed ~default:true in
@@ -336,9 +329,8 @@ let to_source_code ?(use_newlines : bool option) :
            match e1 with _ -> default_repr)
        | App (_, e1, e2) -> convert e1 |.> write " " |.> convert e2
        | Match (_, e, t2, cs) ->
-           let convert_case
-               ((p : 'tag_p Pattern.t), (c_e : ('tag_e, 'tag_p) expr)) :
-               state -> state =
+           let convert_case ((p : 'tag_p Pattern.t), (c_e : ('tag_e, 'tag_p) t))
+               : state -> state =
              write "| ("
              |.> write (Pattern.to_source_code p)
              |.> write ") ->"
@@ -360,6 +352,8 @@ let to_source_code ?(use_newlines : bool option) :
   in
   SourceCodeBuilder.from_converter ~converter:(convert ~bracketed:false)
     ~use_newlines:(Option.value ~default:true use_newlines)
+
+type ('tag_e, 'tag_p) expr = ('tag_e, 'tag_p) t
 
 module QCheck_testing (TagExpr : sig
   type t
@@ -425,7 +419,7 @@ end = struct
     function
     | NoPrint -> None
     | PrintSexp (f_e, f_p) ->
-        Some (fun e -> sexp_of_expr f_e f_p e |> Sexp.to_string_hum)
+        Some (fun e -> sexp_of_t f_e f_p e |> Sexp.to_string_hum)
     | PrintExprSource -> Some (to_source_code ~use_newlines:true)
 
   let get_expr_printer (p : expr_print_method) (e : (TagExpr.t, TagPat.t) expr)

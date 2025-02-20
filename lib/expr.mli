@@ -5,113 +5,102 @@ open Utils
 open Varname
 
 (** Expressions in the language. Tagged with arbitrary values on each node. *)
-type ('tag_e, 'tag_p) expr =
+type ('tag_e, 'tag_p) t =
   (* Unit type *)
   | UnitLit of 'tag_e  (** The literal of the unit type *)
   (* Integer arithmetic *)
   | IntLit of 'tag_e * int  (** An integer literal *)
-  | Add of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-      (** Addition *)
-  | Neg of 'tag_e * ('tag_e, 'tag_p) expr  (** Negation *)
-  | Subtr of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | Add of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Addition *)
+  | Neg of 'tag_e * ('tag_e, 'tag_p) t  (** Negation *)
+  | Subtr of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
       (** Subtraction *)
-  | Mult of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | Mult of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
       (** Multiplication *)
   (* Boolean algebra *)
   | BoolLit of 'tag_e * bool  (** A boolean literal *)
-  | BNot of 'tag_e * ('tag_e, 'tag_p) expr  (** Boolean negation *)
-  | BOr of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-      (** Boolean OR *)
-  | BAnd of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-      (** Boolean AND *)
+  | BNot of 'tag_e * ('tag_e, 'tag_p) t  (** Boolean negation *)
+  | BOr of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Boolean OR *)
+  | BAnd of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Boolean AND *)
   (* Pairs *)
-  | Pair of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr  (** Pair *)
+  | Pair of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Pair *)
   (* Comparisons *)
-  | Eq of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-      (** Equality *)
-  | Gt of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-      (** Greater than *)
-  | GtEq of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | Eq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Equality *)
+  | Gt of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Greater than *)
+  | GtEq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
       (** Greater than or equal to *)
-  | Lt of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
-      (** Less than *)
-  | LtEq of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | Lt of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Less than *)
+  | LtEq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
       (** Less than or equal to *)
   (* Control flow *)
-  | If of
-      'tag_e
-      * ('tag_e, 'tag_p) expr
-      * ('tag_e, 'tag_p) expr
-      * ('tag_e, 'tag_p) expr  (** If-then-else *)
+  | If of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+      (** If-then-else *)
   (* Variables and functions *)
   | Var of 'tag_e * string  (** Variable references *)
-  | Let of 'tag_e * string * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | Let of 'tag_e * string * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
       (** Let binding *)
-  | App of 'tag_e * ('tag_e, 'tag_p) expr * ('tag_e, 'tag_p) expr
+  | App of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
       (** Function application *)
   (* Pattern matching *)
   | Match of
       'tag_e
-      * ('tag_e, 'tag_p) expr
+      * ('tag_e, 'tag_p) t
       * Vtype.t
-      * ('tag_p Pattern.t * ('tag_e, 'tag_p) expr) Nonempty_list.t
+      * ('tag_p Pattern.t * ('tag_e, 'tag_p) t) Nonempty_list.t
       (** Match expression *)
   (* Variant data types *)
-  | Constructor of 'tag_e * string * ('tag_e, 'tag_p) expr
+  | Constructor of 'tag_e * string * ('tag_e, 'tag_p) t
       (** Constructor for a variant data type *)
 [@@deriving sexp, equal]
 
 (** Extract the value attached to a single node of a tagged Expr expression *)
-val expr_node_val : ('tag_e, 'tag_p) expr -> 'tag_e
+val expr_node_val : ('tag_e, 'tag_p) t -> 'tag_e
 
 (** Map a function onto the value of a single node of a tagged Expr expression
 *)
 val expr_node_map_val :
-  f:('tag_e -> 'tag_e) -> ('tag_e, 'tag_p) expr -> ('tag_e, 'tag_p) expr
+  f:('tag_e -> 'tag_e) -> ('tag_e, 'tag_p) t -> ('tag_e, 'tag_p) t
 
 (** Map a function onto all values in an entire tagged Expr expression *)
-val fmap :
-  f:('tag_e1 -> 'tag_e2) -> ('tag_e1, 'tag_p) expr -> ('tag_e2, 'tag_p) expr
+val fmap : f:('tag_e1 -> 'tag_e2) -> ('tag_e1, 'tag_p) t -> ('tag_e2, 'tag_p) t
 
 (** Map a function onto all patterns in an entire tagged Expr expression with
     tagged patterns *)
 val fmap_pattern :
-  f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) expr -> ('tag_e, 'tag_p2) expr
+  f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) t -> ('tag_e, 'tag_p2) t
 
 (** Get all the names used (defined or referenced) in an expression. Includes
     variable names, variant type constructor names, etc. *)
-val existing_names : ('tag_e, 'tag_p) expr -> StringSet.t
+val existing_names : ('tag_e, 'tag_p) t -> StringSet.t
 
 (** An expression in the language without any tagging data *)
-type plain_expr = (unit, unit) expr [@@deriving sexp, equal]
+type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
 (** An expression in the language with typing information *)
-type ('a, 'b) typed_expr = (Vtype.t * 'a, Vtype.t * 'b) expr
-[@@deriving sexp, equal]
+type ('a, 'b) typed_t = (Vtype.t * 'a, Vtype.t * 'b) t [@@deriving sexp, equal]
 
 (** An expression in the language with typing information *)
-type plain_typed_expr = (unit, unit) typed_expr [@@deriving sexp, equal]
+type plain_typed_t = (unit, unit) typed_t [@@deriving sexp, equal]
 
 (** Delete an Expr's tagging data to form a plain Expr *)
-val expr_to_plain_expr : ('tag_e, 'tag_p) expr -> plain_expr
+val expr_to_plain_expr : ('tag_e, 'tag_p) t -> plain_t
 
 (** Rename a variable in an expression *)
 val rename_var :
   old_name:varname ->
   new_name:varname ->
-  ('tag_e, 'tag_p) expr ->
-  ('tag_e, 'tag_p) expr
+  ('tag_e, 'tag_p) t ->
+  ('tag_e, 'tag_p) t
 
 (** Create a possibly-open expression from a pattern *)
 val of_pattern :
-  convert_tag:('tag_p -> 'tag_e) -> 'tag_p Pattern.t -> ('tag_e, 'tag_p) expr
+  convert_tag:('tag_p -> 'tag_e) -> 'tag_p Pattern.t -> ('tag_e, 'tag_p) t
 
 exception ExprConverionFixError
 
 (** Convert an Expr expression into source code that corresponds to the Expr
     representation. If the input has a malformed usage of the Fix node, this
     will raise a `ExprConversionFixError` exception. *)
-val to_source_code : ?use_newlines:bool -> ('tag_e, 'tag_p) expr -> string
+val to_source_code : ?use_newlines:bool -> ('tag_e, 'tag_p) t -> string
 
 module QCheck_testing : functor
   (TagExpr : sig
@@ -134,13 +123,12 @@ module QCheck_testing : functor
   (** Take an Expr printing method and return a function that implements the
       printing method. Returns None if no printing is specified. *)
   val get_expr_printer_opt :
-    expr_print_method -> ((TagExpr.t, TagPat.t) expr -> string) option
+    expr_print_method -> ((TagExpr.t, TagPat.t) t -> string) option
 
   (** Take an Expr printing method and return a function that implements the
       printing method. Returns a function always returning the empty string if
       no printing is specified. *)
-  val get_expr_printer :
-    expr_print_method -> (TagExpr.t, TagPat.t) expr -> string
+  val get_expr_printer : expr_print_method -> (TagExpr.t, TagPat.t) t -> string
 
   (** A default Expr printing method *)
   val default_expr_print_method : expr_print_method
@@ -173,7 +161,7 @@ module QCheck_testing : functor
 
   include
     QCheck_testing_sig
-      with type t = (TagExpr.t, TagPat.t) expr
+      with type t = (TagExpr.t, TagPat.t) t
        and type gen_options := gen_options
        and type print_options = expr_print_method
        and type shrink_options := shrink_options

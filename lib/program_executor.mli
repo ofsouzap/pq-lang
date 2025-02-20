@@ -13,8 +13,7 @@ type pattern_tag = unit [@@deriving sexp, equal]
 type closure_props = {
   param : varname * Vtype.t;  (** The function's parameter's name and type *)
   out_type : Vtype.t;  (** The output type of the function *)
-  body : (expr_tag, pattern_tag) Expr.typed_expr;
-      (** The body of the function *)
+  body : (expr_tag, pattern_tag) Expr.typed_t;  (** The body of the function *)
   store : store;  (** The store to use when executing the function *)
   recursive : [ `Recursive of varname | `NonRecursive ];
       (** Whether the function is recursive or not. If so, the name of the

@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Varname
-open Expr
 open Program
 
 (* TODO - stop using LispBuilder, just use Core.Sexp instead *)
@@ -58,7 +57,7 @@ end
 type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
 type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
 type tag_pattern = pattern_tag Pattern.t [@@deriving sexp, equal]
-type tag_expr = (expr_tag, pattern_tag) expr [@@deriving sexp, equal]
+type tag_expr = (expr_tag, pattern_tag) Expr.t [@@deriving sexp, equal]
 
 let pattern_tag_to_expr_tag (v : pattern_tag) : expr_tag =
   ({ t = v.t } : expr_tag)

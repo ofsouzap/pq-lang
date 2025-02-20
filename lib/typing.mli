@@ -1,4 +1,3 @@
-open Expr
 open Program
 
 (** Typing errors *)
@@ -18,7 +17,7 @@ type typing_error =
   | EqConsBodyPatternTypeMismatch of Pattern.plain_t * Vtype.t * Vtype.t
       (** The pattern of an equivalence constructor body was expected to have
           the first type but had the second *)
-  | EqConsBodyExprTypeMismatch of plain_expr * Vtype.t * Vtype.t
+  | EqConsBodyExprTypeMismatch of Expr.plain_t * Vtype.t * Vtype.t
       (** The expression of an equivalence constructor body was expected to have
           the first type but had the second *)
   | EqualOperatorTypeMistmatch of Vtype.t * Vtype.t
@@ -141,8 +140,8 @@ module type TypeCheckerSig = functor
   (** Type checks a single expression in the given context *)
   val type_expr :
     checked_type_ctx * VarCtx.t ->
-    ('tag_e, 'tag_p) expr ->
-    (('tag_e, 'tag_p) typed_expr, typing_error) Result.t
+    ('tag_e, 'tag_p) Expr.t ->
+    (('tag_e, 'tag_p) Expr.typed_t, typing_error) Result.t
 
   (** Check a type context is valid *)
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
@@ -166,8 +165,8 @@ end
 (** Type program using the default context implementation *)
 val type_expr :
   type_ctx:SetTypingTypeContext.t ->
-  ('tag_e, 'tag_p) expr ->
-  (('tag_e, 'tag_p) typed_expr, typing_error) result
+  ('tag_e, 'tag_p) Expr.t ->
+  (('tag_e, 'tag_p) Expr.typed_t, typing_error) result
 
 (** Type program using the default context implementations *)
 val type_program :

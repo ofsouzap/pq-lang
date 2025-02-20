@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Varname
-open Expr
 
 (** A top-level function definition *)
 type ('tag_e, 'tag_p) top_level_defn = {
@@ -9,7 +8,7 @@ type ('tag_e, 'tag_p) top_level_defn = {
   name : string;
   param : varname * Vtype.t;
   return_t : Vtype.t;
-  body : ('tag_e, 'tag_p) expr;
+  body : ('tag_e, 'tag_p) Expr.t;
 }
 [@@deriving sexp, equal]
 
@@ -36,7 +35,7 @@ let top_level_defn_to_source_code ~(use_newlines : bool) :
 type ('tag_e, 'tag_p) program = {
   custom_types : ('tag_e, 'tag_p) CustomType.t list;
   top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
-  e : ('tag_e, 'tag_p) expr;
+  e : ('tag_e, 'tag_p) Expr.t;
 }
 [@@deriving sexp, equal]
 

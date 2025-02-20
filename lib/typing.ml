@@ -10,7 +10,7 @@ type typing_error =
   | NoCommonRootType of Vtype.t * Vtype.t
   | PatternTypeMismatch of Pattern.plain_t * Vtype.t * Vtype.t
   | EqConsBodyPatternTypeMismatch of Pattern.plain_t * Vtype.t * Vtype.t
-  | EqConsBodyExprTypeMismatch of plain_expr * Vtype.t * Vtype.t
+  | EqConsBodyExprTypeMismatch of Expr.plain_t * Vtype.t * Vtype.t
   | EqualOperatorTypeMistmatch of Vtype.t * Vtype.t
   | ExpectedFunctionOf of Vtype.t
   | UndefinedVariantTypeConstructor of string
@@ -267,8 +267,8 @@ module type TypeCheckerSig = functor
 
   val type_expr :
     checked_type_ctx * VarCtx.t ->
-    ('tag_e, 'tag_p) expr ->
-    (('tag_e, 'tag_p) typed_expr, typing_error) Result.t
+    ('tag_e, 'tag_p) Expr.t ->
+    (('tag_e, 'tag_p) Expr.typed_t, typing_error) Result.t
 
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
 
@@ -348,28 +348,28 @@ functor
                   (PatternTypeMismatch (Pattern.to_plain_pattern p, c_t, p_t)))
 
     let rec type_expr (((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) as ctx)
-        (orig_e : ('tag_e, 'tag_p) expr) :
-        (('tag_e, 'tag_p) typed_expr, typing_error) Result.t =
+        (orig_e : ('tag_e, 'tag_p) Expr.t) :
+        (('tag_e, 'tag_p) Expr.typed_t, typing_error) Result.t =
       let open Result in
       let ( <: ) = TypeCtx.subtype type_ctx in
-      let e_type (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr) : Vtype.t =
-        e |> expr_node_val |> fst
+      let e_type (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t) : Vtype.t =
+        e |> Expr.expr_node_val |> fst
       in
       let be_of_type ?(msg : string option) (exp : Vtype.t)
-          (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr) :
-          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr, typing_error) Result.t =
+          (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t) :
+          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t, typing_error) Result.t =
         e_type e <: exp >>= fun types_valid ->
         if types_valid then Ok e else Error (TypeMismatch (exp, e_type e, msg))
       in
       let type_binop ?(msg : string option)
           (recomp :
-            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
-            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t ->
             Vtype.t ->
-            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
-          (e1 : ('tag_e, 'tag_p) expr) (e2 : ('tag_e, 'tag_p) expr)
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t)
+          (e1 : ('tag_e, 'tag_p) Expr.t) (e2 : ('tag_e, 'tag_p) Expr.t)
           (req_t : Vtype.t) :
-          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr, typing_error) Result.t =
+          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t, typing_error) Result.t =
         type_expr ctx e1 >>= fun e1' ->
         type_expr ctx e2 >>= fun e2' ->
         be_of_type
@@ -383,20 +383,20 @@ functor
       in
       let type_unop ?(msg : string option)
           (recomp :
-            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t ->
             Vtype.t ->
-            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
-          (e1 : ('tag_e, 'tag_p) expr) (req_t : Vtype.t) :
-          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr, typing_error) Result.t =
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t)
+          (e1 : ('tag_e, 'tag_p) Expr.t) (req_t : Vtype.t) :
+          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t, typing_error) Result.t =
         type_expr ctx e1 >>= fun e1' ->
         be_of_type ?msg req_t e1' >>= fun _ -> Ok (recomp e1' (e_type e1'))
       in
       let type_int_compare ?(msg : string option)
           (recomp :
-            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
-            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
-            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
-          (e1 : ('tag_e, 'tag_p) expr) (e2 : ('tag_e, 'tag_p) expr) =
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t)
+          (e1 : ('tag_e, 'tag_p) Expr.t) (e2 : ('tag_e, 'tag_p) Expr.t) =
         type_expr ctx e1 >>= fun e1' ->
         type_expr ctx e2 >>= fun e2' ->
         let t1 = e_type e1' in
@@ -512,10 +512,10 @@ functor
                 (acc :
                   ( unit,
                     ((Vtype.t * 'tag_p) Pattern.t
-                    * (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
+                    * (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t)
                     Nonempty_list.t )
                   Either.t)
-                ((p : 'tag_p Pattern.t), (c_e : ('tag_e, 'tag_p) expr))
+                ((p : 'tag_p Pattern.t), (c_e : ('tag_e, 'tag_p) Expr.t))
               ->
               (* First, try type the pattern *)
               (* TODO - don't allow the case patterns to be PatName. Check that they are compound patterns *)
@@ -546,7 +546,7 @@ functor
           >>|
           fun (cs_typed_rev :
                 ((Vtype.t * 'tag_p) Pattern.t
-                * (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
+                * (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t)
                 Nonempty_list.t)
           -> Match ((t_out, v), e', t_out, Nonempty_list.rev cs_typed_rev)
       | Constructor (v, c_name, e1) -> (
@@ -724,9 +724,8 @@ functor
 module SimpleTypeChecker =
   TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 
-let type_expr ~(type_ctx : SetTypingTypeContext.t)
-    (e : ('tag_e, 'tag_p) Expr.expr) :
-    (('tag_e, 'tag_p) typed_expr, typing_error) Result.t =
+let type_expr ~(type_ctx : SetTypingTypeContext.t) (e : ('tag_e, 'tag_p) Expr.t)
+    : (('tag_e, 'tag_p) Expr.typed_t, typing_error) Result.t =
   let open Result in
   SimpleTypeChecker.check_type_ctx type_ctx >>= fun type_ctx ->
   SimpleTypeChecker.type_expr (type_ctx, ListTypingVarContext.empty) e

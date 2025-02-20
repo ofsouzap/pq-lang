@@ -5,7 +5,7 @@ open Expr
 open Testing_utils
 
 let test_cases_equality : test list =
-  let create_positive_test ((x : plain_expr), (y : plain_expr)) =
+  let create_positive_test ((x : Expr.plain_t), (y : Expr.plain_t)) =
     let name =
       sprintf "%s =? %s"
         (Unit_expr_qcheck_testing.print
@@ -15,9 +15,9 @@ let test_cases_equality : test list =
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            y)
     in
-    name >:: fun _ -> assert_bool "not equal" (equal_plain_expr x y)
+    name >:: fun _ -> assert_bool "not equal" (Expr.equal_plain_t x y)
   in
-  let create_negative_test ((x : plain_expr), (y : plain_expr)) =
+  let create_negative_test ((x : Expr.plain_t), (y : Expr.plain_t)) =
     let name =
       sprintf "%s =? %s"
         (Unit_expr_qcheck_testing.print
@@ -27,7 +27,7 @@ let test_cases_equality : test list =
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            y)
     in
-    name >:: fun _ -> assert_bool "equal" (not (equal_plain_expr x y))
+    name >:: fun _ -> assert_bool "equal" (not (Expr.equal_plain_t x y))
   in
   List.map ~f:create_positive_test
     [
@@ -79,7 +79,7 @@ let test_cases_to_source_code_inv =
       let e = prog.e in
       match run_frontend_string (Expr.to_source_code e) with
       | Ok prog ->
-          if equal_plain_expr e prog.e then true
+          if Expr.equal_plain_t e prog.e then true
           else
             Test.fail_reportf
               "Got different Expr. Expected:\n\n%s\n\nActual:\n\n%s"

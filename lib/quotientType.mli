@@ -1,13 +1,12 @@
 open Utils
 open Varname
-open Expr
 
 (** A single equality constructor on a quotient type *)
 type ('tag_e, 'tag_p) eqcons = {
   bindings : (varname * Vtype.t) list;
       (** The variable bindings for the equality constructor of the equality
           constructor *)
-  body : 'tag_p Pattern.t * ('tag_e, 'tag_p) expr;
+  body : 'tag_p Pattern.t * ('tag_e, 'tag_p) Expr.t;
       (** The equality definition of the equality constructor *)
       (* TODO - instead of having "body" which is the pattern and the expression,
       have something like body_pattern and body_expr, to make it nicer to use *)

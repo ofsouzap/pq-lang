@@ -3,7 +3,7 @@ open Utils
 
 
 
-open Expr
+
 open Program
 
 let add_variant_type_definition_to_program (p : plain_program) (vt : VariantType.t) : plain_program =
@@ -60,15 +60,15 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 %type <string * Vtype.t> typed_name
 
 %type <Pattern.plain_t> match_case_pattern
-%type <Pattern.plain_t * plain_expr> match_case
-%type <(Pattern.plain_t * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
-%type <(Pattern.plain_t * plain_expr) Nonempty_list.t> match_cases
+%type <Pattern.plain_t * Expr.plain_t> match_case
+%type <(Pattern.plain_t * Expr.plain_t) Nonempty_list.t> match_cases_no_leading_pipe
+%type <(Pattern.plain_t * Expr.plain_t) Nonempty_list.t> match_cases
 
-%type <plain_expr> expr
-%type <plain_expr> contained_expr
+%type <Expr.plain_t> expr
+%type <Expr.plain_t> contained_expr
 
 %type <(string * Vtype.t) list> quotient_type_eqcons_bindings
-%type <Pattern.plain_t * plain_expr> quotient_type_eqcons_body
+%type <Pattern.plain_t * Expr.plain_t> quotient_type_eqcons_body
 %type <QuotientType.plain_eqcons> quotient_type_eqcons
 %type <QuotientType.plain_eqcons list> quotient_type_definition_eqconss
 %type <QuotientType.plain_t> quotient_type_definition

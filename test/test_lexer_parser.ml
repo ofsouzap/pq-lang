@@ -9,12 +9,12 @@ open Frontend
 open Testing_utils
 
 type test_case_no_variant_types =
-  string * string * token list * (plain_expr, frontend_error) Result.t
+  string * string * token list * (Expr.plain_t, frontend_error) Result.t
 
 type test_case_full_prog =
   string * string * token list * (plain_program, frontend_error) Result.t
 
-type test_case_precedence = string * string * Expr.plain_expr
+type test_case_precedence = string * string * Expr.plain_t
 
 let test_cases_unit_value : test_case_no_variant_types list =
   List.map

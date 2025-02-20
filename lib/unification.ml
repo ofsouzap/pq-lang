@@ -1,18 +1,17 @@
 open Core
 open Utils
 open Varname
-open Expr
 
-type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) expr StringMap.t
+type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) Expr.t StringMap.t
 [@@deriving sexp, equal]
 
 let simply_find_unifier ~(bound_names_in_from : StringSet.t)
-    ~(from_expr : ('a, 'b) expr) ~(to_expr : ('tag_e, 'tag_p) expr) :
+    ~(from_expr : ('a, 'b) Expr.t) ~(to_expr : ('tag_e, 'tag_p) Expr.t) :
     (('tag_e, 'tag_p) unifier, unit) Result.t =
   let open Result in
   let rec aux ~(bound_names_in_from : StringSet.t)
       (acc : ('tag_e, 'tag_p) unifier) :
-      ('a, 'b) expr * ('tag_e, 'tag_p) expr ->
+      ('a, 'b) Expr.t * ('tag_e, 'tag_p) Expr.t ->
       (('tag_e, 'tag_p) unifier, unit) Result.t = function
     | Var (_, xname), Var (_, xname')
       when Set.mem bound_names_in_from xname && equal_string xname xname' ->
@@ -50,7 +49,7 @@ let rename_var_in_body ~(old_name : varname) ~(new_name : varname)
   Map.map unifier ~f:(Expr.rename_var ~old_name ~new_name)
 
 let rec apply_to_expr ~(unifier : ('tag_e, 'tag_p) unifier) :
-    ('tag_e, 'tag_p) expr -> ('tag_e, 'tag_p) expr = function
+    ('tag_e, 'tag_p) Expr.t -> ('tag_e, 'tag_p) Expr.t = function
   | UnitLit v -> UnitLit v
   | IntLit (v, i) -> IntLit (v, i)
   | Add (v, e1, e2) ->

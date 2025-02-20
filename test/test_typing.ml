@@ -37,7 +37,7 @@ let test_cases_expr_typing : test list =
   let create_test
       ( (type_ctx :
           (SetTypingTypeContext.t, Typing.typing_error) Result.t option),
-        (e : plain_expr),
+        (e : Expr.plain_t),
         (t : (Vtype.t, typing_error) Result.t) ) : test =
     Expr.to_source_code e >:: fun _ ->
     let type_ctx =
@@ -50,7 +50,7 @@ let test_cases_expr_typing : test list =
     let out = Typing.type_expr ~type_ctx e in
     match (out, t) with
     | Ok e_typed, Ok exp_t ->
-        let out_t = e_typed |> expr_node_val |> fst in
+        let out_t = e_typed |> Expr.expr_node_val |> fst in
         assert_equal ~cmp:Vtype.equal ~printer:Vtype.to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
@@ -311,8 +311,8 @@ let test_cases_expr_typing_full_check : test list =
   let create_test
       ( (name : string),
         (type_ctx : SetTypingTypeContext.t option),
-        (e : plain_expr),
-        (exp : (Vtype.t, Vtype.t) expr) ) : test =
+        (e : Expr.plain_t),
+        (exp : (Vtype.t, Vtype.t) Expr.t) ) : test =
     name >:: fun _ ->
     let open Result in
     let out =
@@ -326,7 +326,7 @@ let test_cases_expr_typing_full_check : test list =
           e_typed |> Expr.fmap ~f:fst |> Expr.fmap_pattern ~f:fst
         in
         assert_equal
-          ~cmp:(equal_expr Vtype.equal Vtype.equal)
+          ~cmp:(Expr.equal Vtype.equal Vtype.equal)
           ~printer:
             (Vtype_ast_qcheck_testing.print
                (PrintSexp (Vtype.sexp_of_t, Vtype.sexp_of_t)))
@@ -371,7 +371,7 @@ let test_cases_typing_with_var_ctx : test list =
   let open Result in
   let create_test
       ( (ctx_list : (string * Vtype.t) list),
-        (e : plain_expr),
+        (e : Expr.plain_t),
         (t : (Vtype.t, typing_error) Result.t) ) : test =
     let ctx =
       List.fold ~init:ListTypingVarContext.empty
@@ -504,7 +504,7 @@ let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in
   let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : Vtype.t) :
-      (unit, unit) expr Gen.t =
+      (unit, unit) Expr.t Gen.t =
     Unit_expr_qcheck_testing.gen
       {
         t = Some (Unit_expr_qcheck_testing.vtype_to_gen_vtype_unsafe t);
@@ -522,7 +522,7 @@ let test_cases_arb_compound_expr_typing : test list =
   let create_test
       ( (name : string),
         (type_ctx : (TestingTypeCtx.t, Typing.typing_error) Result.t option),
-        (e_gen : TestingTypeCtx.t -> (Vtype.t * plain_expr) Gen.t) ) : test =
+        (e_gen : TestingTypeCtx.t -> (Vtype.t * Expr.plain_t) Gen.t) ) : test =
     let type_ctx : TestingTypeCtx.t =
       Option.value ~default:(Ok TestingTypeCtx.empty) type_ctx |> function
       | Ok type_ctx -> type_ctx
@@ -750,7 +750,7 @@ let test_cases_typing_maintains_structure : test =
              | Ok e_typed ->
                  let plain_e = expr_to_plain_expr e in
                  let plain_typed_e = e_typed |> expr_to_plain_expr in
-                 equal_plain_expr plain_e plain_typed_e
+                 Expr.equal_plain_t plain_e plain_typed_e
              | Error _ -> false)))
 
 let suite =
