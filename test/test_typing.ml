@@ -2,7 +2,6 @@ open OUnit2
 open Core
 open Pq_lang
 open Utils
-open Pattern
 open Expr
 open Typing
 open Testing_utils
@@ -143,7 +142,9 @@ let test_cases_expr_typing : test list =
             IntLit ((), 3),
             Vtype.VTypeBool,
             Nonempty_list.from_list_unsafe
-              [ (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true)) ] ),
+              [
+                (Pattern.PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+              ] ),
         Ok Vtype.VTypeBool );
       ( None,
         Match
@@ -151,7 +152,7 @@ let test_cases_expr_typing : test list =
             IntLit ((), 3),
             Vtype.VTypeInt,
             Nonempty_list.from_list_unsafe
-              [ (PatName ((), "x", Vtype.VTypeInt), Var ((), "x")) ] ),
+              [ (Pattern.PatName ((), "x", Vtype.VTypeInt), Var ((), "x")) ] ),
         Ok Vtype.VTypeInt );
       ( None,
         Match
@@ -160,8 +161,8 @@ let test_cases_expr_typing : test list =
             Vtype.VTypeBool,
             Nonempty_list.from_list_unsafe
               [
-                (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
-                (PatName ((), "y", Vtype.VTypeInt), BoolLit ((), true));
+                (Pattern.PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+                (Pattern.PatName ((), "y", Vtype.VTypeInt), BoolLit ((), true));
               ] ),
         Ok Vtype.VTypeBool );
       ( None,
@@ -171,12 +172,12 @@ let test_cases_expr_typing : test list =
             Vtype.VTypeBool,
             Nonempty_list.from_list_unsafe
               [
-                (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
-                (PatName ((), "y", Vtype.VTypeBool), BoolLit ((), true));
+                (Pattern.PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+                (Pattern.PatName ((), "y", Vtype.VTypeBool), BoolLit ((), true));
               ] ),
         Error
           (PatternTypeMismatch
-             ( PatName ((), "y", Vtype.VTypeBool),
+             ( Pattern.PatName ((), "y", Vtype.VTypeBool),
                Vtype.VTypeInt,
                Vtype.VTypeBool )) );
       ( (* Incorrect return type annotation *) None,
@@ -186,8 +187,8 @@ let test_cases_expr_typing : test list =
             Vtype.VTypeInt,
             Nonempty_list.from_list_unsafe
               [
-                (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
-                (PatName ((), "y", Vtype.VTypeBool), BoolLit ((), true));
+                (Pattern.PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+                (Pattern.PatName ((), "y", Vtype.VTypeBool), BoolLit ((), true));
               ] ),
         Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
       ( None,
@@ -197,8 +198,8 @@ let test_cases_expr_typing : test list =
             Vtype.VTypeBool,
             Nonempty_list.from_list_unsafe
               [
-                (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
-                (PatName ((), "y", Vtype.VTypeInt), IntLit ((), 5));
+                (Pattern.PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+                (Pattern.PatName ((), "y", Vtype.VTypeInt), IntLit ((), 5));
               ] ),
         Error (TypeMismatch (Vtype.VTypeBool, Vtype.VTypeInt, None)) );
       ( (* Valid for constructor pattern *)
@@ -226,12 +227,13 @@ let test_cases_expr_typing : test list =
             Vtype.VTypeInt,
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ((), "Nil", PatName ((), "z", Vtype.VTypeUnit)),
+                ( Pattern.PatConstructor
+                    ((), "Nil", Pattern.PatName ((), "z", Vtype.VTypeUnit)),
                   IntLit ((), 0) );
-                ( PatConstructor
+                ( Pattern.PatConstructor
                     ( (),
                       "Cons",
-                      PatName
+                      Pattern.PatName
                         ( (),
                           "x",
                           Vtype.VTypePair
@@ -251,12 +253,13 @@ let test_cases_expr_typing : test list =
             Vtype.VTypeInt,
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ((), "Nil", PatName ((), "z", Vtype.VTypeUnit)),
+                ( Pattern.PatConstructor
+                    ((), "Nil", Pattern.PatName ((), "z", Vtype.VTypeUnit)),
                   IntLit ((), 0) );
-                ( PatConstructor
+                ( Pattern.PatConstructor
                     ( (),
                       "Cons",
-                      PatName
+                      Pattern.PatName
                         ( (),
                           "x",
                           Vtype.VTypePair

@@ -2,7 +2,6 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
-open Pattern
 open Expr
 open Program
 open Parser
@@ -310,7 +309,7 @@ let test_cases_match : test_case_no_variant_types list =
                Var ((), "x"),
                VTypeInt,
                Nonempty_list.from_list_unsafe
-                 [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
+                 [ (Pattern.PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Simple match with leading pipe *)
         "match x -> int with | (y : int) -> y end",
         [
@@ -335,7 +334,7 @@ let test_cases_match : test_case_no_variant_types list =
                Var ((), "x"),
                VTypeInt,
                Nonempty_list.from_list_unsafe
-                 [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
+                 [ (Pattern.PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Match with compound inner expression *)
         "match (1 + (if true then x else 4 end)) -> int with (y : int) -> y end",
         [
@@ -374,7 +373,7 @@ let test_cases_match : test_case_no_variant_types list =
                    If ((), BoolLit ((), true), Var ((), "x"), IntLit ((), 4)) ),
                VTypeInt,
                Nonempty_list.from_list_unsafe
-                 [ (PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
+                 [ (Pattern.PatName ((), "y", VTypeInt), Var ((), "y")) ] )) );
       ( (* Match with multiple patterns *)
         "match x -> int with (y : int) -> y | (z : int) -> z end",
         [
@@ -407,8 +406,8 @@ let test_cases_match : test_case_no_variant_types list =
                VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
-                   (PatName ((), "y", VTypeInt), Var ((), "y"));
-                   (PatName ((), "z", VTypeInt), Var ((), "z"));
+                   (Pattern.PatName ((), "y", VTypeInt), Var ((), "y"));
+                   (Pattern.PatName ((), "z", VTypeInt), Var ((), "z"));
                  ] )) );
       ( (* Matching pair *)
         "match x -> int with ((y : int), (z : bool)) -> y end",
@@ -442,10 +441,10 @@ let test_cases_match : test_case_no_variant_types list =
                VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
-                   ( PatPair
+                   ( Pattern.PatPair
                        ( (),
-                         PatName ((), "y", VTypeInt),
-                         PatName ((), "z", VTypeBool) ),
+                         Pattern.PatName ((), "y", VTypeInt),
+                         Pattern.PatName ((), "z", VTypeBool) ),
                      Var ((), "y") );
                  ] )) );
       ( (* Matching nested pair *)
@@ -495,13 +494,13 @@ let test_cases_match : test_case_no_variant_types list =
                VTypeBool,
                Nonempty_list.from_list_unsafe
                  [
-                   ( PatPair
+                   ( Pattern.PatPair
                        ( (),
-                         PatName ((), "y", VTypeBool),
-                         PatPair
+                         Pattern.PatName ((), "y", VTypeBool),
+                         Pattern.PatPair
                            ( (),
-                             PatName ((), "z1", VTypeBool),
-                             PatName ((), "z2", VTypeBool) ) ),
+                             Pattern.PatName ((), "z1", VTypeBool),
+                             Pattern.PatName ((), "z2", VTypeBool) ) ),
                      If ((), Var ((), "y"), Var ((), "z1"), Var ((), "z2")) );
                  ] )) );
       ( (* Matching variant data type constructor *)
@@ -551,15 +550,17 @@ let test_cases_match : test_case_no_variant_types list =
                VTypeInt,
                Nonempty_list.from_list_unsafe
                  [
-                   ( PatConstructor ((), "Nil", PatName ((), "z", VTypeInt)),
+                   ( Pattern.PatConstructor
+                       ((), "Nil", Pattern.PatName ((), "z", VTypeInt)),
                      IntLit ((), 0) );
-                   ( PatConstructor
+                   ( Pattern.PatConstructor
                        ( (),
                          "Cons",
-                         PatPair
+                         Pattern.PatPair
                            ( (),
-                             PatName ((), "h", VTypeInt),
-                             PatName ((), "ts", VTypeCustom "int_list") ) ),
+                             Pattern.PatName ((), "h", VTypeInt),
+                             Pattern.PatName ((), "ts", VTypeCustom "int_list")
+                           ) ),
                      IntLit ((), 1) );
                  ] )) );
     ]
@@ -766,8 +767,8 @@ qtype int_boxed
                       {
                         bindings = [ ("x", VTypeInt) ];
                         body =
-                          ( PatConstructor
-                              ((), "Int", PatName ((), "x", VTypeInt)),
+                          ( Pattern.PatConstructor
+                              ((), "Int", Pattern.PatName ((), "x", VTypeInt)),
                             Var ((), "x") );
                       };
                     ];
@@ -863,13 +864,14 @@ qtype int_boxed
                             ("l", VTypeCustom "tree"); ("r", VTypeCustom "tree");
                           ];
                         body =
-                          ( PatConstructor
+                          ( Pattern.PatConstructor
                               ( (),
                                 "Node",
-                                PatPair
+                                Pattern.PatPair
                                   ( (),
-                                    PatName ((), "l", VTypeCustom "tree"),
-                                    PatName ((), "r", VTypeCustom "tree") ) ),
+                                    Pattern.PatName ((), "l", VTypeCustom "tree"),
+                                    Pattern.PatName ((), "r", VTypeCustom "tree")
+                                  ) ),
                             Constructor
                               ( (),
                                 "Node",
@@ -974,23 +976,27 @@ qtype my_qt
                       {
                         bindings = [ ("x", VTypeInt) ];
                         body =
-                          ( PatConstructor
-                              ((), "Int", PatName ((), "x", VTypeInt)),
+                          ( Pattern.PatConstructor
+                              ((), "Int", Pattern.PatName ((), "x", VTypeInt)),
                             Var ((), "x") );
                       };
                       {
                         bindings = [ ("x", VTypeInt) ];
                         body =
-                          ( PatConstructor
+                          ( Pattern.PatConstructor
                               ( (),
                                 "Pair",
-                                PatPair
+                                Pattern.PatPair
                                   ( (),
-                                    PatConstructor
-                                      ((), "Int", PatName ((), "x", VTypeInt)),
-                                    PatConstructor
-                                      ((), "Int", PatName ((), "x", VTypeInt))
-                                  ) ),
+                                    Pattern.PatConstructor
+                                      ( (),
+                                        "Int",
+                                        Pattern.PatName ((), "x", VTypeInt) ),
+                                    Pattern.PatConstructor
+                                      ( (),
+                                        "Int",
+                                        Pattern.PatName ((), "x", VTypeInt) ) )
+                              ),
                             Var ((), "x") );
                       };
                     ];

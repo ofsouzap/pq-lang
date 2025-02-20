@@ -2,7 +2,7 @@
 open Utils
 
 
-open Pattern
+
 open Expr
 open Program
 
@@ -49,8 +49,8 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 
 %type <Vtype.t> vtype
 
-%type <plain_pattern> pattern
-%type <plain_pattern> contained_pattern
+%type <Pattern.plain_t> pattern
+%type <Pattern.plain_t> contained_pattern
 
 %type <VariantType.constructor> variant_type_constructor
 %type <VariantType.constructor list> variant_type_definition_constructors_no_leading_pipe
@@ -59,16 +59,16 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 
 %type <string * Vtype.t> typed_name
 
-%type <plain_pattern> match_case_pattern
-%type <plain_pattern * plain_expr> match_case
-%type <(plain_pattern * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
-%type <(plain_pattern * plain_expr) Nonempty_list.t> match_cases
+%type <Pattern.plain_t> match_case_pattern
+%type <Pattern.plain_t * plain_expr> match_case
+%type <(Pattern.plain_t * plain_expr) Nonempty_list.t> match_cases_no_leading_pipe
+%type <(Pattern.plain_t * plain_expr) Nonempty_list.t> match_cases
 
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
 
 %type <(string * Vtype.t) list> quotient_type_eqcons_bindings
-%type <plain_pattern * plain_expr> quotient_type_eqcons_body
+%type <Pattern.plain_t * plain_expr> quotient_type_eqcons_body
 %type <QuotientType.plain_eqcons> quotient_type_eqcons
 %type <QuotientType.plain_eqcons list> quotient_type_definition_eqconss
 %type <QuotientType.plain_t> quotient_type_definition
@@ -94,8 +94,8 @@ vtype:
 
 pattern:
   | p = contained_pattern { p }
-  | n = LNAME COLON t = vtype { PatName ((), n, t) }
-  | cname = UNAME p = contained_pattern { PatConstructor ((), cname, p) }
+  | n = LNAME COLON t = vtype { Pattern.PatName ((), n, t) }
+  | cname = UNAME p = contained_pattern { Pattern.PatConstructor ((), cname, p) }
 ;
 
 contained_pattern:
@@ -127,8 +127,8 @@ typed_name:
 
 match_case_pattern:
   | LPAREN p = pattern RPAREN { p }
-  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair ((), p1, p2) }
-  | cname = UNAME p = contained_pattern { PatConstructor ((), cname, p) }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { Pattern.PatPair ((), p1, p2) }
+  | cname = UNAME p = contained_pattern { Pattern.PatConstructor ((), cname, p) }
 ;
 
 match_case:

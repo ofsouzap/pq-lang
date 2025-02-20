@@ -3,7 +3,6 @@
 open Core
 open Utils
 open Varname
-open Pattern
 
 (** Expressions in the language. Tagged with arbitrary values on each node. *)
 type ('tag_e, 'tag_p) expr =
@@ -55,7 +54,7 @@ type ('tag_e, 'tag_p) expr =
       'tag_e
       * ('tag_e, 'tag_p) expr
       * Vtype.t
-      * ('tag_p pattern * ('tag_e, 'tag_p) expr) Nonempty_list.t
+      * ('tag_p Pattern.t * ('tag_e, 'tag_p) expr) Nonempty_list.t
       (** Match expression *)
   (* Variant data types *)
   | Constructor of 'tag_e * string * ('tag_e, 'tag_p) expr
@@ -105,7 +104,7 @@ val rename_var :
 
 (** Create a possibly-open expression from a pattern *)
 val of_pattern :
-  convert_tag:('tag_p -> 'tag_e) -> 'tag_p pattern -> ('tag_e, 'tag_p) expr
+  convert_tag:('tag_p -> 'tag_e) -> 'tag_p Pattern.t -> ('tag_e, 'tag_p) expr
 
 exception ExprConverionFixError
 

@@ -1,7 +1,6 @@
 open Core
 open Pq_lang
 open Utils
-open Pattern
 open Typing
 open Parser
 open Program_executor
@@ -266,7 +265,7 @@ end = struct
         fun eqcons ->
           sprintf "{bindings=%s; body=%s}"
             (list (pair string Vtype.to_source_code) eqcons.bindings)
-            (pair pattern_to_source_code
+            (pair Pattern.to_source_code
                (Expr.to_source_code ~use_newlines:false)
                eqcons.body)
       in

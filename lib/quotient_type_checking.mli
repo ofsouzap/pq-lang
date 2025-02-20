@@ -21,7 +21,7 @@ module LispBuilder : LispBuilderSig
 
 type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
 type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
-type tag_pattern = pattern_tag Pattern.pattern [@@deriving sexp, equal]
+type tag_pattern = pattern_tag Pattern.t [@@deriving sexp, equal]
 type tag_expr = (expr_tag, pattern_tag) Expr.expr [@@deriving sexp, equal]
 
 val pattern_tag_to_expr_tag : pattern_tag -> expr_tag

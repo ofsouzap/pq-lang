@@ -2,7 +2,6 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
-open Pattern
 open Program
 open Typing
 open Program_executor
@@ -219,7 +218,7 @@ let test_cases_match : basic_test_case list =
                 VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
-                    ( PatName ((), "y", VTypeInt),
+                    ( Pattern.PatName ((), "y", VTypeInt),
                       Add ((), Var ((), "y"), IntLit ((), 1)) );
                   ] ) ),
         Ok (Int 4) );
@@ -234,9 +233,9 @@ let test_cases_match : basic_test_case list =
                 VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
-                    ( PatName ((), "y", VTypeBool),
+                    ( Pattern.PatName ((), "y", VTypeBool),
                       If ((), Var ((), "y"), IntLit ((), 4), IntLit ((), 0)) );
-                    (PatName ((), "z", VTypeBool), IntLit ((), 9));
+                    (Pattern.PatName ((), "z", VTypeBool), IntLit ((), 9));
                   ] ) ),
         Ok (Int 0) );
       ( None,
@@ -250,10 +249,10 @@ let test_cases_match : basic_test_case list =
                 VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
-                    ( PatPair
+                    ( Pattern.PatPair
                         ( (),
-                          PatName ((), "y", VTypeBool),
-                          PatName ((), "z", VTypeInt) ),
+                          Pattern.PatName ((), "y", VTypeBool),
+                          Pattern.PatName ((), "z", VTypeInt) ),
                       If ((), Var ((), "y"), Var ((), "z"), IntLit ((), 0)) );
                   ] ) ),
         Ok (Int 1) );
@@ -271,10 +270,11 @@ let test_cases_match : basic_test_case list =
                 VTypePair (VTypeBool, VTypeBool),
                 Nonempty_list.from_list_unsafe
                   [
-                    ( PatPair
+                    ( Pattern.PatPair
                         ( (),
-                          PatName ((), "y", VTypePair (VTypeBool, VTypeBool)),
-                          PatName ((), "z", VTypeInt) ),
+                          Pattern.PatName
+                            ((), "y", VTypePair (VTypeBool, VTypeBool)),
+                          Pattern.PatName ((), "z", VTypeInt) ),
                       Var ((), "y") );
                   ] ) ),
         Ok (Pair (Bool true, Bool true)) );
@@ -294,7 +294,8 @@ let test_cases_match : basic_test_case list =
             VTypeBool,
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ((), "BoolBox", PatName ((), "x", VTypeBool)),
+                ( Pattern.PatConstructor
+                    ((), "BoolBox", Pattern.PatName ((), "x", VTypeBool)),
                   Var ((), "x") );
               ] ),
         Ok (Bool true) );
@@ -318,15 +319,16 @@ let test_cases_match : basic_test_case list =
             VTypeInt,
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ((), "Nil", PatName ((), "x", VTypeUnit)),
+                ( Pattern.PatConstructor
+                    ((), "Nil", Pattern.PatName ((), "x", VTypeUnit)),
                   IntLit ((), 0) );
-                ( PatConstructor
+                ( Pattern.PatConstructor
                     ( (),
                       "Cons",
-                      PatPair
+                      Pattern.PatPair
                         ( (),
-                          PatName ((), "x", VTypeInt),
-                          PatName ((), "y", VTypeCustom "int_list") ) ),
+                          Pattern.PatName ((), "x", VTypeInt),
+                          Pattern.PatName ((), "y", VTypeCustom "int_list") ) ),
                   Var ((), "x") );
               ] ),
         Ok (Int 7) );

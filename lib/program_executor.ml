@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Varname
-open Pattern
 open Program
 
 type expr_tag = unit [@@deriving sexp, equal]
@@ -103,7 +102,7 @@ let show_exec_res = function
   | Ok v -> sexp_of_value v |> Sexp.to_string_hum
   | Error e -> print_exec_err e
 
-let rec match_pattern (p : 'tag_p pattern) (v : value) :
+let rec match_pattern (p : 'tag_p Pattern.t) (v : value) :
     (varname * value) list option =
   let open Option in
   match (p, v) with

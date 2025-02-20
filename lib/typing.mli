@@ -1,4 +1,3 @@
-open Pattern
 open Expr
 open Program
 
@@ -14,9 +13,9 @@ type typing_error =
       *)
   | NoCommonRootType of Vtype.t * Vtype.t
       (** The types given were expected to have a common root type but didn't *)
-  | PatternTypeMismatch of plain_pattern * Vtype.t * Vtype.t
+  | PatternTypeMismatch of Pattern.plain_t * Vtype.t * Vtype.t
       (** A pattern was expected to have the first type but had the second *)
-  | EqConsBodyPatternTypeMismatch of plain_pattern * Vtype.t * Vtype.t
+  | EqConsBodyPatternTypeMismatch of Pattern.plain_t * Vtype.t * Vtype.t
       (** The pattern of an equivalence constructor body was expected to have
           the first type but had the second *)
   | EqConsBodyExprTypeMismatch of plain_expr * Vtype.t * Vtype.t
@@ -136,8 +135,8 @@ module type TypeCheckerSig = functor
       type and declared variables, or a pattern typing error *)
   val type_pattern :
     checked_type_ctx * VarCtx.t ->
-    'tag_p pattern ->
-    ((Vtype.t * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
+    'tag_p Pattern.t ->
+    ((Vtype.t * 'tag_p) Pattern.t * VarCtx.t, typing_error) Result.t
 
   (** Type checks a single expression in the given context *)
   val type_expr :

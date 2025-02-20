@@ -1,12 +1,11 @@
 open Core
 open Utils
 open Varname
-open Pattern
 open Expr
 
 type ('tag_e, 'tag_p) eqcons = {
   bindings : (varname * Vtype.t) list;
-  body : 'tag_p pattern * ('tag_e, 'tag_p) expr;
+  body : 'tag_p Pattern.t * ('tag_e, 'tag_p) expr;
 }
 [@@deriving sexp, equal]
 
@@ -55,7 +54,7 @@ let eqcons_to_source_code ?(use_newlines : bool option)
         |> fun str -> String.append str " => "
   in
   let p, e = eqcons.body in
-  sprintf "%s(%s) == (%s)" bindings_str (pattern_to_source_code p)
+  sprintf "%s(%s) == (%s)" bindings_str (Pattern.to_source_code p)
     (Expr.to_source_code ?use_newlines e)
 
 type ('tag_e, 'tag_p) t = {

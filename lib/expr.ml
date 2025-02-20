@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Varname
-open Pattern
 
 type ('tag_e, 'tag_p) expr =
   | UnitLit of 'tag_e
@@ -32,7 +31,7 @@ type ('tag_e, 'tag_p) expr =
       'tag_e
       * ('tag_e, 'tag_p) expr
       * Vtype.t
-      * ('tag_p pattern * ('tag_e, 'tag_p) expr) Nonempty_list.t
+      * ('tag_p Pattern.t * ('tag_e, 'tag_p) expr) Nonempty_list.t
   | Constructor of 'tag_e * string * ('tag_e, 'tag_p) expr
 [@@deriving sexp, equal]
 
@@ -283,7 +282,7 @@ let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
       Constructor (v, name, rename_var ~old_name ~new_name e)
 
 let rec of_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
-    'tag_p pattern -> ('tag_e, 'tag_p) expr = function
+    'tag_p Pattern.t -> ('tag_e, 'tag_p) expr = function
   | PatName (v, xname, _) -> Var (convert_tag v, xname)
   | PatPair (v, p1, p2) ->
       Pair
@@ -337,10 +336,11 @@ let to_source_code ?(use_newlines : bool option) :
            match e1 with _ -> default_repr)
        | App (_, e1, e2) -> convert e1 |.> write " " |.> convert e2
        | Match (_, e, t2, cs) ->
-           let convert_case ((p : 'tag_p pattern), (c_e : ('tag_e, 'tag_p) expr))
-               : state -> state =
+           let convert_case
+               ((p : 'tag_p Pattern.t), (c_e : ('tag_e, 'tag_p) expr)) :
+               state -> state =
              write "| ("
-             |.> write (pattern_to_source_code p)
+             |.> write (Pattern.to_source_code p)
              |.> write ") ->"
              |.> block (convert c_e)
            in

@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Varname
-open Pattern
 open Expr
 
 type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) expr StringMap.t
@@ -100,7 +99,7 @@ let rec apply_to_expr ~(unifier : ('tag_e, 'tag_p) unifier) :
           ~f:(fun (case_p, case_e) ->
             (* Need to beware of alpha-equivalence considerations:
             if the pattern redefines a variable name, the unifier should remove this variable name from its scope *)
-            let case_p_defined_vars = defined_vars case_p in
+            let case_p_defined_vars = Pattern.defined_vars case_p in
             let unifier' =
               List.fold ~init:unifier
                 ~f:(fun acc (xname, _) -> Map.remove acc xname)

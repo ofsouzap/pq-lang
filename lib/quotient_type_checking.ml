@@ -57,7 +57,7 @@ end
 
 type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
 type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
-type tag_pattern = pattern_tag Pattern.pattern [@@deriving sexp, equal]
+type tag_pattern = pattern_tag Pattern.t [@@deriving sexp, equal]
 type tag_expr = (expr_tag, pattern_tag) expr [@@deriving sexp, equal]
 
 let pattern_tag_to_expr_tag (v : pattern_tag) : expr_tag =
@@ -294,11 +294,10 @@ module FlatPattern = struct
         Constructor (v, name, expr_rename_var ~old_name ~new_name e)
 
   (** Convert a flat pattern to a regular pattern *)
-  let to_non_flat_pattern : t -> tag_pattern =
-    let open Pattern in
-    function
+  let to_non_flat_pattern : t -> tag_pattern = function
     | FlatPatPair (v, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)) ->
-        PatPair (v, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
+        Pattern.PatPair
+          (v, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
     | FlatPatConstructor (v, c_name, (x1_v, x1_name, x1_t)) ->
         PatConstructor (v, c_name, PatName (x1_v, x1_name, x1_t))
 
@@ -365,8 +364,8 @@ module FlatPattern = struct
         let new_binding_name_2, existing_names =
           generate_fresh_varname ~seed_name:"snd" existing_names
         in
-        let p1_t = (Pattern.pattern_node_val p1).t in
-        let p2_t = (Pattern.pattern_node_val p2).t in
+        let p1_t = (Pattern.Pattern.node_val p1).t in
+        let p2_t = (Pattern.Pattern.node_val p2).t in
         flatten_case_pattern ~existing_names (p2, e)
         >>= fun (existing_names, flattened_p2_case_p, flattened_p2_case_e) ->
         flatten_case_pattern ~existing_names
@@ -411,7 +410,7 @@ module FlatPattern = struct
         let new_binding_name, existing_names =
           generate_fresh_varname ~seed_name:"val" existing_names
         in
-        let p1_t = (Pattern.pattern_node_val p1).t in
+        let p1_t = (Pattern.Pattern.node_val p1).t in
         flatten_case_pattern ~existing_names (p1, e)
         >>| fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
         ( existing_names,

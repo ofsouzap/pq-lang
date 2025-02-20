@@ -2,28 +2,27 @@ open Core
 open Utils
 open Varname
 
-type 'a pattern =
+type 'a t =
   | PatName of 'a * varname * Vtype.t
-  | PatPair of 'a * 'a pattern * 'a pattern
-  | PatConstructor of 'a * string * 'a pattern
+  | PatPair of 'a * 'a t * 'a t
+  | PatConstructor of 'a * string * 'a t
 [@@deriving sexp, equal]
 
-type 'a typed_pattern = (Vtype.t * 'a) pattern [@@deriving sexp, equal]
-type plain_pattern = unit pattern [@@deriving sexp, equal]
+type 'a typed_t = (Vtype.t * 'a) t [@@deriving sexp, equal]
+type plain_t = unit t [@@deriving sexp, equal]
 
-let rec pattern_to_plain_pattern : 'a pattern -> plain_pattern = function
+let rec to_plain_pattern : 'a t -> plain_t = function
   | PatName (_, xname, t) -> PatName ((), xname, t)
-  | PatPair (_, p1, p2) ->
-      PatPair ((), pattern_to_plain_pattern p1, pattern_to_plain_pattern p2)
+  | PatPair (_, p1, p2) -> PatPair ((), to_plain_pattern p1, to_plain_pattern p2)
   | PatConstructor (_, cname, p) ->
-      PatConstructor ((), cname, pattern_to_plain_pattern p)
+      PatConstructor ((), cname, to_plain_pattern p)
 
-let pattern_node_val = function
+let node_val = function
   | PatName (v, _, _) -> v
   | PatPair (v, _, _) -> v
   | PatConstructor (v, _, _) -> v
 
-let rec fmap ~(f : 'a -> 'b) : 'a pattern -> 'b pattern = function
+let rec fmap ~(f : 'a -> 'b) : 'a t -> 'b t = function
   | PatName (v, xname, t) -> PatName (f v, xname, t)
   | PatPair (v, p1, p2) -> PatPair (f v, fmap ~f p1, fmap ~f p2)
   | PatConstructor (v, cname, p) -> PatConstructor (f v, cname, fmap ~f p)
@@ -38,25 +37,22 @@ let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
   | PatConstructor (v, cname, p) ->
       PatConstructor (v, cname, rename_var ~old_name ~new_name p)
 
-let rec existing_names : 'a pattern -> StringSet.t = function
+let rec existing_names : 'a t -> StringSet.t = function
   | PatName (_, xname, _) -> StringSet.singleton xname
   | PatPair (_, p1, p2) -> Set.union (existing_names p1) (existing_names p2)
   | PatConstructor (_, c_name, p) ->
       Set.union (StringSet.singleton c_name) (existing_names p)
 
-let rec defined_vars : 'a pattern -> (varname * Vtype.t) list = function
+let rec defined_vars : 'a t -> (varname * Vtype.t) list = function
   | PatName (_, xname, xtype) -> [ (xname, xtype) ]
   | PatPair (_, p1, p2) -> defined_vars p1 @ defined_vars p2
   | PatConstructor (_, _, p) -> defined_vars p
 
-let rec pattern_to_source_code = function
+let rec to_source_code = function
   | PatName (_, xname, t) -> sprintf "%s : (%s)" xname (Vtype.to_source_code t)
   | PatPair (_, p1, p2) ->
-      sprintf "(%s), (%s)"
-        (pattern_to_source_code p1)
-        (pattern_to_source_code p2)
-  | PatConstructor (_, cname, p) ->
-      sprintf "%s (%s)" cname (pattern_to_source_code p)
+      sprintf "(%s), (%s)" (to_source_code p1) (to_source_code p2)
+  | PatConstructor (_, cname, p) -> sprintf "%s (%s)" cname (to_source_code p)
 
 module QCheck_testing : functor
   (Tag : sig
@@ -71,7 +67,7 @@ module QCheck_testing : functor
 
   include
     QCheck_testing_sig
-      with type t = Tag.t pattern * (string * Vtype.t) list
+      with type t = Tag.t t * (string * Vtype.t) list
        and type gen_options := gen_options
        and type print_options = unit
        and type shrink_options = unit
@@ -83,7 +79,7 @@ functor
    end)
   ->
   struct
-    type this_t = Tag.t pattern * (string * Vtype.t) list
+    type this_t = Tag.t t * (string * Vtype.t) list
     type t = this_t
 
     type gen_options = {
@@ -112,21 +108,21 @@ functor
         gen_new_varname vars >|= fun vname ->
         (PatName (v, vname, t), (vname, t) :: vars)
       and gen_unit (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
-        (* Generate a pattern that types as unit *)
+        (* Generate a t that types as unit *)
         named_var vars VTypeUnit
       and gen_int (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
-        (* Generate a pattern that types as integer *)
+        (* Generate a t that types as integer *)
         named_var vars VTypeInt
       and gen_bool (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
-        (* Generate a pattern that types as boolean *)
+        (* Generate a t that types as boolean *)
         named_var vars VTypeBool
       and gen_fun ((t1 : Vtype.t), (t2 : Vtype.t))
           (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
-        (* Generate a pattern that types as a function *)
+        (* Generate a t that types as a function *)
         named_var vars (VTypeFun (t1, t2))
       and gen_pair ((t1 : Vtype.t), (t2 : Vtype.t))
           (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
-        (* Generate a pattern that types as a pair *)
+        (* Generate a t that types as a pair *)
         v_gen >>= fun v ->
         oneof
           [
@@ -137,14 +133,14 @@ functor
           ]
       and gen_variant (cs : VariantType.constructor list)
           (vars : (string * Vtype.t) list) :
-          (* Generate a pattern that types as the specified variant type *)
+          (* Generate a t that types as the specified variant type *)
           this_t QCheck.Gen.t =
         v_gen >>= fun v ->
         oneof (List.map ~f:return cs) >>= fun (c_name, c_t) ->
         gen c_t vars >>= fun (p, ctx') ->
         return (PatConstructor (v, c_name, p), ctx')
       and gen (t : Vtype.t) : (string * Vtype.t) list -> this_t QCheck.Gen.t =
-        (* Generate a pattern of a specified type *)
+        (* Generate a t of a specified type *)
         match t with
         | VTypeUnit -> gen_unit
         | VTypeInt -> gen_int
@@ -158,7 +154,7 @@ functor
 
     let print () : this_t QCheck.Print.t =
       QCheck.Print.(
-        pair pattern_to_source_code (list (pair string Vtype.to_source_code)))
+        pair to_source_code (list (pair string Vtype.to_source_code)))
 
     let rec shrink () : this_t QCheck.Shrink.t =
       let open QCheck.Iter in
