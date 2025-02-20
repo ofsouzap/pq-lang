@@ -4,7 +4,6 @@ open Utils
 open Vtype
 open Variant_types
 open Pattern
-open Expr
 open Quotient_types
 open Custom_types
 open Typing
@@ -271,7 +270,7 @@ end = struct
           sprintf "{bindings=%s; body=%s}"
             (list (pair string vtype_to_source_code) eqcons.bindings)
             (pair pattern_to_source_code
-               (ast_to_source_code ~use_newlines:false)
+               (Expr.to_source_code ~use_newlines:false)
                eqcons.body)
       in
       let print_quotient_type : plain_quotient_type QCheck.Print.t =

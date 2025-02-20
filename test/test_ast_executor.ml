@@ -35,13 +35,13 @@ let type_expr ?(custom_types : plain_custom_type list option)
   | Error err ->
       failwith
         (sprintf "Typing error:\nExpression: %s\nError: %s"
-           (Expr.ast_to_source_code ~use_newlines:true e)
+           (Expr.to_source_code ~use_newlines:true e)
            (print_typing_error err))
 
 let test_cases_unit_value : basic_test_case list =
   let open Expr in
   let mapf ((x : plain_expr), (y : value)) =
-    (ast_to_source_code x, type_expr x, Ok y)
+    (Expr.to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
     [
@@ -52,7 +52,7 @@ let test_cases_unit_value : basic_test_case list =
 let test_cases_arithmetic : basic_test_case list =
   let open Expr in
   let mapf ((x : plain_expr), (y : int)) =
-    (ast_to_source_code x, type_expr x, Ok (Int y))
+    (Expr.to_source_code x, type_expr x, Ok (Int y))
   in
   List.map ~f:mapf
     [
@@ -85,7 +85,7 @@ let test_cases_arithmetic : basic_test_case list =
 let test_cases_booleans : basic_test_case list =
   let open Expr in
   let mapf ((x : plain_expr), (y : bool)) =
-    (ast_to_source_code x, type_expr x, Ok (Bool y))
+    (Expr.to_source_code x, type_expr x, Ok (Bool y))
   in
   List.map ~f:mapf
     [
@@ -110,7 +110,7 @@ let test_cases_booleans : basic_test_case list =
 let test_cases_pairs : basic_test_case list =
   let open Expr in
   let mapf ((x : plain_expr), (y : value)) =
-    (ast_to_source_code x, type_expr x, Ok y)
+    (Expr.to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
     [
@@ -126,7 +126,7 @@ let test_cases_pairs : basic_test_case list =
 let test_cases_integer_comparisons : basic_test_case list =
   let open Expr in
   let mapf ((x : plain_expr), (y : bool)) =
-    (ast_to_source_code x, type_expr x, Ok (Bool y))
+    (Expr.to_source_code x, type_expr x, Ok (Bool y))
   in
   List.map ~f:mapf
     [
@@ -155,7 +155,7 @@ let test_cases_integer_comparisons : basic_test_case list =
 let test_cases_control_flow : basic_test_case list =
   let open Expr in
   let mapf ((x : plain_expr), (y : exec_res)) =
-    (ast_to_source_code x, type_expr x, y)
+    (Expr.to_source_code x, type_expr x, y)
   in
   List.map ~f:mapf
     [
@@ -178,7 +178,7 @@ let test_cases_control_flow : basic_test_case list =
 let test_cases_variables : basic_test_case list =
   let open Expr in
   let mapf ((x : plain_expr), (y : exec_res)) =
-    (ast_to_source_code x, type_expr x, y)
+    (Expr.to_source_code x, type_expr x, y)
   in
   List.map ~f:mapf
     [
@@ -207,7 +207,7 @@ let test_cases_match : basic_test_case list =
       ( (custom_types : plain_custom_type list option),
         (x : plain_expr),
         (y : exec_res) ) : basic_test_case =
-    (ast_to_source_code x, type_expr ?custom_types x, y)
+    (Expr.to_source_code x, type_expr ?custom_types x, y)
   in
   List.map ~f:mapf
     [
@@ -339,7 +339,7 @@ let test_cases_constructor : basic_test_case list =
   let open Expr in
   let mapf
       ((variant_types : variant_type list), (y : plain_expr), (z : exec_res)) =
-    ( ast_to_source_code y,
+    ( Expr.to_source_code y,
       type_expr
         ~custom_types:(List.map ~f:(fun vt -> VariantType vt) variant_types)
         y,

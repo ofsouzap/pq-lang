@@ -77,7 +77,7 @@ let test_cases_to_source_code_inv =
   Test.make ~count:1000 ~name:"Expr to source code"
     unit_program_arbitrary_with_default_options (fun prog ->
       let e = prog.e in
-      match run_frontend_string (ast_to_source_code e) with
+      match run_frontend_string (Expr.to_source_code e) with
       | Ok prog ->
           if equal_plain_expr e prog.e then true
           else

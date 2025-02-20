@@ -1104,7 +1104,7 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   let out = run_frontend_string inp in
   match out with
   | Ok prog ->
-      assert_equal exp prog.e ~printer:(ast_to_source_code ~use_newlines:true)
+      assert_equal exp prog.e ~printer:(Expr.to_source_code ~use_newlines:true)
   | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
   | Error ParsingError -> assert_failure "ParsingError"
 

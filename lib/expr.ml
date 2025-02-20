@@ -293,9 +293,9 @@ let rec of_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
   | PatConstructor (v, cname, p) ->
       Constructor (convert_tag v, cname, of_pattern ~convert_tag p)
 
-exception AstConverionFixError
+exception ExprConverionFixError
 
-let ast_to_source_code ?(use_newlines : bool option) :
+let to_source_code ?(use_newlines : bool option) :
     ('tag_e, 'tag_p) expr -> string =
   let rec convert ?(bracketed : bool option) (orig_e : ('tag_e, 'tag_p) expr)
       (p : SourceCodeBuilder.state) : SourceCodeBuilder.state =
@@ -426,7 +426,7 @@ end = struct
     | NoPrint -> None
     | PrintSexp (f_e, f_p) ->
         Some (fun e -> sexp_of_expr f_e f_p e |> Sexp.to_string_hum)
-    | PrintExprSource -> Some (ast_to_source_code ~use_newlines:true)
+    | PrintExprSource -> Some (to_source_code ~use_newlines:true)
 
   let get_ast_printer (p : ast_print_method) (e : (TagExpr.t, TagPat.t) expr) :
       string =

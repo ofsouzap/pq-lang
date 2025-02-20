@@ -63,7 +63,7 @@ let quotient_type_eqcons_to_source_code ?(use_newlines : bool option)
   in
   let p, e = eqcons.body in
   sprintf "%s(%s) == (%s)" bindings_str (pattern_to_source_code p)
-    (ast_to_source_code ?use_newlines e)
+    (Expr.to_source_code ?use_newlines e)
 
 type ('tag_e, 'tag_p) quotient_type = {
   name : string;

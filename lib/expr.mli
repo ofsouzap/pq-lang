@@ -109,12 +109,12 @@ val rename_var :
 val of_pattern :
   convert_tag:('tag_p -> 'tag_e) -> 'tag_p pattern -> ('tag_e, 'tag_p) expr
 
-exception AstConverionFixError
+exception ExprConverionFixError
 
 (** Convert an Expr expression into source code that corresponds to the Expr
     representation. If the input has a malformed usage of the Fix node, this
-    will raise a `AstConversionFixError` exception. *)
-val ast_to_source_code : ?use_newlines:bool -> ('tag_e, 'tag_p) expr -> string
+    will raise a `ExprConversionFixError` exception. *)
+val to_source_code : ?use_newlines:bool -> ('tag_e, 'tag_p) expr -> string
 
 module QCheck_testing : functor
   (TagExpr : sig

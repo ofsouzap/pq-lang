@@ -32,7 +32,7 @@ let top_level_defn_to_source_code ~(use_newlines : bool) :
     |.> write ") : "
     |.> write (vtype_to_source_code defn.return_t)
     |.> write " ="
-    |.> block (write (ast_to_source_code ~use_newlines defn.body))
+    |.> block (write (Expr.to_source_code ~use_newlines defn.body))
     |.> write "end"
   in
   SourceCodeBuilder.from_converter ~converter:convert ~use_newlines
@@ -109,7 +109,7 @@ let program_to_source_code ?(use_newlines : bool option)
       ~f:(top_level_defn_to_source_code ~use_newlines)
       prog.top_level_defns
   in
-  let e_str : string = ast_to_source_code ~use_newlines prog.e in
+  let e_str : string = Expr.to_source_code ~use_newlines prog.e in
   let str_parts : string list =
     type_defns_str @ top_level_defns_str @ [ e_str ]
   in

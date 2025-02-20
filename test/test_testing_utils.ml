@@ -67,8 +67,8 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
             | Some (type_ctx, e, e_shrunk) ->
                 sprintf "[type ctx: %s]\n\ne = %s\n\ne_shrunk = %s"
                   (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string_hum)
-                  (ast_to_source_code ~use_newlines:true e)
-                  (ast_to_source_code ~use_newlines:true e_shrunk))
+                  (Expr.to_source_code ~use_newlines:true e)
+                  (Expr.to_source_code ~use_newlines:true e_shrunk))
           ~shrink:
             QCheck.Shrink.(
               option
@@ -141,7 +141,7 @@ let create_typed_expr_gen_test (name : string)
             sprintf "[type ctx: %s]\n[type: %s]\n%s"
               (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string_hum)
               (vtype_to_source_code t)
-              (ast_to_source_code ~use_newlines:true e))
+              (Expr.to_source_code ~use_newlines:true e))
           ~shrink:
             QCheck.Shrink.(
               pair nil

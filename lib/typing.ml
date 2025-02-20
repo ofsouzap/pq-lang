@@ -90,7 +90,7 @@ let print_typing_error = function
       sprintf
         "Type mismatch in equivalence constructor body pattern for \"%s\": \
          expected %s but got %s"
-        (ast_to_source_code ~use_newlines:false expr)
+        (Expr.to_source_code ~use_newlines:false expr)
         (vtype_to_source_code t1) (vtype_to_source_code t2)
   | EqualOperatorTypeMistmatch (t1, t2) ->
       sprintf "Trying to apply equality operator to %s and %s"
