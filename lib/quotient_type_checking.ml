@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Vtype
 open Varname
 open Expr
 open Program
@@ -56,8 +55,8 @@ module LispBuilder : LispBuilderSig = struct
       (List.map ~f:(fun n -> node_to_sexp n |> Sexp.to_string_hum) nodes)
 end
 
-type expr_tag = { t : vtype } [@@deriving sexp, equal]
-type pattern_tag = { t : vtype } [@@deriving sexp, equal]
+type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
+type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
 type tag_pattern = pattern_tag Pattern.pattern [@@deriving sexp, equal]
 type tag_expr = (expr_tag, pattern_tag) expr [@@deriving sexp, equal]
 
@@ -88,7 +87,7 @@ type quotient_typing_error =
       (** The pattern for a case of a match construct was the trivial case
           (matching all variables, equivalent to just renaming a variable)
           unexpectedly and cannot be handled *)
-  | PairTypeNotDefinedInState of vtype * vtype
+  | PairTypeNotDefinedInState of Vtype.t * Vtype.t
   | UndefinedCustomTypeName of string
       (** A custom type of the given name was referenced but isn't defined *)
 [@@deriving sexp, equal]
@@ -110,10 +109,10 @@ module FlatPattern = struct
   type t =
     | FlatPatPair of
         pattern_tag
-        * (pattern_tag * varname * vtype)
-        * (pattern_tag * varname * vtype)
+        * (pattern_tag * varname * Vtype.t)
+        * (pattern_tag * varname * Vtype.t)
     | FlatPatConstructor of
-        pattern_tag * string * (pattern_tag * varname * vtype)
+        pattern_tag * string * (pattern_tag * varname * Vtype.t)
   [@@deriving sexp, equal]
 
   type flat_pattern = t [@@deriving sexp, equal]
@@ -142,7 +141,7 @@ module FlatPattern = struct
     | Match of
         expr_tag
         * flat_expr
-        * vtype
+        * Vtype.t
         * (flat_pattern * flat_expr) Nonempty_list.t
     | Constructor of expr_tag * string * flat_expr
   [@@deriving sexp, equal]
@@ -150,8 +149,8 @@ module FlatPattern = struct
   type flat_top_level_defn = {
     recursive : bool;
     name : string;
-    param : varname * vtype;
-    return_t : vtype;
+    param : varname * Vtype.t;
+    return_t : Vtype.t;
     body : flat_expr;
   }
   [@@deriving sexp, equal]
@@ -193,7 +192,7 @@ module FlatPattern = struct
 
   (** Get the list of variables and their types that this pattern introduces to
       its case expression's variable context *)
-  let defined_vars : t -> (varname * vtype) list = function
+  let defined_vars : t -> (varname * Vtype.t) list = function
     | FlatPatPair (_, (_, x1name, x1type), (_, x2name, x2type)) ->
         [ (x1name, x1type); (x2name, x2type) ]
     | FlatPatConstructor (_, _, (_, xname, xtype)) -> [ (xname, xtype) ]
@@ -331,7 +330,7 @@ module FlatPattern = struct
           "TODO - the compound cases for flattening patterns haven't yet been \
            implemented"
   (*
-    let outer_expr_type : vtype = (flat_node_val e).t in
+    let outer_expr_type : Vtype.t = (flat_node_val e).t in
     match p with
     | PatName _ -> Error UnexpectedTrivialMatchCasePatternError
     | PatPair
@@ -635,31 +634,32 @@ module Smt = struct
   module State = struct
     type var_defn = {
       name : varname;
-      kind : [ `NonRec of (varname * vtype) option | `Rec of varname * vtype ];
-      return_t : vtype;
+      kind :
+        [ `NonRec of (varname * Vtype.t) option | `Rec of varname * Vtype.t ];
+      return_t : Vtype.t;
       body : FlatPattern.flat_expr;
     }
     [@@deriving sexp, equal]
 
-    type top_level_elem = VarDecl of varname * vtype | VarDefn of var_defn
+    type top_level_elem = VarDecl of varname * Vtype.t | VarDefn of var_defn
     [@@deriving sexp, equal]
 
     module VtypePairMap = Map.Make (struct
-      type t = vtype * vtype
+      type t = Vtype.t * Vtype.t
 
-      let compare ((t1_1, t1_2) : vtype * vtype) ((t2_1, t2_2) : vtype * vtype)
-          : int =
-        let first_comp = compare_vtype t1_1 t2_1 in
-        if first_comp = 0 then compare_vtype t1_2 t2_2 else first_comp
+      let compare ((t1_1, t1_2) : Vtype.t * Vtype.t)
+          ((t2_1, t2_2) : Vtype.t * Vtype.t) : int =
+        let first_comp = Vtype.compare t1_1 t2_1 in
+        if first_comp = 0 then Vtype.compare t1_2 t2_2 else first_comp
 
-      let t_of_sexp = pair_of_sexp vtype_of_sexp vtype_of_sexp
-      let sexp_of_t = sexp_of_pair sexp_of_vtype sexp_of_vtype
+      let t_of_sexp = pair_of_sexp Vtype.t_of_sexp Vtype.t_of_sexp
+      let sexp_of_t = sexp_of_pair Vtype.sexp_of_t Vtype.sexp_of_t
     end)
 
     type variant_type_constructor_info = {
       name : string;
       accessor_name : string;
-      t : vtype;
+      t : Vtype.t;
     }
     [@@deriving sexp, equal]
 
@@ -671,7 +671,7 @@ module Smt = struct
 
     type pair_type_info = {
       name : string;
-      t : vtype * vtype;
+      t : Vtype.t * Vtype.t;
       constructor_name : string;
       fst_accessor_name : string;
       snd_accessor_name : string;
@@ -693,7 +693,7 @@ module Smt = struct
               Created automatically in state initialization *)
       variant_types : variant_type_info list;
           (** The custom variant types defined. Added by module user *)
-      declared_consts : (string * vtype) list;
+      declared_consts : (string * Vtype.t) list;
           (** Translated by: (xname, xtype) -> (declare-const xname xtype ).
               Created automatically in state initialization *)
       top_level_rev : top_level_elem list;
@@ -727,8 +727,8 @@ module Smt = struct
         top_level_rev = [];
       }
 
-    let rec find_root_base_type (state : t) (t : vtype) :
-        (vtype, quotient_typing_error) Result.t =
+    let rec find_root_base_type (state : t) (t : Vtype.t) :
+        (Vtype.t, quotient_typing_error) Result.t =
       let open Result in
       match t with
       | VTypeCustom ct_name -> (
@@ -736,24 +736,24 @@ module Smt = struct
               equal_string (CustomType.name x_ct) ct_name)
           |> Result.of_option ~error:(UndefinedCustomTypeName ct_name)
           >>= function
-          | VariantType (vt_name, _) -> Ok (VTypeCustom vt_name)
+          | VariantType (vt_name, _) -> Ok (Vtype.VTypeCustom vt_name)
           | CustomType.QuotientType qt ->
               find_root_base_type state (VTypeCustom qt.base_type_name))
       | _ -> Ok t
 
-    let state_add_pair_type ((t1 : vtype), (t2 : vtype)) (state : t) :
+    let state_add_pair_type ((t1 : Vtype.t), (t2 : Vtype.t)) (state : t) :
         (t, quotient_typing_error) Result.t =
       let open Result in
       (* Make sure to only be using types for base variant types, not quotient types *)
       find_root_base_type state t1 >>= fun t1 ->
       find_root_base_type state t2 >>| fun t2 ->
-      let pair_type_vt_name : vtype * vtype -> string =
+      let pair_type_vt_name : Vtype.t * Vtype.t -> string =
         (* Generates an implicitly-unique name for the instantiation of the
             pair type for the specified two parameter types *)
-        let rec aux ((t1 : vtype), (t2 : vtype)) : string =
+        let rec aux ((t1 : Vtype.t), (t2 : Vtype.t)) : string =
           custom_special_name (`VariantType "pair")
           ^ sprintf "-+%s++%s+" (vtype_name t1) (vtype_name t2)
-        and vtype_name : vtype -> string = function
+        and vtype_name : Vtype.t -> string = function
           | VTypeUnit -> "Unit"
           | VTypeInt -> "Int"
           | VTypeBool -> "Bool"
@@ -789,7 +789,7 @@ module Smt = struct
             Map.set state.pair_types_defined ~key:(t1, t2) ~data:info;
         }
 
-    let state_get_pair_type_info ((t1 : vtype), (t2 : vtype)) (state : t) :
+    let state_get_pair_type_info ((t1 : Vtype.t), (t2 : Vtype.t)) (state : t) :
         (pair_type_info, quotient_typing_error) Result.t =
       let open Result in
       find_root_base_type state t1 >>= fun t1 ->
@@ -800,8 +800,8 @@ module Smt = struct
 
     (** Get the name of the special function that should be defined to compare
         two values of the specified type. This is only for quotient types *)
-    let state_get_vtype_special_eq_fun_name (state : t) : vtype -> string option
-        = function
+    let state_get_vtype_special_eq_fun_name (state : t) :
+        Vtype.t -> string option = function
       | VTypeCustom ct_name ->
           if
             List.exists state.custom_types ~f:(function
@@ -832,8 +832,8 @@ module Smt = struct
       }
 
     (** Add a variable declaration to the state *)
-    let state_add_var_decl ((xname : varname), (xtype : vtype)) (state : t) : t
-        =
+    let state_add_var_decl ((xname : varname), (xtype : Vtype.t)) (state : t) :
+        t =
       {
         state with
         top_level_rev = VarDecl (xname, xtype) :: state.top_level_rev;
@@ -844,7 +844,7 @@ module Smt = struct
         (t, quotient_typing_error) Result.t =
       let open Result in
       let rec add_pair_types_used (state : state) :
-          vtype -> (state, quotient_typing_error) Result.t = function
+          Vtype.t -> (state, quotient_typing_error) Result.t = function
         | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> Ok state
         | VTypePair (t1, t2) ->
             state_add_pair_type (t1, t2) state >>= fun state ->
@@ -946,7 +946,7 @@ module Smt = struct
   module Assertion = struct
     type t =
       | Not of t
-      | Eq of vtype option * FlatPattern.flat_expr * FlatPattern.flat_expr
+      | Eq of Vtype.t option * FlatPattern.flat_expr * FlatPattern.flat_expr
           (** Equality node. Optionally the types of the two expressions can be
               specified. This allows for equality lifting for quotient types *)
 
@@ -961,7 +961,7 @@ module Smt = struct
     open State
     open Assertion
 
-    let rec build_vtype (state : State.t) (t : vtype) :
+    let rec build_vtype (state : State.t) (t : Vtype.t) :
         (LispBuilder.node, quotient_typing_error) Result.t =
       let open Result in
       let open LispBuilder in
@@ -1195,7 +1195,7 @@ module Smt = struct
           ~f:(fun (existing_names, (acc_rev : node list list)) -> function
           | VariantType _ -> Ok (existing_names, acc_rev)
           | CustomType.QuotientType qt ->
-              let t = VTypeCustom qt.name in
+              let t = Vtype.VTypeCustom qt.name in
               let eq_fun_name =
                 State.state_get_vtype_special_eq_fun_name state t
                 |> Option.value_exn
@@ -1209,7 +1209,7 @@ module Smt = struct
                   [ Atom eq_fun_name; List [ t_node; t_node ]; bool_node ] )
               |> fun decl_node ->
               (* Assertion nodes *)
-              let create_assert_node (bindings : (varname * vtype) list)
+              let create_assert_node (bindings : (varname * Vtype.t) list)
                   (l : FlatPattern.flat_expr) (r : FlatPattern.flat_expr) :
                   (node, quotient_typing_error) Result.t =
                 List.fold_result bindings ~init:([], [])
@@ -1419,7 +1419,7 @@ let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
 
 let perform_quotient_match_check ~(existing_names : StringSet.t)
     ~(quotient_type : tag_quotient_type) ~(match_node_v : expr_tag)
-    ~(match_t_out : vtype) ~(cases : (tag_pattern * tag_expr) Nonempty_list.t)
+    ~(match_t_out : Vtype.t) ~(cases : (tag_pattern * tag_expr) Nonempty_list.t)
     (state : Smt.State.t) : (StringSet.t, quotient_typing_error) Result.t =
   let open Result in
   let reform_match_with_arg (e1 : tag_expr) : tag_expr =

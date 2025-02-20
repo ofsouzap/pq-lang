@@ -1,19 +1,18 @@
 open Core
 open Utils
 open Varname
-open Vtype
 open Pattern
 open Expr
 
 type ('tag_e, 'tag_p) eqcons = {
-  bindings : (varname * vtype) list;
+  bindings : (varname * Vtype.t) list;
   body : 'tag_p pattern * ('tag_e, 'tag_p) expr;
 }
 [@@deriving sexp, equal]
 
 type plain_eqcons = (unit, unit) eqcons [@@deriving sexp, equal]
 
-type ('tag_e, 'tag_p) typed_eqcons = (vtype * 'tag_e, vtype * 'tag_p) eqcons
+type ('tag_e, 'tag_p) typed_eqcons = (Vtype.t * 'tag_e, Vtype.t * 'tag_p) eqcons
 [@@deriving sexp, equal]
 
 let eqcons_existing_names (eqcons : ('tag_e, 'tag_p) eqcons) : StringSet.t =
@@ -50,7 +49,7 @@ let eqcons_to_source_code ?(use_newlines : bool option)
     | h :: ts ->
         Nonempty_list.(
           map
-            ~f:(fun (v, vt) -> sprintf "(%s : %s)" v (vtype_to_source_code vt))
+            ~f:(fun (v, vt) -> sprintf "(%s : %s)" v (Vtype.to_source_code vt))
             (make (h, ts)))
         |> Nonempty_list.to_list |> String.concat ~sep:" -> "
         |> fun str -> String.append str " => "
@@ -68,7 +67,7 @@ type ('tag_e, 'tag_p) t = {
 
 type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
-type ('tag_e, 'tag_p) typed_t = (vtype * 'tag_e, vtype * 'tag_p) t
+type ('tag_e, 'tag_p) typed_t = (Vtype.t * 'tag_e, Vtype.t * 'tag_p) t
 [@@deriving sexp, equal]
 
 let existing_names (qt : ('tag_e, 'tag_p) t) : StringSet.t =

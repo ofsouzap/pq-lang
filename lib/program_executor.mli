@@ -1,7 +1,6 @@
 (** This module provides functionality for directly executing an Expr of a
     program. *)
 
-open Vtype
 open Varname
 
 (** The data that the executor tags the interpreted Expr with *)
@@ -12,8 +11,8 @@ type pattern_tag = unit [@@deriving sexp, equal]
 
 (** Properties of a closure *)
 type closure_props = {
-  param : varname * vtype;  (** The function's parameter's name and type *)
-  out_type : vtype;  (** The output type of the function *)
+  param : varname * Vtype.t;  (** The function's parameter's name and type *)
+  out_type : Vtype.t;  (** The output type of the function *)
   body : (expr_tag, pattern_tag) Expr.typed_expr;
       (** The body of the function *)
   store : store;  (** The store to use when executing the function *)

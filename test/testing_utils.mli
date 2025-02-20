@@ -1,7 +1,6 @@
 open Core
 open Pq_lang
 open Utils
-open Vtype
 open Typing
 
 (** A default maximum number of defined variant types *)
@@ -86,13 +85,13 @@ module TestingVarCtx : sig
   include Typing.TypingVarContext
 
   (** Get a list of all the variables who have the given type *)
-  val varnames_of_type : vtype -> t -> string list
+  val varnames_of_type : Vtype.t -> t -> string list
 
   (** Get the variable context as a list *)
-  val to_list : t -> (string * vtype) list
+  val to_list : t -> (string * Vtype.t) list
 
   (** Creates a context from a list *)
-  val from_list : (string * vtype) list -> t
+  val from_list : (string * Vtype.t) list -> t
 
   module QCheck_testing : sig
     include

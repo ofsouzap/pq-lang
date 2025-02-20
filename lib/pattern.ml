@@ -1,15 +1,14 @@
 open Core
 open Utils
 open Varname
-open Vtype
 
 type 'a pattern =
-  | PatName of 'a * varname * vtype
+  | PatName of 'a * varname * Vtype.t
   | PatPair of 'a * 'a pattern * 'a pattern
   | PatConstructor of 'a * string * 'a pattern
 [@@deriving sexp, equal]
 
-type 'a typed_pattern = (vtype * 'a) pattern [@@deriving sexp, equal]
+type 'a typed_pattern = (Vtype.t * 'a) pattern [@@deriving sexp, equal]
 type plain_pattern = unit pattern [@@deriving sexp, equal]
 
 let rec pattern_to_plain_pattern : 'a pattern -> plain_pattern = function
@@ -45,13 +44,13 @@ let rec existing_names : 'a pattern -> StringSet.t = function
   | PatConstructor (_, c_name, p) ->
       Set.union (StringSet.singleton c_name) (existing_names p)
 
-let rec defined_vars : 'a pattern -> (varname * vtype) list = function
+let rec defined_vars : 'a pattern -> (varname * Vtype.t) list = function
   | PatName (_, xname, xtype) -> [ (xname, xtype) ]
   | PatPair (_, p1, p2) -> defined_vars p1 @ defined_vars p2
   | PatConstructor (_, _, p) -> defined_vars p
 
 let rec pattern_to_source_code = function
-  | PatName (_, xname, t) -> sprintf "%s : (%s)" xname (vtype_to_source_code t)
+  | PatName (_, xname, t) -> sprintf "%s : (%s)" xname (Vtype.to_source_code t)
   | PatPair (_, p1, p2) ->
       sprintf "(%s), (%s)"
         (pattern_to_source_code p1)
@@ -67,12 +66,12 @@ module QCheck_testing : functor
   type gen_options = {
     get_variant_type_constructors : string -> VariantType.constructor list;
     v_gen : Tag.t QCheck.Gen.t;
-    t : vtype;
+    t : Vtype.t;
   }
 
   include
     QCheck_testing_sig
-      with type t = Tag.t pattern * (string * vtype) list
+      with type t = Tag.t pattern * (string * Vtype.t) list
        and type gen_options := gen_options
        and type print_options = unit
        and type shrink_options = unit
@@ -84,13 +83,13 @@ functor
    end)
   ->
   struct
-    type this_t = Tag.t pattern * (string * vtype) list
+    type this_t = Tag.t pattern * (string * Vtype.t) list
     type t = this_t
 
     type gen_options = {
       get_variant_type_constructors : string -> VariantType.constructor list;
       v_gen : Tag.t QCheck.Gen.t;
-      t : vtype;
+      t : Vtype.t;
     }
 
     type print_options = unit
@@ -100,33 +99,33 @@ functor
     let gen (opts : gen_options) : this_t QCheck.Gen.t =
       let open QCheck.Gen in
       let v_gen = opts.v_gen in
-      let rec gen_new_varname (vars : (string * vtype) list) :
+      let rec gen_new_varname (vars : (string * Vtype.t) list) :
           string QCheck.Gen.t =
         (* Generate a new variable name that is not already in the context *)
         Varname.QCheck_testing.gen () >>= fun vname ->
         if List.exists ~f:(fun (xname, _) -> equal_string vname xname) vars then
           gen_new_varname vars
         else return vname
-      and named_var (vars : (string * vtype) list) (t : vtype) :
+      and named_var (vars : (string * Vtype.t) list) (t : Vtype.t) :
           this_t QCheck.Gen.t =
         v_gen >>= fun v ->
         gen_new_varname vars >|= fun vname ->
         (PatName (v, vname, t), (vname, t) :: vars)
-      and gen_unit (vars : (string * vtype) list) : this_t QCheck.Gen.t =
+      and gen_unit (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
         (* Generate a pattern that types as unit *)
         named_var vars VTypeUnit
-      and gen_int (vars : (string * vtype) list) : this_t QCheck.Gen.t =
+      and gen_int (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
         (* Generate a pattern that types as integer *)
         named_var vars VTypeInt
-      and gen_bool (vars : (string * vtype) list) : this_t QCheck.Gen.t =
+      and gen_bool (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
         (* Generate a pattern that types as boolean *)
         named_var vars VTypeBool
-      and gen_fun ((t1 : vtype), (t2 : vtype)) (vars : (string * vtype) list) :
-          this_t QCheck.Gen.t =
+      and gen_fun ((t1 : Vtype.t), (t2 : Vtype.t))
+          (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
         (* Generate a pattern that types as a function *)
         named_var vars (VTypeFun (t1, t2))
-      and gen_pair ((t1 : vtype), (t2 : vtype)) (vars : (string * vtype) list) :
-          this_t QCheck.Gen.t =
+      and gen_pair ((t1 : Vtype.t), (t2 : Vtype.t))
+          (vars : (string * Vtype.t) list) : this_t QCheck.Gen.t =
         (* Generate a pattern that types as a pair *)
         v_gen >>= fun v ->
         oneof
@@ -137,14 +136,14 @@ functor
             );
           ]
       and gen_variant (cs : VariantType.constructor list)
-          (vars : (string * vtype) list) :
+          (vars : (string * Vtype.t) list) :
           (* Generate a pattern that types as the specified variant type *)
           this_t QCheck.Gen.t =
         v_gen >>= fun v ->
         oneof (List.map ~f:return cs) >>= fun (c_name, c_t) ->
         gen c_t vars >>= fun (p, ctx') ->
         return (PatConstructor (v, c_name, p), ctx')
-      and gen (t : vtype) : (string * vtype) list -> this_t QCheck.Gen.t =
+      and gen (t : Vtype.t) : (string * Vtype.t) list -> this_t QCheck.Gen.t =
         (* Generate a pattern of a specified type *)
         match t with
         | VTypeUnit -> gen_unit
@@ -159,11 +158,11 @@ functor
 
     let print () : this_t QCheck.Print.t =
       QCheck.Print.(
-        pair pattern_to_source_code (list (pair string vtype_to_source_code)))
+        pair pattern_to_source_code (list (pair string Vtype.to_source_code)))
 
     let rec shrink () : this_t QCheck.Shrink.t =
       let open QCheck.Iter in
-      fun (p, (defined_vars : (varname * vtype) list)) ->
+      fun (p, (defined_vars : (varname * Vtype.t) list)) ->
         match p with
         | PatName (v, xname, t) ->
             QCheck.Shrink.(

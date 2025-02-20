@@ -1,4 +1,3 @@
-open Vtype
 open Pattern
 open Expr
 open Program
@@ -7,26 +6,26 @@ open Program
 type typing_error =
   | UndefinedVariable of string
       (** A variable was referenced that isn't defined in the scope *)
-  | EqconsVariableNotInBindings of string * vtype
+  | EqconsVariableNotInBindings of string * Vtype.t
       (** A variable-type pair was used that wasn't defined in an eqcons binding
       *)
-  | TypeMismatch of vtype * vtype * string option
+  | TypeMismatch of Vtype.t * Vtype.t * string option
       (** An expression was expected to have the first type but had the second
       *)
-  | NoCommonRootType of vtype * vtype
+  | NoCommonRootType of Vtype.t * Vtype.t
       (** The types given were expected to have a common root type but didn't *)
-  | PatternTypeMismatch of plain_pattern * vtype * vtype
+  | PatternTypeMismatch of plain_pattern * Vtype.t * Vtype.t
       (** A pattern was expected to have the first type but had the second *)
-  | EqConsBodyPatternTypeMismatch of plain_pattern * vtype * vtype
+  | EqConsBodyPatternTypeMismatch of plain_pattern * Vtype.t * Vtype.t
       (** The pattern of an equivalence constructor body was expected to have
           the first type but had the second *)
-  | EqConsBodyExprTypeMismatch of plain_expr * vtype * vtype
+  | EqConsBodyExprTypeMismatch of plain_expr * Vtype.t * Vtype.t
       (** The expression of an equivalence constructor body was expected to have
           the first type but had the second *)
-  | EqualOperatorTypeMistmatch of vtype * vtype
+  | EqualOperatorTypeMistmatch of Vtype.t * Vtype.t
       (** An application of the equality operation had a type mismatch as the
           operands had the specified types instead of compatible ones *)
-  | ExpectedFunctionOf of vtype
+  | ExpectedFunctionOf of Vtype.t
       (** A value is used as a function but isn't a function. The expected input
           type of the function is the value *)
   | UndefinedVariantTypeConstructor of string
@@ -74,7 +73,7 @@ module type TypingTypeContext = sig
   val type_defns_to_ordered_list : t -> CustomType.plain_t list
 
   (** Check if one type is a subtype of another *)
-  val subtype : t -> vtype -> vtype -> (bool, typing_error) Result.t
+  val subtype : t -> Vtype.t -> Vtype.t -> (bool, typing_error) Result.t
 end
 
 (** Typing context of types using a simple set-based approach *)
@@ -89,13 +88,13 @@ module type TypingVarContext = sig
 
   (** Adds a new variable with its type to the context, overwriting any existing
       values *)
-  val add : t -> string -> vtype -> t
+  val add : t -> string -> Vtype.t -> t
 
   (** Looks up a variable's type in the context *)
-  val find : t -> string -> vtype option
+  val find : t -> string -> Vtype.t option
 
   (** Create a context with a single entry *)
-  val singleton : string -> vtype -> t
+  val singleton : string -> Vtype.t -> t
 
   (** Appends two variable contexts. When overwriting is necessary, the second
       argument overwrites the first *)
@@ -105,7 +104,7 @@ module type TypingVarContext = sig
   val exists : t -> string -> bool
 
   (** Convert the context to a list of variable-type pairs *)
-  val to_list : t -> (string * vtype) list
+  val to_list : t -> (string * Vtype.t) list
 end
 
 (** Typing context of variables using a simple list-based approach *)
@@ -128,17 +127,17 @@ module type TypeCheckerSig = functor
   (** Get the expression from a typed program expression *)
   val typed_program_get_program :
     ('tag_e, 'tag_p) typed_program ->
-    (vtype * 'tag_e, vtype * 'tag_p) Program.program
+    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.program
 
-  (** Check that a vtype is valid in the given context *)
-  val check_vtype : checked_type_ctx -> vtype -> (unit, typing_error) Result.t
+  (** Check that a Vtype.t is valid in the given context *)
+  val check_vtype : checked_type_ctx -> Vtype.t -> (unit, typing_error) Result.t
 
   (** Type checks a pattern in the given context, returning either the pattern's
       type and declared variables, or a pattern typing error *)
   val type_pattern :
     checked_type_ctx * VarCtx.t ->
     'tag_p pattern ->
-    ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
+    ((Vtype.t * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
 
   (** Type checks a single expression in the given context *)
   val type_expr :

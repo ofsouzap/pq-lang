@@ -1,5 +1,4 @@
 open Core
-open Vtype
 open Varname
 
 module type LispBuilderSig = sig
@@ -20,8 +19,8 @@ end
 
 module LispBuilder : LispBuilderSig
 
-type expr_tag = { t : Vtype.vtype } [@@deriving sexp, equal]
-type pattern_tag = { t : Vtype.vtype } [@@deriving sexp, equal]
+type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
+type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
 type tag_pattern = pattern_tag Pattern.pattern [@@deriving sexp, equal]
 type tag_expr = (expr_tag, pattern_tag) Expr.expr [@@deriving sexp, equal]
 
@@ -46,7 +45,7 @@ type quotient_typing_error =
   | QuotientConstraintCheckFailed
   | SmtUnknownResult
   | UnexpectedTrivialMatchCasePatternError
-  | PairTypeNotDefinedInState of Vtype.vtype * Vtype.vtype
+  | PairTypeNotDefinedInState of Vtype.t * Vtype.t
   | UndefinedCustomTypeName of string
 [@@deriving sexp, equal]
 
@@ -54,10 +53,10 @@ module FlatPattern : sig
   type t =
     | FlatPatPair of
         pattern_tag
-        * (pattern_tag * string * Vtype.vtype)
-        * (pattern_tag * string * Vtype.vtype)
+        * (pattern_tag * string * Vtype.t)
+        * (pattern_tag * string * Vtype.t)
     | FlatPatConstructor of
-        pattern_tag * string * (pattern_tag * string * Vtype.vtype)
+        pattern_tag * string * (pattern_tag * string * Vtype.t)
   [@@deriving sexp, equal]
 
   type flat_pattern = t [@@deriving sexp, equal]
@@ -86,7 +85,7 @@ module FlatPattern : sig
     | Match of
         expr_tag
         * flat_expr
-        * Vtype.vtype
+        * Vtype.t
         * (flat_pattern * flat_expr) Utils.Nonempty_list.t
     | Constructor of expr_tag * string * flat_expr
   [@@deriving sexp, equal]
@@ -94,8 +93,8 @@ module FlatPattern : sig
   type flat_top_level_defn = {
     recursive : bool;
     name : string;
-    param : string * Vtype.vtype;
-    return_t : Vtype.vtype;
+    param : string * Vtype.t;
+    return_t : Vtype.t;
     body : flat_expr;
   }
   [@@deriving sexp, equal]
@@ -109,7 +108,7 @@ module FlatPattern : sig
 
   val flat_pattern_node_val : flat_pattern -> pattern_tag
   val flat_node_val : flat_expr -> expr_tag
-  val defined_vars : t -> (string * Vtype.vtype) list
+  val defined_vars : t -> (string * Vtype.t) list
 
   val expr_rename_var :
     old_name:string -> new_name:string -> flat_expr -> flat_expr
@@ -133,19 +132,20 @@ module Smt : sig
   module State : sig
     type var_defn = {
       name : varname;
-      kind : [ `NonRec of (varname * vtype) option | `Rec of varname * vtype ];
-      return_t : vtype;
+      kind :
+        [ `NonRec of (varname * Vtype.t) option | `Rec of varname * Vtype.t ];
+      return_t : Vtype.t;
       body : FlatPattern.flat_expr;
     }
     [@@deriving sexp, equal]
 
-    type top_level_elem = VarDecl of varname * vtype | VarDefn of var_defn
+    type top_level_elem = VarDecl of varname * Vtype.t | VarDefn of var_defn
     [@@deriving sexp, equal]
 
     type variant_type_constructor_info = {
       name : string;
       accessor_name : string;
-      t : vtype;
+      t : Vtype.t;
     }
     [@@deriving sexp, equal]
 
@@ -157,7 +157,7 @@ module Smt : sig
 
     type pair_type_info = {
       name : string;
-      t : Vtype.vtype * Vtype.vtype;
+      t : Vtype.t * Vtype.t;
       constructor_name : string;
       fst_accessor_name : string;
       snd_accessor_name : string;
@@ -169,23 +169,21 @@ module Smt : sig
     val state_init : tag_custom_type list -> t
 
     val find_root_base_type :
-      t -> Vtype.vtype -> (Vtype.vtype, quotient_typing_error) result
+      t -> Vtype.t -> (Vtype.t, quotient_typing_error) result
 
     val state_get_pair_type_info :
-      Vtype.vtype * Vtype.vtype ->
-      t ->
-      (pair_type_info, quotient_typing_error) result
+      Vtype.t * Vtype.t -> t -> (pair_type_info, quotient_typing_error) result
 
-    val state_get_vtype_special_eq_fun_name : t -> Vtype.vtype -> string option
+    val state_get_vtype_special_eq_fun_name : t -> Vtype.t -> string option
     val state_add_variant_type : VariantType.t -> t -> t
-    val state_add_var_decl : string * Vtype.vtype -> t -> t
+    val state_add_var_decl : string * Vtype.t -> t -> t
     val state_add_var_defn : var_defn -> t -> (t, quotient_typing_error) result
   end
 
   module Assertion : sig
     type t =
       | Not of t
-      | Eq of Vtype.vtype option * FlatPattern.flat_expr * FlatPattern.flat_expr
+      | Eq of Vtype.t option * FlatPattern.flat_expr * FlatPattern.flat_expr
 
     type assertion = t
 
@@ -194,7 +192,7 @@ module Smt : sig
 
   module Builder : sig
     val build_vtype :
-      State.t -> Vtype.vtype -> (LispBuilder.node, quotient_typing_error) result
+      State.t -> Vtype.t -> (LispBuilder.node, quotient_typing_error) result
 
     val build_expr :
       directly_callable_fun_names:Utils.StringSet.t ->

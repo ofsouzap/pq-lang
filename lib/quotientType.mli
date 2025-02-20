@@ -1,12 +1,11 @@
 open Utils
 open Varname
-open Vtype
 open Pattern
 open Expr
 
 (** A single equality constructor on a quotient type *)
 type ('tag_e, 'tag_p) eqcons = {
-  bindings : (varname * vtype) list;
+  bindings : (varname * Vtype.t) list;
       (** The variable bindings for the equality constructor of the equality
           constructor *)
   body : 'tag_p pattern * ('tag_e, 'tag_p) expr;
@@ -18,7 +17,7 @@ type ('tag_e, 'tag_p) eqcons = {
 
 type plain_eqcons = (unit, unit) eqcons [@@deriving sexp, equal]
 
-type ('tag_e, 'tag_p) typed_eqcons = (vtype * 'tag_e, vtype * 'tag_p) eqcons
+type ('tag_e, 'tag_p) typed_eqcons = (Vtype.t * 'tag_e, Vtype.t * 'tag_p) eqcons
 [@@deriving sexp, equal]
 
 (** Get all names used in a quotient type equality constructor *)
@@ -51,7 +50,7 @@ type ('tag_e, 'tag_p) t = {
 
 type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
-type ('tag_e, 'tag_p) typed_t = (vtype * 'tag_e, vtype * 'tag_p) t
+type ('tag_e, 'tag_p) typed_t = (Vtype.t * 'tag_e, Vtype.t * 'tag_p) t
 [@@deriving sexp, equal]
 
 (** Get all names used in a quotient type definition *)

@@ -1,20 +1,19 @@
 open Core
 open Utils
-open Vtype
 open Pattern
 open Expr
 open Program
 
 type typing_error =
   | UndefinedVariable of string
-  | EqconsVariableNotInBindings of string * vtype
-  | TypeMismatch of vtype * vtype * string option
-  | NoCommonRootType of vtype * vtype
-  | PatternTypeMismatch of plain_pattern * vtype * vtype
-  | EqConsBodyPatternTypeMismatch of plain_pattern * vtype * vtype
-  | EqConsBodyExprTypeMismatch of plain_expr * vtype * vtype
-  | EqualOperatorTypeMistmatch of vtype * vtype
-  | ExpectedFunctionOf of vtype
+  | EqconsVariableNotInBindings of string * Vtype.t
+  | TypeMismatch of Vtype.t * Vtype.t * string option
+  | NoCommonRootType of Vtype.t * Vtype.t
+  | PatternTypeMismatch of plain_pattern * Vtype.t * Vtype.t
+  | EqConsBodyPatternTypeMismatch of plain_pattern * Vtype.t * Vtype.t
+  | EqConsBodyExprTypeMismatch of plain_expr * Vtype.t * Vtype.t
+  | EqualOperatorTypeMistmatch of Vtype.t * Vtype.t
+  | ExpectedFunctionOf of Vtype.t
   | UndefinedVariantTypeConstructor of string
   | PatternMultipleVariableDefinitions of string
   | MultipleTopLevelNameDefinitions of string
@@ -65,35 +64,35 @@ let print_typing_error = function
       sprintf
         "Variable %s of type %s is not in the bindings of an eqcons but is used"
         xname
-        (vtype_to_source_code xtype)
+        (Vtype.to_source_code xtype)
   | TypeMismatch (t1, t2, msg) ->
       sprintf "Type mismatch: expected %s but got %s%s"
-        (vtype_to_source_code t1) (vtype_to_source_code t2)
+        (Vtype.to_source_code t1) (Vtype.to_source_code t2)
         (match msg with None -> "" | Some msg -> sprintf " (%s)" msg)
   | NoCommonRootType (t1, t2) ->
       sprintf "Expected common root type for %s and %s but none found"
-        (vtype_to_source_code t1) (vtype_to_source_code t2)
+        (Vtype.to_source_code t1) (Vtype.to_source_code t2)
   | PatternTypeMismatch (p, t1, t2) ->
       sprintf "Type mismatch in pattern \"%s\": expected %s but got %s"
-        (pattern_to_source_code p) (vtype_to_source_code t1)
-        (vtype_to_source_code t2)
+        (pattern_to_source_code p) (Vtype.to_source_code t1)
+        (Vtype.to_source_code t2)
   | EqConsBodyPatternTypeMismatch (pattern, t1, t2) ->
       sprintf
         "Type mismatch in equivalence constructor body pattern for \"%s\": \
          expected %s but got %s"
         (pattern_to_source_code pattern)
-        (vtype_to_source_code t1) (vtype_to_source_code t2)
+        (Vtype.to_source_code t1) (Vtype.to_source_code t2)
   | EqConsBodyExprTypeMismatch (expr, t1, t2) ->
       sprintf
         "Type mismatch in equivalence constructor body pattern for \"%s\": \
          expected %s but got %s"
         (Expr.to_source_code ~use_newlines:false expr)
-        (vtype_to_source_code t1) (vtype_to_source_code t2)
+        (Vtype.to_source_code t1) (Vtype.to_source_code t2)
   | EqualOperatorTypeMistmatch (t1, t2) ->
       sprintf "Trying to apply equality operator to %s and %s"
-        (vtype_to_source_code t1) (vtype_to_source_code t2)
+        (Vtype.to_source_code t1) (Vtype.to_source_code t2)
   | ExpectedFunctionOf t ->
-      "Expected a function taking input of " ^ vtype_to_source_code t
+      "Expected a function taking input of " ^ Vtype.to_source_code t
   | UndefinedVariantTypeConstructor c_name ->
       sprintf "Undefined variant type constructor: %s" c_name
   | PatternMultipleVariableDefinitions xname ->
@@ -125,7 +124,7 @@ module type TypingTypeContext = sig
     t -> string -> (VariantType.t * VariantType.constructor) option
 
   val type_defns_to_ordered_list : t -> CustomType.plain_t list
-  val subtype : t -> vtype -> vtype -> (bool, typing_error) Result.t
+  val subtype : t -> Vtype.t -> Vtype.t -> (bool, typing_error) Result.t
 end
 
 module SetTypingTypeContext : TypingTypeContext = struct
@@ -183,7 +182,7 @@ module SetTypingTypeContext : TypingTypeContext = struct
       ~f:(fun ct_name -> find_type_defn_by_name ctx ct_name |> Option.value_exn)
       ctx.custom_types_order
 
-  let rec subtype (ctx : t) (t1 : vtype) (t2 : vtype) :
+  let rec subtype (ctx : t) (t1 : Vtype.t) (t2 : Vtype.t) :
       (bool, typing_error) Result.t =
     let open Result in
     match (t1, t2) with
@@ -223,16 +222,16 @@ module type TypingVarContext = sig
   type t
 
   val empty : t
-  val add : t -> string -> vtype -> t
-  val find : t -> string -> vtype option
-  val singleton : string -> vtype -> t
+  val add : t -> string -> Vtype.t -> t
+  val find : t -> string -> Vtype.t option
+  val singleton : string -> Vtype.t -> t
   val append : t -> t -> t
   val exists : t -> string -> bool
-  val to_list : t -> (string * vtype) list
+  val to_list : t -> (string * Vtype.t) list
 end
 
 module ListTypingVarContext : TypingVarContext = struct
-  type t = (string * vtype) list
+  type t = (string * Vtype.t) list
 
   let empty = []
   let add ctx x t = List.Assoc.add ctx x t ~equal:String.equal
@@ -258,14 +257,14 @@ module type TypeCheckerSig = functor
 
   val typed_program_get_program :
     ('tag_e, 'tag_p) typed_program ->
-    (vtype * 'tag_e, vtype * 'tag_p) Program.program
+    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.program
 
-  val check_vtype : checked_type_ctx -> vtype -> (unit, typing_error) Result.t
+  val check_vtype : checked_type_ctx -> Vtype.t -> (unit, typing_error) Result.t
 
   val type_pattern :
     checked_type_ctx * VarCtx.t ->
     'tag_p pattern ->
-    ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
+    ((Vtype.t * 'tag_p) pattern * VarCtx.t, typing_error) Result.t
 
   val type_expr :
     checked_type_ctx * VarCtx.t ->
@@ -290,14 +289,14 @@ functor
     let checked_empty_type_ctx = TypeCtx.empty
 
     type ('tag_e, 'tag_p) typed_program =
-      (vtype * 'tag_e, vtype * 'tag_p) program
+      (Vtype.t * 'tag_e, Vtype.t * 'tag_p) program
 
     let typed_program_get_program (tp : ('tag_e, 'tag_p) typed_program) :
-        (vtype * 'tag_e, vtype * 'tag_p) program =
+        (Vtype.t * 'tag_e, Vtype.t * 'tag_p) program =
       tp
 
     let rec check_vtype (ctx : checked_type_ctx) :
-        vtype -> (unit, typing_error) Result.t =
+        Vtype.t -> (unit, typing_error) Result.t =
       let open Result in
       function
       | VTypeInt | VTypeBool | VTypeUnit -> Ok ()
@@ -311,7 +310,7 @@ functor
     let rec type_pattern
         (((type_ctx : checked_type_ctx), (var_ctx : VarCtx.t)) as ctx)
         (orig_p : 'tag_p pattern) :
-        ((vtype * 'tag_p) pattern * VarCtx.t, typing_error) Result.t =
+        ((Vtype.t * 'tag_p) pattern * VarCtx.t, typing_error) Result.t =
       let open Result in
       let ( <: ) = TypeCtx.subtype type_ctx in
       match orig_p with
@@ -328,7 +327,7 @@ functor
           let p1_t = pattern_node_val p1_typed |> fst in
           let p2_t = pattern_node_val p2_typed |> fst in
           Ok
-            ( PatPair ((VTypePair (p1_t, p2_t), v), p1_typed, p2_typed),
+            ( PatPair ((Vtype.VTypePair (p1_t, p2_t), v), p1_typed, p2_typed),
               var_ctx_final )
       | PatConstructor (v, c_name, p) -> (
           match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
@@ -339,7 +338,8 @@ functor
               c_t <: p_t >>= fun subpattern_type_matches ->
               if subpattern_type_matches then
                 Ok
-                  ( PatConstructor ((VTypeCustom vt_name, v), c_name, p_typed),
+                  ( PatConstructor
+                      ((Vtype.VTypeCustom vt_name, v), c_name, p_typed),
                     var_ctx_from_p )
               else
                 Error
@@ -350,23 +350,24 @@ functor
         (('tag_e, 'tag_p) typed_expr, typing_error) Result.t =
       let open Result in
       let ( <: ) = TypeCtx.subtype type_ctx in
-      let e_type (e : (vtype * 'tag_e, vtype * 'tag_p) expr) : vtype =
+      let e_type (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr) : Vtype.t =
         e |> expr_node_val |> fst
       in
-      let be_of_type ?(msg : string option) (exp : vtype)
-          (e : (vtype * 'tag_e, vtype * 'tag_p) expr) :
-          ((vtype * 'tag_e, vtype * 'tag_p) expr, typing_error) Result.t =
+      let be_of_type ?(msg : string option) (exp : Vtype.t)
+          (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr) :
+          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr, typing_error) Result.t =
         e_type e <: exp >>= fun types_valid ->
         if types_valid then Ok e else Error (TypeMismatch (exp, e_type e, msg))
       in
       let type_binop ?(msg : string option)
           (recomp :
-            (vtype * 'tag_e, vtype * 'tag_p) expr ->
-            (vtype * 'tag_e, vtype * 'tag_p) expr ->
-            vtype ->
-            (vtype * 'tag_e, vtype * 'tag_p) expr) (e1 : ('tag_e, 'tag_p) expr)
-          (e2 : ('tag_e, 'tag_p) expr) (req_t : vtype) :
-          ((vtype * 'tag_e, vtype * 'tag_p) expr, typing_error) Result.t =
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
+            Vtype.t ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
+          (e1 : ('tag_e, 'tag_p) expr) (e2 : ('tag_e, 'tag_p) expr)
+          (req_t : Vtype.t) :
+          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr, typing_error) Result.t =
         type_expr ctx e1 >>= fun e1' ->
         type_expr ctx e2 >>= fun e2' ->
         be_of_type
@@ -380,20 +381,20 @@ functor
       in
       let type_unop ?(msg : string option)
           (recomp :
-            (vtype * 'tag_e, vtype * 'tag_p) expr ->
-            vtype ->
-            (vtype * 'tag_e, vtype * 'tag_p) expr) (e1 : ('tag_e, 'tag_p) expr)
-          (req_t : vtype) :
-          ((vtype * 'tag_e, vtype * 'tag_p) expr, typing_error) Result.t =
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
+            Vtype.t ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
+          (e1 : ('tag_e, 'tag_p) expr) (req_t : Vtype.t) :
+          ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr, typing_error) Result.t =
         type_expr ctx e1 >>= fun e1' ->
         be_of_type ?msg req_t e1' >>= fun _ -> Ok (recomp e1' (e_type e1'))
       in
       let type_int_compare ?(msg : string option)
           (recomp :
-            (vtype * 'tag_e, vtype * 'tag_p) expr ->
-            (vtype * 'tag_e, vtype * 'tag_p) expr ->
-            (vtype * 'tag_e, vtype * 'tag_p) expr) (e1 : ('tag_e, 'tag_p) expr)
-          (e2 : ('tag_e, 'tag_p) expr) =
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr ->
+            (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
+          (e1 : ('tag_e, 'tag_p) expr) (e2 : ('tag_e, 'tag_p) expr) =
         type_expr ctx e1 >>= fun e1' ->
         type_expr ctx e2 >>= fun e2' ->
         let t1 = e_type e1' in
@@ -438,7 +439,7 @@ functor
           type_expr ctx e2 >>= fun e2' ->
           let t1 = e_type e1' in
           let t2 = e_type e2' in
-          Ok (Pair ((VTypePair (t1, t2), v), e1', e2'))
+          Ok (Pair ((Vtype.VTypePair (t1, t2), v), e1', e2'))
       | Eq (v, e1, e2) -> (
           type_expr ctx e1 >>= fun e1' ->
           type_expr ctx e2 >>= fun e2' ->
@@ -446,7 +447,7 @@ functor
           let t2 = e_type e2' in
           match (t1, t2) with
           | VTypeInt, VTypeInt | VTypeBool, VTypeBool ->
-              Ok (Eq ((VTypeBool, v), e1', e2'))
+              Ok (Eq ((Vtype.VTypeBool, v), e1', e2'))
           | _, _ -> Error (EqualOperatorTypeMistmatch (t1, t2)))
       | Gt (v, e1, e2) ->
           type_int_compare ~msg:"Gt node"
@@ -508,8 +509,8 @@ functor
             ~f:(fun
                 (acc :
                   ( unit,
-                    ((vtype * 'tag_p) pattern
-                    * (vtype * 'tag_e, vtype * 'tag_p) expr)
+                    ((Vtype.t * 'tag_p) pattern
+                    * (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
                     Nonempty_list.t )
                   Either.t)
                 ((p : 'tag_p pattern), (c_e : ('tag_e, 'tag_p) expr))
@@ -518,7 +519,7 @@ functor
               (* TODO - don't allow the case patterns to be PatName. Check that they are compound patterns *)
               type_pattern (type_ctx, VarCtx.empty) p
               >>= fun (typed_p, p_ctx) ->
-              let p_t : vtype = pattern_node_val typed_p |> fst in
+              let p_t : Vtype.t = pattern_node_val typed_p |> fst in
               (* Check the pattern's type *)
               p_t <: t_in >>= fun pattern_type_valid ->
               if pattern_type_valid then
@@ -542,8 +543,8 @@ functor
             cs
           >>|
           fun (cs_typed_rev :
-                ((vtype * 'tag_p) pattern
-                * (vtype * 'tag_e, vtype * 'tag_p) expr)
+                ((Vtype.t * 'tag_p) pattern
+                * (Vtype.t * 'tag_e, Vtype.t * 'tag_p) expr)
                 Nonempty_list.t)
           -> Match ((t_out, v), e', t_out, Nonempty_list.rev cs_typed_rev)
       | Constructor (v, c_name, e1) -> (
@@ -554,7 +555,7 @@ functor
           | Some ((vt_name, _), (_, c_t)) ->
               c_t <: t1 >>= fun subexpr_type_valid ->
               if subexpr_type_valid then
-                Ok (Constructor ((VTypeCustom vt_name, v), c_name, e1'))
+                Ok (Constructor ((Vtype.VTypeCustom vt_name, v), c_name, e1'))
               else Error (TypeMismatch (c_t, t1, Some "Constructor argument")))
 
     type ('tag_e, 'tag_p) checking_type_ctx_acc = {
@@ -609,7 +610,7 @@ functor
         (('tag_e, 'tag_p) QuotientType.typed_eqcons, typing_error) Result.t =
       let open Result in
       let ( <: ) = TypeCtx.subtype type_ctx in
-      let quotient_type = VTypeCustom quotient_type_name in
+      let quotient_type = Vtype.VTypeCustom quotient_type_name in
       let body_pattern, body_expr = eqcons.body in
       (* Create a variable context from only the bindings *)
       List.fold_result ~init:VarCtx.empty
@@ -625,7 +626,7 @@ functor
       List.fold_result ~init:()
         ~f:(fun () (xname, xtype) ->
           match VarCtx.find bindings_var_ctx xname with
-          | Some ctx_xtype when equal_vtype ctx_xtype xtype -> Ok ()
+          | Some ctx_xtype when Vtype.equal ctx_xtype xtype -> Ok ()
           | _ -> Error (EqconsVariableNotInBindings (xname, xtype)))
         (pattern_var_ctx |> VarCtx.to_list)
       >>= fun () ->
@@ -664,7 +665,7 @@ functor
       |> Result.all
 
     type ('tag_e, 'tag_p) type_program_tlds_acc = {
-      defns_rev : (vtype * 'tag_e, vtype * 'tag_p) top_level_defn list;
+      defns_rev : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) top_level_defn list;
       defns_var_ctx : VarCtx.t;
     }
 
@@ -698,7 +699,7 @@ functor
             let typed_body_t = typed_body |> expr_node_val |> fst in
             typed_body_t <: defn.return_t >>= fun return_t_valid ->
             if return_t_valid then
-              let defn_t = VTypeFun (snd defn.param, defn.return_t) in
+              let defn_t = Vtype.VTypeFun (snd defn.param, defn.return_t) in
               Ok
                 {
                   defns_rev = { defn with body = typed_body } :: acc.defns_rev;

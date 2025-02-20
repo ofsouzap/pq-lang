@@ -1,17 +1,16 @@
 open Utils
 open Varname
-open Vtype
 
 (** A pattern in the language *)
 type 'a pattern =
-  | PatName of 'a * varname * vtype
+  | PatName of 'a * varname * Vtype.t
       (** A named and typed variable in a pattern *)
   | PatPair of 'a * 'a pattern * 'a pattern  (** A pair pattern *)
   | PatConstructor of 'a * string * 'a pattern  (** A constructor pattern *)
 [@@deriving sexp, equal]
 
 (** A pattern with type information *)
-type 'a typed_pattern = (vtype * 'a) pattern [@@deriving sexp, equal]
+type 'a typed_pattern = (Vtype.t * 'a) pattern [@@deriving sexp, equal]
 
 (** Pattern with no tagging information *)
 type plain_pattern = unit pattern [@@deriving sexp, equal]
@@ -34,7 +33,7 @@ val existing_names : 'a pattern -> StringSet.t
 
 (** Get the list of variables and their types that this pattern introduces to
     its case expression's variable context *)
-val defined_vars : 'a pattern -> (varname * vtype) list
+val defined_vars : 'a pattern -> (varname * Vtype.t) list
 
 (** Convert a pattern to a source code representation *)
 val pattern_to_source_code : 'a pattern -> string
@@ -47,12 +46,12 @@ module QCheck_testing : functor
   type gen_options = {
     get_variant_type_constructors : string -> VariantType.constructor list;
     v_gen : Tag.t QCheck.Gen.t;
-    t : vtype;
+    t : Vtype.t;
   }
 
   include
     QCheck_testing_sig
-      with type t = Tag.t pattern * (string * vtype) list
+      with type t = Tag.t pattern * (string * Vtype.t) list
        and type gen_options := gen_options
        and type print_options = unit
        and type shrink_options = unit

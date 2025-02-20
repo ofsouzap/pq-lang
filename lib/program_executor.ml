@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Vtype
 open Varname
 open Pattern
 open Program
@@ -9,8 +8,8 @@ type expr_tag = unit [@@deriving sexp, equal]
 type pattern_tag = unit [@@deriving sexp, equal]
 
 type closure_props = {
-  param : varname * vtype;
-  out_type : vtype;
+  param : varname * Vtype.t;
+  out_type : Vtype.t;
   body : (expr_tag, pattern_tag) Expr.typed_expr;
   store : store;
   recursive : [ `Recursive of varname | `NonRecursive ];
@@ -35,12 +34,12 @@ let store_compare = equal_store
 let store_traverse = Map.to_alist ~key_order:`Increasing
 
 let rec value_type = function
-  | Unit -> VTypeUnit
-  | Int _ -> VTypeInt
-  | Bool _ -> VTypeBool
-  | Closure closure -> VTypeFun (snd closure.param, closure.out_type)
-  | Pair (v1, v2) -> VTypePair (value_type v1, value_type v2)
-  | VariantTypeValue ((vt_name, _), _, _) -> VTypeCustom vt_name
+  | Unit -> Vtype.VTypeUnit
+  | Int _ -> Vtype.VTypeInt
+  | Bool _ -> Vtype.VTypeBool
+  | Closure closure -> Vtype.VTypeFun (snd closure.param, closure.out_type)
+  | Pair (v1, v2) -> Vtype.VTypePair (value_type v1, value_type v2)
+  | VariantTypeValue ((vt_name, _), _, _) -> Vtype.VTypeCustom vt_name
 
 type typing_error = {
   expected_type : string option;
@@ -109,7 +108,7 @@ let rec match_pattern (p : 'tag_p pattern) (v : value) :
   let open Option in
   match (p, v) with
   | PatName (_, xname, xtype), v ->
-      if value_type v |> equal_vtype xtype then Some [ (xname, v) ] else None
+      if value_type v |> Vtype.equal xtype then Some [ (xname, v) ] else None
   | PatPair (_, p1, p2), Pair (v1, v2) ->
       match_pattern p1 v1 >>= fun m1 ->
       match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)

@@ -1,5 +1,4 @@
 open Utils
-open Vtype
 open Varname
 open Expr
 
@@ -7,8 +6,8 @@ open Expr
 type ('tag_e, 'tag_p) top_level_defn = {
   recursive : bool;
   name : string;
-  param : varname * vtype;
-  return_t : vtype;
+  param : varname * Vtype.t;
+  return_t : Vtype.t;
   body : ('tag_e, 'tag_p) expr;
 }
 [@@deriving sexp, equal]
@@ -29,7 +28,8 @@ type ('tag_e, 'tag_p) program = {
 [@@deriving sexp, equal]
 
 (** A program with typing information *)
-type ('tag_e, 'tag_p) typed_program = (vtype * 'tag_e, vtype * 'tag_p) program
+type ('tag_e, 'tag_p) typed_program =
+  (Vtype.t * 'tag_e, Vtype.t * 'tag_p) program
 [@@deriving sexp, equal]
 
 (** A program with no tagging *)
@@ -69,7 +69,7 @@ module QCheck_testing : functor
     max_variant_type_constructors : int;
     max_top_level_defns : int;
     allow_fun_types : bool;
-    body_type : vtype option;
+    body_type : Vtype.t option;
     expr_v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
   }
@@ -77,7 +77,7 @@ module QCheck_testing : functor
   val gen_top_level_defn :
     expr_v_gen:TagExpr.t QCheck.Gen.t ->
     pat_v_gen:TagPat.t QCheck.Gen.t ->
-    top_level_defns:(varname * (vtype * vtype)) list ->
+    top_level_defns:(varname * (Vtype.t * Vtype.t)) list ->
     variant_types:VariantType.t list ->
     mrd:int ->
     (TagExpr.t, TagPat.t) top_level_defn QCheck.Gen.t

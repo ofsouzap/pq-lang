@@ -1,7 +1,6 @@
 open Core
 open Pq_lang
 open Utils
-open Vtype
 open Pattern
 open Typing
 open Parser
@@ -75,7 +74,7 @@ let override_equal_typing_error (a : Typing.typing_error)
     (b : Typing.typing_error) : bool =
   match (a, b) with
   | TypeMismatch (ta1, ta2, _), TypeMismatch (tb1, tb2, _) ->
-      equal_vtype ta1 tb1 && equal_vtype ta2 tb2
+      Vtype.equal ta1 tb1 && Vtype.equal ta2 tb2
   | _ -> Typing.equal_typing_error a b
 
 module TestingTypeCtx : sig
@@ -131,7 +130,7 @@ end = struct
           >>| fun c -> (vt, c)
       | CustomType.QuotientType _ -> None)
 
-  let rec subtype (ctx : t) (t1 : vtype) (t2 : vtype) :
+  let rec subtype (ctx : t) (t1 : Vtype.t) (t2 : Vtype.t) :
       (bool, typing_error) Result.t =
     let open Result in
     match (t1, t2) with
@@ -256,7 +255,7 @@ end = struct
     let print () : t QCheck.Print.t =
       let print_variant_type_constructor :
           VariantType.constructor QCheck.Print.t =
-        QCheck.Print.(pair string vtype_to_source_code)
+        QCheck.Print.(pair string Vtype.to_source_code)
       in
       let print_variant_type : VariantType.t QCheck.Print.t =
         QCheck.Print.(pair Fn.id (list print_variant_type_constructor))
@@ -266,7 +265,7 @@ end = struct
         let open QCheck.Print in
         fun eqcons ->
           sprintf "{bindings=%s; body=%s}"
-            (list (pair string vtype_to_source_code) eqcons.bindings)
+            (list (pair string Vtype.to_source_code) eqcons.bindings)
             (pair pattern_to_source_code
                (Expr.to_source_code ~use_newlines:false)
                eqcons.body)
@@ -321,9 +320,9 @@ let default_testing_type_ctx_arb =
 module TestingVarCtx : sig
   include Typing.TypingVarContext
 
-  val varnames_of_type : vtype -> t -> string list
-  val to_list : t -> (string * vtype) list
-  val from_list : (string * vtype) list -> t
+  val varnames_of_type : Vtype.t -> t -> string list
+  val to_list : t -> (string * Vtype.t) list
+  val from_list : (string * Vtype.t) list -> t
 
   module QCheck_testing : sig
     include
@@ -335,7 +334,7 @@ module TestingVarCtx : sig
          and type arb_options = TestingTypeCtx.t
   end
 end = struct
-  type t = (Varname.varname * vtype) list
+  type t = (Varname.varname * Vtype.t) list
   type this_t = t
 
   let empty = []
@@ -348,10 +347,10 @@ end = struct
 
   let exists ctx x = match find ctx x with None -> false | Some _ -> true
 
-  let varnames_of_type (t : vtype) (ctx : t) : string list =
+  let varnames_of_type (t : Vtype.t) (ctx : t) : string list =
     List.filter_map
       ~f:(fun (vname, vtype) ->
-        if equal_vtype vtype t then Some vname else None)
+        if Vtype.equal vtype t then Some vname else None)
       ctx
 
   let to_list = Fn.id
@@ -386,7 +385,7 @@ end = struct
 
     let print () : t QCheck.Print.t =
       Core.Fn.compose
-        QCheck.Print.(list (pair string vtype_to_source_code))
+        QCheck.Print.(list (pair string Vtype.to_source_code))
         to_list
 
     let shrink () : t QCheck.Shrink.t =

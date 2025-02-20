@@ -1,9 +1,8 @@
 open Utils
-open Vtype
 
 (** A single constructor for a variant data type, with a name and mandatory
     attached data type *)
-type constructor = string * vtype [@@deriving sexp, equal]
+type constructor = string * Vtype.t [@@deriving sexp, equal]
 
 (** Get all names used in a variant type constructor *)
 val constructor_existing_names : constructor -> StringSet.t

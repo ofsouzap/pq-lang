@@ -2,7 +2,6 @@ open OUnit2
 open Core
 open Pq_lang
 open Utils
-open Vtype
 open Pattern
 open Expr
 open Typing
@@ -13,10 +12,10 @@ open Testing_utils
 module Vtype_ast_qcheck_testing =
   Expr.QCheck_testing
     (struct
-      type t = vtype
+      type t = Vtype.t
     end)
     (struct
-      type t = vtype
+      type t = Vtype.t
     end)
 
 let varname_gen = Varname.QCheck_testing.gen ()
@@ -40,7 +39,7 @@ let test_cases_expr_typing : test list =
       ( (type_ctx :
           (SetTypingTypeContext.t, Typing.typing_error) Result.t option),
         (e : plain_expr),
-        (t : (vtype, typing_error) Result.t) ) : test =
+        (t : (Vtype.t, typing_error) Result.t) ) : test =
     Expr.to_source_code e >:: fun _ ->
     let type_ctx =
       Option.value ~default:(Ok SetTypingTypeContext.empty) type_ctx |> function
@@ -53,7 +52,7 @@ let test_cases_expr_typing : test list =
     match (out, t) with
     | Ok e_typed, Ok exp_t ->
         let out_t = e_typed |> expr_node_val |> fst in
-        assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
+        assert_equal ~cmp:Vtype.equal ~printer:Vtype.to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
     | Error t_err, Error exp_err ->
@@ -62,136 +61,146 @@ let test_cases_expr_typing : test list =
   in
   List.map ~f:create_test
     [
-      (None, UnitLit (), Ok VTypeUnit);
-      (None, IntLit ((), 1), Ok VTypeInt);
-      (None, Add ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
+      (None, UnitLit (), Ok Vtype.VTypeUnit);
+      (None, IntLit ((), 1), Ok Vtype.VTypeInt);
+      (None, Add ((), IntLit ((), 3), IntLit ((), 0)), Ok Vtype.VTypeInt);
       ( None,
         Add ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
-      (None, Neg ((), IntLit ((), 3)), Ok VTypeInt);
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
+      (None, Neg ((), IntLit ((), 3)), Ok Vtype.VTypeInt);
       ( None,
         Neg ((), BoolLit ((), false)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
-      (None, Subtr ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
+      (None, Subtr ((), IntLit ((), 3), IntLit ((), 0)), Ok Vtype.VTypeInt);
       ( None,
         Subtr ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
-      (None, Mult ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeInt);
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
+      (None, Mult ((), IntLit ((), 3), IntLit ((), 0)), Ok Vtype.VTypeInt);
       ( None,
         Mult ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
-      (None, BoolLit ((), true), Ok VTypeBool);
-      (None, BNot ((), BoolLit ((), false)), Ok VTypeBool);
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
+      (None, BoolLit ((), true), Ok Vtype.VTypeBool);
+      (None, BNot ((), BoolLit ((), false)), Ok Vtype.VTypeBool);
       ( None,
         BNot ((), IntLit ((), 3)),
-        Error (TypeMismatch (VTypeBool, VTypeInt, None)) );
-      (None, BAnd ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
+        Error (TypeMismatch (Vtype.VTypeBool, Vtype.VTypeInt, None)) );
+      ( None,
+        BAnd ((), BoolLit ((), false), BoolLit ((), true)),
+        Ok Vtype.VTypeBool );
       ( None,
         BAnd ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeBool, VTypeInt, None)) );
-      (None, BOr ((), BoolLit ((), false), BoolLit ((), true)), Ok VTypeBool);
+        Error (TypeMismatch (Vtype.VTypeBool, Vtype.VTypeInt, None)) );
+      ( None,
+        BOr ((), BoolLit ((), false), BoolLit ((), true)),
+        Ok Vtype.VTypeBool );
       ( None,
         BOr ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeBool, VTypeInt, None)) );
-      (None, Eq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+        Error (TypeMismatch (Vtype.VTypeBool, Vtype.VTypeInt, None)) );
+      (None, Eq ((), IntLit ((), 3), IntLit ((), 0)), Ok Vtype.VTypeBool);
       ( None,
         Eq ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (EqualOperatorTypeMistmatch (VTypeBool, VTypeInt)) );
+        Error (EqualOperatorTypeMistmatch (Vtype.VTypeBool, Vtype.VTypeInt)) );
       ( None,
         Eq ((), IntLit ((), 3), BoolLit ((), true)),
-        Error (EqualOperatorTypeMistmatch (VTypeInt, VTypeBool)) );
-      (None, Eq ((), BoolLit ((), true), BoolLit ((), true)), Ok VTypeBool);
-      (None, GtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+        Error (EqualOperatorTypeMistmatch (Vtype.VTypeInt, Vtype.VTypeBool)) );
+      (None, Eq ((), BoolLit ((), true), BoolLit ((), true)), Ok Vtype.VTypeBool);
+      (None, GtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok Vtype.VTypeBool);
       ( None,
         GtEq ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
-      (None, Gt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
+      (None, Gt ((), IntLit ((), 3), IntLit ((), 0)), Ok Vtype.VTypeBool);
       ( None,
         Gt ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
-      (None, LtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
+      (None, LtEq ((), IntLit ((), 3), IntLit ((), 0)), Ok Vtype.VTypeBool);
       ( None,
         LtEq ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
-      (None, Lt ((), IntLit ((), 3), IntLit ((), 0)), Ok VTypeBool);
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
+      (None, Lt ((), IntLit ((), 3), IntLit ((), 0)), Ok Vtype.VTypeBool);
       ( None,
         Lt ((), BoolLit ((), true), IntLit ((), 2)),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
-        Ok VTypeInt );
+        Ok Vtype.VTypeInt );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), BoolLit ((), false)),
-        Error (NoCommonRootType (VTypeInt, VTypeBool)) );
+        Error (NoCommonRootType (Vtype.VTypeInt, Vtype.VTypeBool)) );
       ( None,
         If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)),
-        Ok VTypeInt );
+        Ok Vtype.VTypeInt );
       (None, Var ((), "x"), Error (UndefinedVariable "x"));
-      (None, Let ((), "x", IntLit ((), 3), Var ((), "x")), Ok VTypeInt);
-      (None, Let ((), "x", BoolLit ((), true), Var ((), "x")), Ok VTypeBool);
-      (None, Let ((), "x", IntLit ((), 3), BoolLit ((), true)), Ok VTypeBool);
+      (None, Let ((), "x", IntLit ((), 3), Var ((), "x")), Ok Vtype.VTypeInt);
+      ( None,
+        Let ((), "x", BoolLit ((), true), Var ((), "x")),
+        Ok Vtype.VTypeBool );
+      ( None,
+        Let ((), "x", IntLit ((), 3), BoolLit ((), true)),
+        Ok Vtype.VTypeBool );
       ( None,
         Match
           ( (),
             IntLit ((), 3),
-            VTypeBool,
+            Vtype.VTypeBool,
             Nonempty_list.from_list_unsafe
-              [ (PatName ((), "x", VTypeInt), BoolLit ((), true)) ] ),
-        Ok VTypeBool );
+              [ (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true)) ] ),
+        Ok Vtype.VTypeBool );
       ( None,
         Match
           ( (),
             IntLit ((), 3),
-            VTypeInt,
+            Vtype.VTypeInt,
             Nonempty_list.from_list_unsafe
-              [ (PatName ((), "x", VTypeInt), Var ((), "x")) ] ),
-        Ok VTypeInt );
+              [ (PatName ((), "x", Vtype.VTypeInt), Var ((), "x")) ] ),
+        Ok Vtype.VTypeInt );
       ( None,
         Match
           ( (),
             IntLit ((), 3),
-            VTypeBool,
+            Vtype.VTypeBool,
             Nonempty_list.from_list_unsafe
               [
-                (PatName ((), "x", VTypeInt), BoolLit ((), true));
-                (PatName ((), "y", VTypeInt), BoolLit ((), true));
+                (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+                (PatName ((), "y", Vtype.VTypeInt), BoolLit ((), true));
               ] ),
-        Ok VTypeBool );
+        Ok Vtype.VTypeBool );
       ( None,
         Match
           ( (),
             IntLit ((), 3),
-            VTypeBool,
+            Vtype.VTypeBool,
             Nonempty_list.from_list_unsafe
               [
-                (PatName ((), "x", VTypeInt), BoolLit ((), true));
-                (PatName ((), "y", VTypeBool), BoolLit ((), true));
+                (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+                (PatName ((), "y", Vtype.VTypeBool), BoolLit ((), true));
               ] ),
         Error
           (PatternTypeMismatch
-             (PatName ((), "y", VTypeBool), VTypeInt, VTypeBool)) );
+             ( PatName ((), "y", Vtype.VTypeBool),
+               Vtype.VTypeInt,
+               Vtype.VTypeBool )) );
       ( (* Incorrect return type annotation *) None,
         Match
           ( (),
             IntLit ((), 3),
-            VTypeInt,
+            Vtype.VTypeInt,
             Nonempty_list.from_list_unsafe
               [
-                (PatName ((), "x", VTypeInt), BoolLit ((), true));
-                (PatName ((), "y", VTypeBool), BoolLit ((), true));
+                (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+                (PatName ((), "y", Vtype.VTypeBool), BoolLit ((), true));
               ] ),
-        Error (TypeMismatch (VTypeInt, VTypeBool, None)) );
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeBool, None)) );
       ( None,
         Match
           ( (),
             IntLit ((), 3),
-            VTypeBool,
+            Vtype.VTypeBool,
             Nonempty_list.from_list_unsafe
               [
-                (PatName ((), "x", VTypeInt), BoolLit ((), true));
-                (PatName ((), "y", VTypeInt), IntLit ((), 5));
+                (PatName ((), "x", Vtype.VTypeInt), BoolLit ((), true));
+                (PatName ((), "y", Vtype.VTypeInt), IntLit ((), 5));
               ] ),
-        Error (TypeMismatch (VTypeBool, VTypeInt, None)) );
+        Error (TypeMismatch (Vtype.VTypeBool, Vtype.VTypeInt, None)) );
       ( (* Valid for constructor pattern *)
         Some
           (SetTypingTypeContext.create
@@ -201,8 +210,10 @@ let test_cases_expr_typing : test list =
                  VariantType
                    ( "int_list",
                      [
-                       ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                       ("Nil", Vtype.VTypeUnit);
+                       ( "Cons",
+                         Vtype.VTypePair
+                           (Vtype.VTypeInt, Vtype.VTypeCustom "int_list") );
                      ] );
                ]),
         Match
@@ -212,20 +223,22 @@ let test_cases_expr_typing : test list =
                 "Cons",
                 Pair ((), IntLit ((), 3), Constructor ((), "Nil", UnitLit ()))
               ),
-            VTypeInt,
+            Vtype.VTypeInt,
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ((), "Nil", PatName ((), "z", VTypeUnit)),
+                ( PatConstructor ((), "Nil", PatName ((), "z", Vtype.VTypeUnit)),
                   IntLit ((), 0) );
                 ( PatConstructor
                     ( (),
                       "Cons",
                       PatName
-                        ((), "x", VTypePair (VTypeInt, VTypeCustom "int_list"))
-                    ),
+                        ( (),
+                          "x",
+                          Vtype.VTypePair
+                            (Vtype.VTypeInt, Vtype.VTypeCustom "int_list") ) ),
                   IntLit ((), 1) );
               ] ),
-        Ok VTypeInt );
+        Ok Vtype.VTypeInt );
       ( (* Non-existant variant type *)
         Some (SetTypingTypeContext.create ~custom_types:[]),
         Match
@@ -235,17 +248,19 @@ let test_cases_expr_typing : test list =
                 "Cons",
                 Pair ((), IntLit ((), 3), Constructor ((), "Nil", UnitLit ()))
               ),
-            VTypeInt,
+            Vtype.VTypeInt,
             Nonempty_list.from_list_unsafe
               [
-                ( PatConstructor ((), "Nil", PatName ((), "z", VTypeUnit)),
+                ( PatConstructor ((), "Nil", PatName ((), "z", Vtype.VTypeUnit)),
                   IntLit ((), 0) );
                 ( PatConstructor
                     ( (),
                       "Cons",
                       PatName
-                        ((), "x", VTypePair (VTypeInt, VTypeCustom "int_list"))
-                    ),
+                        ( (),
+                          "x",
+                          Vtype.VTypePair
+                            (Vtype.VTypeInt, Vtype.VTypeCustom "int_list") ) ),
                   IntLit ((), 1) );
               ] ),
         Error (UndefinedVariantTypeConstructor "Nil") );
@@ -264,12 +279,14 @@ let test_cases_expr_typing : test list =
                  VariantType
                    ( "list",
                      [
-                       ("Leaf", VTypeInt);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Leaf", Vtype.VTypeInt);
+                       ( "Cons",
+                         Vtype.VTypePair
+                           (Vtype.VTypeInt, Vtype.VTypeCustom "list") );
                      ] );
                ]),
         Constructor ((), "Leaf", UnitLit ()),
-        Error (TypeMismatch (VTypeInt, VTypeUnit, None)) );
+        Error (TypeMismatch (Vtype.VTypeInt, Vtype.VTypeUnit, None)) );
       ( Some
           (SetTypingTypeContext.create
              ~custom_types:
@@ -277,12 +294,14 @@ let test_cases_expr_typing : test list =
                  VariantType
                    ( "list",
                      [
-                       ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Nil", Vtype.VTypeUnit);
+                       ( "Cons",
+                         Vtype.VTypePair
+                           (Vtype.VTypeInt, Vtype.VTypeCustom "list") );
                      ] );
                ]),
         Constructor ((), "Nil", UnitLit ()),
-        Ok (VTypeCustom "list") );
+        Ok (Vtype.VTypeCustom "list") );
     ]
 
 let test_cases_expr_typing_full_check : test list =
@@ -290,7 +309,7 @@ let test_cases_expr_typing_full_check : test list =
       ( (name : string),
         (type_ctx : SetTypingTypeContext.t option),
         (e : plain_expr),
-        (exp : (vtype, vtype) expr) ) : test =
+        (exp : (Vtype.t, Vtype.t) expr) ) : test =
     name >:: fun _ ->
     let open Result in
     let out =
@@ -304,10 +323,10 @@ let test_cases_expr_typing_full_check : test list =
           e_typed |> Expr.fmap ~f:fst |> Expr.fmap_pattern ~f:fst
         in
         assert_equal
-          ~cmp:(equal_expr equal_vtype equal_vtype)
+          ~cmp:(equal_expr Vtype.equal Vtype.equal)
           ~printer:
             (Vtype_ast_qcheck_testing.print
-               (PrintSexp (sexp_of_vtype, sexp_of_vtype)))
+               (PrintSexp (Vtype.sexp_of_t, Vtype.sexp_of_t)))
           exp typed_out
     | Error _ -> assert_failure "Failed to type"
   in
@@ -320,12 +339,15 @@ let test_cases_expr_typing_full_check : test list =
             Subtr ((), IntLit ((), 3), IntLit ((), 2)),
             Mult ((), IntLit ((), 2), Neg ((), IntLit ((), 7))) ),
         Add
-          ( VTypeInt,
-            Subtr (VTypeInt, IntLit (VTypeInt, 3), IntLit (VTypeInt, 2)),
+          ( Vtype.VTypeInt,
+            Subtr
+              ( Vtype.VTypeInt,
+                IntLit (Vtype.VTypeInt, 3),
+                IntLit (Vtype.VTypeInt, 2) ),
             Mult
-              ( VTypeInt,
-                IntLit (VTypeInt, 2),
-                Neg (VTypeInt, IntLit (VTypeInt, 7)) ) ) );
+              ( Vtype.VTypeInt,
+                IntLit (Vtype.VTypeInt, 2),
+                Neg (Vtype.VTypeInt, IntLit (Vtype.VTypeInt, 7)) ) ) );
       ( "Mixed Typing 1",
         None,
         Add
@@ -333,21 +355,21 @@ let test_cases_expr_typing_full_check : test list =
             IntLit ((), 2),
             If ((), BoolLit ((), true), IntLit ((), 3), IntLit ((), 0)) ),
         Add
-          ( VTypeInt,
-            IntLit (VTypeInt, 2),
+          ( Vtype.VTypeInt,
+            IntLit (Vtype.VTypeInt, 2),
             If
-              ( VTypeInt,
-                BoolLit (VTypeBool, true),
-                IntLit (VTypeInt, 3),
-                IntLit (VTypeInt, 0) ) ) );
+              ( Vtype.VTypeInt,
+                BoolLit (Vtype.VTypeBool, true),
+                IntLit (Vtype.VTypeInt, 3),
+                IntLit (Vtype.VTypeInt, 0) ) ) );
     ]
 
 let test_cases_typing_with_var_ctx : test list =
   let open Result in
   let create_test
-      ( (ctx_list : (string * vtype) list),
+      ( (ctx_list : (string * Vtype.t) list),
         (e : plain_expr),
-        (t : (vtype, typing_error) Result.t) ) : test =
+        (t : (Vtype.t, typing_error) Result.t) ) : test =
     let ctx =
       List.fold ~init:ListTypingVarContext.empty
         ~f:(fun acc (xname, xtype) -> ListTypingVarContext.add acc xname xtype)
@@ -366,7 +388,7 @@ let test_cases_typing_with_var_ctx : test list =
     match (out, t) with
     | Ok e_typed, Ok exp_t ->
         let out_t = e_typed |> expr_node_val |> fst in
-        assert_equal ~cmp:equal_vtype ~printer:vtype_to_source_code exp_t out_t
+        assert_equal ~cmp:Vtype.equal ~printer:Vtype.to_source_code exp_t out_t
     | Ok _, Error _ -> assert_failure "Expected typing error but got type"
     | Error _, Ok _ -> assert_failure "Expected type but got typing error"
     | Error t_err, Error exp_err ->
@@ -376,36 +398,38 @@ let test_cases_typing_with_var_ctx : test list =
   List.map ~f:create_test
     [
       ([], Var ((), "x"), Error (UndefinedVariable "x"));
-      ([ ("x", VTypeInt) ], Var ((), "x"), Ok VTypeInt);
-      ([ ("x", VTypeBool) ], Var ((), "x"), Ok VTypeBool);
-      ([ ("x", VTypeBool) ], Var ((), "y"), Error (UndefinedVariable "y"));
+      ([ ("x", Vtype.VTypeInt) ], Var ((), "x"), Ok Vtype.VTypeInt);
+      ([ ("x", Vtype.VTypeBool) ], Var ((), "x"), Ok Vtype.VTypeBool);
+      ([ ("x", Vtype.VTypeBool) ], Var ((), "y"), Error (UndefinedVariable "y"));
     ]
 
 (* TODO - type context tester module and implementations *)
 
 module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
   let create_test_add_then_get
-      ((ctx : VarCtx.t), (xname : string), (xtype : vtype)) : bool =
+      ((ctx : VarCtx.t), (xname : string), (xtype : Vtype.t)) : bool =
     let ctx' = VarCtx.add ctx xname xtype in
-    (equal_option equal_vtype) (Some xtype) (VarCtx.find ctx' xname)
+    (equal_option Vtype.equal) (Some xtype) (VarCtx.find ctx' xname)
 
   let create_test_overwrite
-      ((ctx : VarCtx.t), (xname : string), (xtype1 : vtype), (xtype2 : vtype)) :
-      bool =
+      ( (ctx : VarCtx.t),
+        (xname : string),
+        (xtype1 : Vtype.t),
+        (xtype2 : Vtype.t) ) : bool =
     let ctx' = VarCtx.add (VarCtx.add ctx xname xtype1) xname xtype2 in
-    (equal_option equal_vtype) (Some xtype2) (VarCtx.find ctx' xname)
+    (equal_option Vtype.equal) (Some xtype2) (VarCtx.find ctx' xname)
 
   let create_test_append_overwriting
       ( ((ctx1_ : VarCtx.t), (ctx2_ : VarCtx.t)),
-        ((xname : string), (xtype1 : vtype), (xtype2 : vtype)) ) : bool =
+        ((xname : string), (xtype1 : Vtype.t), (xtype2 : Vtype.t)) ) : bool =
     let ctx1 = VarCtx.add ctx1_ xname xtype1 in
     let ctx2 = VarCtx.add ctx2_ xname xtype2 in
     let ctx' = VarCtx.append ctx1 ctx2 in
-    (equal_option equal_vtype) (VarCtx.find ctx2 xname) (VarCtx.find ctx' xname)
+    (equal_option Vtype.equal) (VarCtx.find ctx2 xname) (VarCtx.find ctx' xname)
 
   let all_test_cases : test list =
     let open QCheck in
-    let var_ctx_from_list : (string * vtype) list -> VarCtx.t =
+    let var_ctx_from_list : (string * Vtype.t) list -> VarCtx.t =
       List.fold ~init:VarCtx.empty ~f:(fun acc (xname, xtype) ->
           VarCtx.add acc xname xtype)
     in
@@ -416,7 +440,7 @@ module MakeVariableContextTester (VarCtx : TypingVarContext) = struct
       (type_ctx, var_ctx_from_list ctx_list)
     in
     let ctx_two_vtypes_gen :
-        ((TestingTypeCtx.t * VarCtx.t) * (vtype * vtype)) QCheck.Gen.t =
+        ((TestingTypeCtx.t * VarCtx.t) * (Vtype.t * Vtype.t)) QCheck.Gen.t =
       let open QCheck.Gen in
       ctx_gen >>= fun (type_ctx, var_ctx) ->
       pair
@@ -445,11 +469,11 @@ end
     but is just meant to be used as a ground truth to test against the
     actually-used implementations *)
 module FunctionTypingVarContext : TypingVarContext = struct
-  type t = (string -> vtype option) * string list
+  type t = (string -> Vtype.t option) * string list
 
   let empty : t = (Fn.const None, [])
 
-  let add ((f', xs') : t) (xname : string) (xtype : vtype) : t =
+  let add ((f', xs') : t) (xname : string) (xtype : Vtype.t) : t =
     ((fun x -> if equal_string xname x then Some xtype else f' x), xname :: xs')
 
   let find ((f, _) : t) = f
@@ -460,7 +484,7 @@ module FunctionTypingVarContext : TypingVarContext = struct
 
   let exists ((_, xs) : t) xname = List.mem ~equal:equal_string xs xname
 
-  let to_list ((f, xs) : t) : (string * vtype) list =
+  let to_list ((f, xs) : t) : (string * Vtype.t) list =
     List.filter_map xs ~f:(fun x ->
         match f x with None -> None | Some v -> Some (x, v))
 end
@@ -476,7 +500,7 @@ module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
 let test_cases_arb_compound_expr_typing : test list =
   let open QCheck in
   let open QCheck.Gen in
-  let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : vtype) :
+  let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : Vtype.t) :
       (unit, unit) expr Gen.t =
     Unit_expr_qcheck_testing.gen
       {
@@ -495,7 +519,7 @@ let test_cases_arb_compound_expr_typing : test list =
   let create_test
       ( (name : string),
         (type_ctx : (TestingTypeCtx.t, Typing.typing_error) Result.t option),
-        (e_gen : TestingTypeCtx.t -> (vtype * plain_expr) Gen.t) ) : test =
+        (e_gen : TestingTypeCtx.t -> (Vtype.t * plain_expr) Gen.t) ) : test =
     let type_ctx : TestingTypeCtx.t =
       Option.value ~default:(Ok TestingTypeCtx.empty) type_ctx |> function
       | Ok type_ctx -> type_ctx
@@ -507,7 +531,7 @@ let test_cases_arb_compound_expr_typing : test list =
       QCheck.make
         ~print:
           QCheck.Print.(
-            pair vtype_to_source_code (Expr.to_source_code ~use_newlines:true))
+            pair Vtype.to_source_code (Expr.to_source_code ~use_newlines:true))
         (e_gen type_ctx)
     in
     QCheck_ounit.to_ounit2_test
@@ -522,7 +546,7 @@ let test_cases_arb_compound_expr_typing : test list =
                with
                | Ok e_typed ->
                    let t = e_typed |> expr_node_val |> fst in
-                   equal_vtype exp_t t
+                   Vtype.equal exp_t t
                | Error _ -> false)))
   in
   List.map ~f:create_test
@@ -530,85 +554,107 @@ let test_cases_arb_compound_expr_typing : test list =
       ( "Add",
         None,
         fun type_ctx ->
-          pair (return VTypeInt)
-            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+          pair (return Vtype.VTypeInt)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeInt)
+                (expr_gen ~type_ctx Vtype.VTypeInt)
             >|= fun (e1, e2) -> Add ((), e1, e2) ) );
       ( "Neg",
         None,
         fun type_ctx ->
-          pair (return VTypeInt)
-            (expr_gen ~type_ctx VTypeInt >|= fun e -> Neg ((), e)) );
+          pair (return Vtype.VTypeInt)
+            (expr_gen ~type_ctx Vtype.VTypeInt >|= fun e -> Neg ((), e)) );
       ( "Subtr",
         None,
         fun type_ctx ->
-          pair (return VTypeInt)
-            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+          pair (return Vtype.VTypeInt)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeInt)
+                (expr_gen ~type_ctx Vtype.VTypeInt)
             >|= fun (e1, e2) -> Subtr ((), e1, e2) ) );
       ( "Mult",
         None,
         fun type_ctx ->
-          pair (return VTypeInt)
-            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+          pair (return Vtype.VTypeInt)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeInt)
+                (expr_gen ~type_ctx Vtype.VTypeInt)
             >|= fun (e1, e2) -> Mult ((), e1, e2) ) );
       ( "BNot",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            (expr_gen ~type_ctx VTypeBool >|= fun e -> BNot ((), e)) );
+          pair (return Vtype.VTypeBool)
+            (expr_gen ~type_ctx Vtype.VTypeBool >|= fun e -> BNot ((), e)) );
       ( "BOr",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            ( pair (expr_gen ~type_ctx VTypeBool) (expr_gen ~type_ctx VTypeBool)
+          pair (return Vtype.VTypeBool)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeBool)
+                (expr_gen ~type_ctx Vtype.VTypeBool)
             >|= fun (e1, e2) -> BOr ((), e1, e2) ) );
       ( "BAnd",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            ( pair (expr_gen ~type_ctx VTypeBool) (expr_gen ~type_ctx VTypeBool)
+          pair (return Vtype.VTypeBool)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeBool)
+                (expr_gen ~type_ctx Vtype.VTypeBool)
             >|= fun (e1, e2) -> BAnd ((), e1, e2) ) );
       ( "Eq - int",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+          pair (return Vtype.VTypeBool)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeInt)
+                (expr_gen ~type_ctx Vtype.VTypeInt)
             >|= fun (e1, e2) -> Eq ((), e1, e2) ) );
       ( "Eq - bool",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            ( pair (expr_gen ~type_ctx VTypeBool) (expr_gen ~type_ctx VTypeBool)
+          pair (return Vtype.VTypeBool)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeBool)
+                (expr_gen ~type_ctx Vtype.VTypeBool)
             >|= fun (e1, e2) -> Eq ((), e1, e2) ) );
       ( "Gt",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+          pair (return Vtype.VTypeBool)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeInt)
+                (expr_gen ~type_ctx Vtype.VTypeInt)
             >|= fun (e1, e2) -> Gt ((), e1, e2) ) );
       ( "GtEq",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+          pair (return Vtype.VTypeBool)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeInt)
+                (expr_gen ~type_ctx Vtype.VTypeInt)
             >|= fun (e1, e2) -> GtEq ((), e1, e2) ) );
       ( "Lt",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+          pair (return Vtype.VTypeBool)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeInt)
+                (expr_gen ~type_ctx Vtype.VTypeInt)
             >|= fun (e1, e2) -> Lt ((), e1, e2) ) );
       ( "LtEq",
         None,
         fun type_ctx ->
-          pair (return VTypeBool)
-            ( pair (expr_gen ~type_ctx VTypeInt) (expr_gen ~type_ctx VTypeInt)
+          pair (return Vtype.VTypeBool)
+            ( pair
+                (expr_gen ~type_ctx Vtype.VTypeInt)
+                (expr_gen ~type_ctx Vtype.VTypeInt)
             >|= fun (e1, e2) -> LtEq ((), e1, e2) ) );
       ( "If",
         None,
         fun type_ctx ->
           vtype_gen type_ctx >>= fun t ->
           triple
-            (expr_gen ~type_ctx VTypeBool)
+            (expr_gen ~type_ctx Vtype.VTypeBool)
             (expr_gen ~type_ctx t) (expr_gen ~type_ctx t)
           >|= fun (e1, e2, e3) -> (t, If ((), e1, e2, e3)) );
       ( "Let",
@@ -628,15 +674,17 @@ let test_cases_arb_compound_expr_typing : test list =
                  VariantType
                    ( "list",
                      [
-                       ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Nil", Vtype.VTypeUnit);
+                       ( "Cons",
+                         Vtype.VTypePair
+                           (Vtype.VTypeInt, Vtype.VTypeCustom "list") );
                      ] );
-                 VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
+                 VariantType ("int_box", [ ("IntBox", Vtype.VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeCustom "list"))
-            ( expr_gen ~type_ctx VTypeUnit >|= fun e1 ->
+            (return (Vtype.VTypeCustom "list"))
+            ( expr_gen ~type_ctx Vtype.VTypeUnit >|= fun e1 ->
               Constructor ((), "Nil", e1) ) );
       ( "Constructor - list Cons",
         Some
@@ -646,15 +694,18 @@ let test_cases_arb_compound_expr_typing : test list =
                  VariantType
                    ( "list",
                      [
-                       ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Nil", Vtype.VTypeUnit);
+                       ( "Cons",
+                         Vtype.VTypePair
+                           (Vtype.VTypeInt, Vtype.VTypeCustom "list") );
                      ] );
-                 VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
+                 VariantType ("int_box", [ ("IntBox", Vtype.VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeCustom "list"))
-            ( expr_gen ~type_ctx (VTypePair (VTypeInt, VTypeCustom "list"))
+            (return (Vtype.VTypeCustom "list"))
+            ( expr_gen ~type_ctx
+                (Vtype.VTypePair (Vtype.VTypeInt, Vtype.VTypeCustom "list"))
             >|= fun e1 -> Constructor ((), "Cons", e1) ) );
       ( "Constructor - int_box",
         Some
@@ -664,15 +715,17 @@ let test_cases_arb_compound_expr_typing : test list =
                  VariantType
                    ( "list",
                      [
-                       ("Nil", VTypeUnit);
-                       ("Cons", VTypePair (VTypeInt, VTypeCustom "list"));
+                       ("Nil", Vtype.VTypeUnit);
+                       ( "Cons",
+                         Vtype.VTypePair
+                           (Vtype.VTypeInt, Vtype.VTypeCustom "list") );
                      ] );
-                 VariantType ("int_box", [ ("IntBox", VTypeInt) ]);
+                 VariantType ("int_box", [ ("IntBox", Vtype.VTypeInt) ]);
                ]),
         fun type_ctx ->
           pair
-            (return (VTypeCustom "int_box"))
-            ( expr_gen ~type_ctx VTypeInt >|= fun e1 ->
+            (return (Vtype.VTypeCustom "int_box"))
+            ( expr_gen ~type_ctx Vtype.VTypeInt >|= fun e1 ->
               Constructor ((), "IntBox", e1) ) );
     ]
 

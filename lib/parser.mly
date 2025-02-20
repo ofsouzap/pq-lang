@@ -1,6 +1,6 @@
 %{
 open Utils
-open Vtype
+
 
 open Pattern
 open Expr
@@ -47,7 +47,7 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 
 // Non-terminal typing
 
-%type <vtype> vtype
+%type <Vtype.t> vtype
 
 %type <plain_pattern> pattern
 %type <plain_pattern> contained_pattern
@@ -57,7 +57,7 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 %type <VariantType.constructor list> variant_type_definition_constructors
 %type <VariantType.t> variant_type_definition
 
-%type <string * vtype> typed_name
+%type <string * Vtype.t> typed_name
 
 %type <plain_pattern> match_case_pattern
 %type <plain_pattern * plain_expr> match_case
@@ -67,13 +67,13 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 %type <plain_expr> expr
 %type <plain_expr> contained_expr
 
-%type <(string * vtype) list> quotient_type_eqcons_bindings
+%type <(string * Vtype.t) list> quotient_type_eqcons_bindings
 %type <plain_pattern * plain_expr> quotient_type_eqcons_body
 %type <QuotientType.plain_eqcons> quotient_type_eqcons
 %type <QuotientType.plain_eqcons list> quotient_type_definition_eqconss
 %type <QuotientType.plain_t> quotient_type_definition
 
-%type <(string * vtype)> top_level_defn_param
+%type <(string * Vtype.t)> top_level_defn_param
 %type <plain_top_level_defn> top_level_defn
 
 // Main program
@@ -84,12 +84,12 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 
 vtype:
   | LPAREN v = vtype RPAREN { v }
-  | UNIT { VTypeUnit }
-  | INT { VTypeInt }
-  | BOOL { VTypeBool }
-  | t1 = vtype ARROW t2 = vtype { VTypeFun (t1, t2) }
-  | t1 = vtype STAR t2 = vtype { VTypePair (t1, t2) }
-  | tname = LNAME { VTypeCustom tname }
+  | UNIT { Vtype.VTypeUnit }
+  | INT { Vtype.VTypeInt }
+  | BOOL { Vtype.VTypeBool }
+  | t1 = vtype ARROW t2 = vtype { Vtype.VTypeFun (t1, t2) }
+  | t1 = vtype STAR t2 = vtype { Vtype.VTypePair (t1, t2) }
+  | tname = LNAME { Vtype.VTypeCustom tname }
 ;
 
 pattern:

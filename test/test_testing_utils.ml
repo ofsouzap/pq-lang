@@ -3,7 +3,6 @@ open OUnit2
 open QCheck
 open Pq_lang
 open Utils
-open Vtype
 open Expr
 open Typing
 open Testing_utils
@@ -98,12 +97,12 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                          let e_shrunk_type =
                            e_shrunk_typed |> Expr.expr_node_val |> fst
                          in
-                         if equal_vtype e_type e_shrunk_type then true
+                         if Vtype.equal e_type e_shrunk_type then true
                          else
                            Test.fail_reportf
                              "Types don't match. Original: %s, shrunk: %s"
-                             (vtype_to_source_code e_type)
-                             (vtype_to_source_code e_shrunk_type)
+                             (Vtype.to_source_code e_type)
+                             (Vtype.to_source_code e_shrunk_type)
                      | Error err ->
                          Test.fail_reportf "Typing error for shrunk e: %s"
                            (err |> sexp_of_typing_error |> Sexp.to_string_hum))
@@ -112,13 +111,14 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                        (err |> sexp_of_typing_error |> Sexp.to_string_hum)))))
 
 let create_typed_expr_gen_test (name : string)
-    (types_gen : (TestingTypeCtx.t * vtype) Gen.t) : test =
+    (types_gen : (TestingTypeCtx.t * Vtype.t) Gen.t) : test =
   let open QCheck in
   QCheck_runner.to_ounit2_test
     (Test.make ~name ~count:1000
        (let open QCheck.Gen in
         let gen :
-            (TestingTypeCtx.t * (vtype * (unit, unit) Expr.expr)) QCheck.Gen.t =
+            (TestingTypeCtx.t * (Vtype.t * (unit, unit) Expr.expr)) QCheck.Gen.t
+            =
           types_gen >>= fun (type_ctx, t) ->
           Unit_expr_qcheck_testing.gen
             {
@@ -139,7 +139,7 @@ let create_typed_expr_gen_test (name : string)
           ~print:(fun (type_ctx, (t, e)) ->
             sprintf "[type ctx: %s]\n[type: %s]\n%s"
               (type_ctx |> TestingTypeCtx.sexp_of_t |> Sexp.to_string_hum)
-              (vtype_to_source_code t)
+              (Vtype.to_source_code t)
               (Expr.to_source_code ~use_newlines:true e))
           ~shrink:
             QCheck.Shrink.(
@@ -158,10 +158,10 @@ let create_typed_expr_gen_test (name : string)
              with
              | Ok e_typed ->
                  let et = e_typed |> Expr.expr_node_val |> fst in
-                 equal_vtype t et
+                 Vtype.equal t et
              | Error _ -> false)))
 
-let create_typed_expr_gen_test_for_fixed_type (name : string) (t : vtype) =
+let create_typed_expr_gen_test_for_fixed_type (name : string) (t : Vtype.t) =
   create_typed_expr_gen_test name
     QCheck.Gen.(default_testing_type_ctx_gen >|= fun type_ctx -> (type_ctx, t))
 
@@ -175,7 +175,7 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
        (QCheck.make
           ~print:
             QCheck.Print.(
-              pair (TestingTypeCtx.QCheck_testing.print ()) vtype_to_source_code)
+              pair (TestingTypeCtx.QCheck_testing.print ()) Vtype.to_source_code)
           QCheck.Gen.(
             default_testing_type_ctx_gen >>= fun type_ctx ->
             vtype_gen_no_fun type_ctx >|= fun t -> (type_ctx, t)))
@@ -206,11 +206,11 @@ let create_test_type_ctx_gen_valid (name : string) : test =
              Test.fail_reportf "Failed to check type ctx, with error: %s"
                (print_typing_error err)))
 
-let create_test_var_ctx (xs : (string * vtype) list) : TestingVarCtx.t =
+let create_test_var_ctx (xs : (string * Vtype.t) list) : TestingVarCtx.t =
   List.fold xs ~init:TestingVarCtx.empty ~f:(fun ctx (x, t) ->
       TestingVarCtx.add ctx x t)
 
-let create_list_impl_var_ctx (xs : (string * vtype) list) :
+let create_list_impl_var_ctx (xs : (string * Vtype.t) list) :
     ListTypingVarContext.t =
   List.fold xs ~init:ListTypingVarContext.empty ~f:(fun ctx (x, t) ->
       ListTypingVarContext.add ctx x t)
@@ -237,6 +237,6 @@ let suite =
                   Gen.(
                     default_testing_type_ctx_gen >>= fun type_ctx ->
                     pair (vtype_gen_no_fun type_ctx) (vtype_gen_no_fun type_ctx)
-                    >|= fun (t1, t2) -> (type_ctx, VTypePair (t1, t2)));
+                    >|= fun (t1, t2) -> (type_ctx, Vtype.VTypePair (t1, t2)));
               ];
        ]

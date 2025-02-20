@@ -1,5 +1,4 @@
 open Utils
-open Vtype
 
 (** A user-defined type. Either a variant type definition or a quotient type
     definition *)
@@ -10,7 +9,7 @@ type ('tag_e, 'tag_p) t =
 
 type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
-type ('tag_e, 'tag_p) typed_custom_type = (vtype * 'tag_e, vtype * 'tag_p) t
+type ('tag_e, 'tag_p) typed_custom_type = (Vtype.t * 'tag_e, Vtype.t * 'tag_p) t
 [@@deriving sexp, equal]
 
 (** Get the name of a custom type *)

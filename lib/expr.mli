@@ -2,7 +2,6 @@
 
 open Core
 open Utils
-open Vtype
 open Varname
 open Pattern
 
@@ -55,7 +54,7 @@ type ('tag_e, 'tag_p) expr =
   | Match of
       'tag_e
       * ('tag_e, 'tag_p) expr
-      * vtype
+      * Vtype.t
       * ('tag_p pattern * ('tag_e, 'tag_p) expr) Nonempty_list.t
       (** Match expression *)
   (* Variant data types *)
@@ -88,7 +87,7 @@ val existing_names : ('tag_e, 'tag_p) expr -> StringSet.t
 type plain_expr = (unit, unit) expr [@@deriving sexp, equal]
 
 (** An expression in the language with typing information *)
-type ('a, 'b) typed_expr = (vtype * 'a, vtype * 'b) expr
+type ('a, 'b) typed_expr = (Vtype.t * 'a, Vtype.t * 'b) expr
 [@@deriving sexp, equal]
 
 (** An expression in the language with typing information *)
@@ -154,12 +153,12 @@ module QCheck_testing : functor
     | GenVTypePair of gen_vtype * gen_vtype
     | GenVTypeCustom of string
 
-  val vtype_to_gen_vtype_unsafe : vtype -> gen_vtype
+  val vtype_to_gen_vtype_unsafe : Vtype.t -> gen_vtype
 
   type gen_options = {
     t : gen_vtype option;
     variant_types : VariantType.t list;
-    top_level_defns : (varname * (vtype * vtype)) list;
+    top_level_defns : (varname * (Vtype.t * Vtype.t)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;

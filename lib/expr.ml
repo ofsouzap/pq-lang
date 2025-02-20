@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Vtype
 open Varname
 open Pattern
 
@@ -32,7 +31,7 @@ type ('tag_e, 'tag_p) expr =
   | Match of
       'tag_e
       * ('tag_e, 'tag_p) expr
-      * vtype
+      * Vtype.t
       * ('tag_p pattern * ('tag_e, 'tag_p) expr) Nonempty_list.t
   | Constructor of 'tag_e * string * ('tag_e, 'tag_p) expr
 [@@deriving sexp, equal]
@@ -170,7 +169,7 @@ let rec existing_names : ('tag_e, 'tag_p) expr -> StringSet.t = function
 
 type plain_expr = (unit, unit) expr [@@deriving sexp, equal]
 
-type ('a, 'b) typed_expr = (vtype * 'a, vtype * 'b) expr
+type ('a, 'b) typed_expr = (Vtype.t * 'a, Vtype.t * 'b) expr
 [@@deriving sexp, equal]
 
 type plain_typed_expr = (unit, unit) typed_expr [@@deriving sexp, equal]
@@ -354,7 +353,7 @@ let to_source_code ?(use_newlines : bool option) :
            write "match"
            |.> block (convert e)
            |.> write "-> "
-           |.> write (vtype_to_source_code t2)
+           |.> write (Vtype.to_source_code t2)
            |.> write " with" |.> block cases_converter |.> write "end"
        | Constructor (_, cname, e) -> write cname |.> write " " |.> convert e)
     |> if bracketed then write ")" else Fn.id
@@ -387,12 +386,12 @@ end) : sig
     | GenVTypePair of gen_vtype * gen_vtype
     | GenVTypeCustom of string
 
-  val vtype_to_gen_vtype_unsafe : vtype -> gen_vtype
+  val vtype_to_gen_vtype_unsafe : Vtype.t -> gen_vtype
 
   type gen_options = {
     t : gen_vtype option;
     variant_types : VariantType.t list;
-    top_level_defns : (varname * (vtype * vtype)) list;
+    top_level_defns : (varname * (Vtype.t * Vtype.t)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;
@@ -445,7 +444,7 @@ end = struct
     | GenVTypeCustom of string
 
   let rec gen_vtype_to_vtype = function
-    | GenVTypeUnit -> VTypeUnit
+    | GenVTypeUnit -> Vtype.VTypeUnit
     | GenVTypeInt -> VTypeInt
     | GenVTypeBool -> VTypeBool
     | GenVTypePair (t1, t2) ->
@@ -453,7 +452,7 @@ end = struct
     | GenVTypeCustom ct_name -> VTypeCustom ct_name
 
   let rec vtype_to_gen_vtype_unsafe = function
-    | VTypeUnit -> GenVTypeUnit
+    | Vtype.VTypeUnit -> GenVTypeUnit
     | VTypeInt -> GenVTypeInt
     | VTypeBool -> GenVTypeBool
     | VTypePair (t1, t2) ->
@@ -464,7 +463,7 @@ end = struct
   type gen_options = {
     t : gen_vtype option;
     variant_types : VariantType.t list;
-    top_level_defns : (varname * (vtype * vtype)) list;
+    top_level_defns : (varname * (Vtype.t * Vtype.t)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;
@@ -485,7 +484,7 @@ end = struct
     (* Check that none of the variant type constructors take function types *)
     List.iter initial_opts.variant_types ~f:(fun (_, cs) ->
         let rec vtype_contains_fun_type = function
-          | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> false
+          | Vtype.VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> false
           | VTypePair (t1, t2) ->
               vtype_contains_fun_type t1 || vtype_contains_fun_type t2
           | VTypeFun _ -> true
@@ -504,11 +503,11 @@ end = struct
 
     let varname_gen = Varname.QCheck_testing.gen () in
     let rec varname_filter_type
-        ( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
-          (_ : vtype),
-          ((_ : int), (ctx : (string * vtype) list)),
-          (_ : TagExpr.t) ) (tf : vtype -> bool) :
-        (varname * vtype) Gen.t option =
+        ( (_ : int * (string * Vtype.t) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : Vtype.t),
+          ((_ : int), (ctx : (string * Vtype.t) list)),
+          (_ : TagExpr.t) ) (tf : Vtype.t -> bool) :
+        (varname * Vtype.t) Gen.t option =
       (* Shorthand for generating a variable node for an existing variable with a given type in the context, filtered by a function of its type *)
       match
         List.filter_map
@@ -518,28 +517,29 @@ end = struct
       | [] -> None
       | _ :: _ as varnames -> Some (varnames |> List.map ~f:return |> oneof)
     and gen_e_var_of_type
-        (( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
-           (_ : vtype),
-           ((_ : int), (_ : (string * vtype) list)),
-           (v : TagExpr.t) ) as param) (t : vtype) :
+        (( (_ :
+             int * (string * Vtype.t) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+           (_ : Vtype.t),
+           ((_ : int), (_ : (string * Vtype.t) list)),
+           (v : TagExpr.t) ) as param) (t : Vtype.t) :
         (TagExpr.t, TagPat.t) expr Gen.t option =
       (* Shorthand for generating a variable node for an existing variable with a given type in the context *)
-      varname_filter_type param (equal_vtype t)
+      varname_filter_type param (Vtype.equal t)
       |> Option.map ~f:(Gen.map (fun (xname, _) -> Var (v, xname)))
     and gen_e_if
         ( (self :
-            int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
-          (_ : vtype),
-          ((d : int), (ctx : (string * vtype) list)),
+            int * (string * Vtype.t) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : Vtype.t),
+          ((d : int), (ctx : (string * Vtype.t) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating an if-then-else expression *)
       triple (gen_bool (d - 1, ctx)) (self (d - 1, ctx)) (self (d - 1, ctx))
       >|= fun (e1, e2, e3) -> If (v, e1, e2, e3)
     and gen_e_let_in
         ( (self :
-            int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
-          (_ : vtype),
-          ((d : int), (ctx : (string * vtype) list)),
+            int * (string * Vtype.t) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : Vtype.t),
+          ((d : int), (ctx : (string * Vtype.t) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating a let-in expression *)
       pair varname_gen (gen_any_of_type (d - 1, ctx))
@@ -547,15 +547,15 @@ end = struct
       self (d - 1, List.Assoc.add ~equal:equal_string ctx vname e1t)
       >|= fun e2 -> Let (v, vname, e1, e2)
     and gen_e_app
-        ( (_ : int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
-          (_ : vtype),
-          ((_ : int), (_ : (string * vtype) list)),
-          (_ : TagExpr.t) ) (_ : vtype) :
+        ( (_ : int * (string * Vtype.t) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (_ : Vtype.t),
+          ((_ : int), (_ : (string * Vtype.t) list)),
+          (_ : TagExpr.t) ) (_ : Vtype.t) :
         (TagExpr.t, TagPat.t) expr Gen.t option =
       (* Shorthand for generating a function application expression *)
       (* varname_filter_type
         (self, (d - 1, ctx), v)
-        (function VTypeFun (_, x_t2) -> equal_vtype t2 x_t2 | _ -> false)
+        (function VTypeFun (_, x_t2) -> Vtype.equal t2 x_t2 | _ -> false)
       |> Option.map ~f:(fun x_gen ->
              x_gen >>= fun (xname, xt) ->
              v_gen >>= fun v2 ->
@@ -568,9 +568,9 @@ end = struct
       None
     and gen_e_match
         ( (self :
-            int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
-          (self_t : vtype),
-          ((d : int), (ctx : (string * vtype) list)),
+            int * (string * Vtype.t) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (self_t : Vtype.t),
+          ((d : int), (ctx : (string * Vtype.t) list)),
           (v : TagExpr.t) ) : (TagExpr.t, TagPat.t) expr Gen.t =
       (* Shorthand for generating a match expression *)
       gen_any_of_type (d - 1, ctx) >>= fun (e1_t, e1) ->
@@ -589,7 +589,7 @@ end = struct
       in
       let case_and_pat_gen =
         pat_gen >>= fun (p, p_ctx_list) ->
-        let case_ctx : (string * vtype) list =
+        let case_ctx : (string * Vtype.t) list =
           List.fold ~init:ctx
             ~f:(fun acc (x, t) -> List.Assoc.add ~equal:equal_string acc x t)
             p_ctx_list
@@ -601,11 +601,11 @@ end = struct
       >|= fun cs -> Match (v, e1, self_t, cs)
     and standard_rec_gen_cases
         ( (self :
-            int * (string * vtype) list -> (TagExpr.t, TagPat.t) expr Gen.t),
-          (self_t : vtype),
-          ((d : int), (ctx : (string * vtype) list)),
-          (v : TagExpr.t) ) (t : vtype) : (TagExpr.t, TagPat.t) expr Gen.t list
-        =
+            int * (string * Vtype.t) list -> (TagExpr.t, TagPat.t) expr Gen.t),
+          (self_t : Vtype.t),
+          ((d : int), (ctx : (string * Vtype.t) list)),
+          (v : TagExpr.t) ) (t : Vtype.t) :
+        (TagExpr.t, TagPat.t) expr Gen.t list =
       (* The standard recursive generator cases for some provided type *)
       [
         gen_e_if (self, self_t, (d, ctx), v) (* If-then-else *);
@@ -614,10 +614,10 @@ end = struct
       ]
       @ Option.to_list
           (gen_e_app (self, self_t, (d, ctx), v) t (* Function application *))
-    and gen_unit (param : int * (string * vtype) list) :
+    and gen_unit (param : int * (string * Vtype.t) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as unit *)
-      let t = VTypeUnit in
+      let t = Vtype.VTypeUnit in
       fix
         (fun self (d, ctx) ->
           v_gen >>= fun v ->
@@ -631,10 +631,10 @@ end = struct
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
-    and gen_int (param : int * (string * vtype) list) :
+    and gen_int (param : int * (string * Vtype.t) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as integer *)
-      let t = VTypeInt in
+      let t = Vtype.VTypeInt in
       fix
         (fun self (d, ctx) ->
           let self' = self (d - 1, ctx) in
@@ -657,10 +657,10 @@ end = struct
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
-    and gen_bool (param : int * (string * vtype) list) :
+    and gen_bool (param : int * (string * Vtype.t) list) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as boolean *)
-      let t = VTypeBool in
+      let t = Vtype.VTypeBool in
       fix
         (fun self (d, ctx) ->
           let self' = self (d - 1, ctx) in
@@ -699,11 +699,11 @@ end = struct
           in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
-    and gen_pair ((t1 : vtype), (t2 : vtype))
-        (param : int * (string * vtype) list) : (TagExpr.t, TagPat.t) expr Gen.t
-        =
+    and gen_pair ((t1 : Vtype.t), (t2 : Vtype.t))
+        (param : int * (string * Vtype.t) list) :
+        (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as a pair of the provided types *)
-      let t = VTypePair (t1, t2) in
+      let t = Vtype.VTypePair (t1, t2) in
       fix
         (fun self (d, ctx) ->
           v_gen >>= fun v ->
@@ -718,10 +718,10 @@ end = struct
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
     and gen_variant ((vt_name, cs) : VariantType.t)
-        (param : int * (string * vtype) list) : (TagExpr.t, TagPat.t) expr Gen.t
-        =
+        (param : int * (string * Vtype.t) list) :
+        (TagExpr.t, TagPat.t) expr Gen.t =
       (* Generate an expression that types as the provided variant type *)
-      let t = VTypeCustom vt_name in
+      let t = Vtype.VTypeCustom vt_name in
       fix
         (fun self (d, ctx) ->
           v_gen >>= fun v ->
@@ -736,7 +736,7 @@ end = struct
           let rec_cases = standard_rec_gen_cases (self, t, (d, ctx), v) t in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
-    and gen ((d : int), (ctx : (string * vtype) list)) (t : vtype) :
+    and gen ((d : int), (ctx : (string * Vtype.t) list)) (t : Vtype.t) :
         (TagExpr.t, TagPat.t) expr Gen.t =
       match t with
       | VTypeUnit -> gen_unit (d, ctx)
@@ -756,8 +756,8 @@ end = struct
                 variant_types)
           |> gen_variant)
             (d, ctx)
-    and gen_any_of_type ((d : int), (ctx : (string * vtype) list)) :
-        (vtype * (TagExpr.t, TagPat.t) expr) Gen.t =
+    and gen_any_of_type ((d : int), (ctx : (string * Vtype.t) list)) :
+        (Vtype.t * (TagExpr.t, TagPat.t) expr) Gen.t =
       (* TODO - once function types handled better, allow for them here *)
       Vtype.QCheck_testing.gen
         { variant_types = variant_types_set; allow_fun_types = false; mrd = d }
