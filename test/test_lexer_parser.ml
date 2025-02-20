@@ -12,7 +12,7 @@ type test_case_no_variant_types =
   string * string * token list * (Expr.plain_t, frontend_error) Result.t
 
 type test_case_full_prog =
-  string * string * token list * (plain_program, frontend_error) Result.t
+  string * string * token list * (Program.plain_t, frontend_error) Result.t
 
 type test_case_precedence = string * string * Expr.plain_t
 
@@ -1096,11 +1096,11 @@ let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
   let out = run_frontend_string inp in
   assert_equal
     ~cmp:
-      (Result.equal (equal_program equal_unit equal_unit) equal_frontend_error)
+      (Result.equal (Program.equal equal_unit equal_unit) equal_frontend_error)
     exp out
     ~printer:(fun x ->
       match x with
-      | Ok prog -> program_to_source_code prog
+      | Ok prog -> Program.to_source_code prog
       | Error (LexingError c) -> sprintf "LexingError %c" c
       | Error ParsingError -> "ParsingError")
 

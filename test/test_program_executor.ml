@@ -3,7 +3,6 @@ open OUnit2
 open Pq_lang
 open Utils
 open Expr
-open Program
 open Typing
 open Program_executor
 open Testing_utils
@@ -18,7 +17,7 @@ let make_store (vars : (string * Program_executor.value) list) :
     ~init:Program_executor.empty_store
 
 let type_expr ?(custom_types : CustomType.plain_t list option)
-    ?(top_level_defns : (unit, unit) top_level_defn list option)
+    ?(top_level_defns : (unit, unit) Program.top_level_defn list option)
     (e : Expr.plain_t) : (unit, unit) SimpleTypeChecker.typed_program =
   match
     type_program

@@ -1,5 +1,3 @@
-open Program
-
 (** Typing errors *)
 type typing_error =
   | UndefinedVariable of string
@@ -125,7 +123,7 @@ module type TypeCheckerSig = functor
   (** Get the expression from a typed program expression *)
   val typed_program_get_program :
     ('tag_e, 'tag_p) typed_program ->
-    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.program
+    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t
 
   (** Check that a Vtype.t is valid in the given context *)
   val check_vtype : checked_type_ctx -> Vtype.t -> (unit, typing_error) Result.t
@@ -149,7 +147,7 @@ module type TypeCheckerSig = functor
   (** Type checks a program in the given context, returning either a typed
       program or a typing error *)
   val type_program :
-    ('tag_e, 'tag_p) program ->
+    ('tag_e, 'tag_p) Program.t ->
     (('tag_e, 'tag_p) typed_program, typing_error) Result.t
 end
 
@@ -170,5 +168,5 @@ val type_expr :
 
 (** Type program using the default context implementations *)
 val type_program :
-  ('tag_e, 'tag_p) program ->
+  ('tag_e, 'tag_p) Program.t ->
   (('tag_e, 'tag_p) SimpleTypeChecker.typed_program, typing_error) result

@@ -38,8 +38,7 @@ type tag_quotient_type = (expr_tag, pattern_tag) QuotientType.t
 type tag_custom_type = (expr_tag, pattern_tag) CustomType.t
 [@@deriving sexp, equal]
 
-type tag_program = (expr_tag, pattern_tag) Program.program
-[@@deriving sexp, equal]
+type tag_program = (expr_tag, pattern_tag) Program.t [@@deriving sexp, equal]
 
 type quotient_typing_error =
   | QuotientConstraintCheckFailed

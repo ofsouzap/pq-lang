@@ -32,21 +32,20 @@ let top_level_defn_to_source_code ~(use_newlines : bool) :
   in
   SourceCodeBuilder.from_converter ~converter:convert ~use_newlines
 
-type ('tag_e, 'tag_p) program = {
+type ('tag_e, 'tag_p) t = {
   custom_types : ('tag_e, 'tag_p) CustomType.t list;
   top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
   e : ('tag_e, 'tag_p) Expr.t;
 }
 [@@deriving sexp, equal]
 
-type ('tag_e, 'tag_p) typed_program =
-  (Vtype.t * 'tag_e, Vtype.t * 'tag_p) program
+type ('tag_e, 'tag_p) typed_t = (Vtype.t * 'tag_e, Vtype.t * 'tag_p) t
 [@@deriving sexp, equal]
 
-type plain_program = (unit, unit) program [@@deriving sexp, equal]
+type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
-let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) program) :
-    ('tag_e2, 'tag_p) program =
+let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) t) :
+    ('tag_e2, 'tag_p) t =
   {
     custom_types = List.map ~f:(CustomType.fmap_expr ~f) prog.custom_types;
     top_level_defns =
@@ -57,8 +56,8 @@ let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) program) :
     e = Expr.fmap ~f prog.e;
   }
 
-let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) program) :
-    ('tag_e, 'tag_p2) program =
+let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) t) :
+    ('tag_e, 'tag_p2) t =
   {
     custom_types = List.map ~f:(CustomType.fmap_pattern ~f) prog.custom_types;
     top_level_defns =
@@ -73,7 +72,7 @@ let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) program) :
     e = Expr.fmap_pattern ~f prog.e;
   }
 
-let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
+let existing_names (prog : ('tag_e, 'tag_p) t) : StringSet.t =
   Set.union
     (List.fold ~init:StringSet.empty
        ~f:(fun acc -> function
@@ -91,8 +90,8 @@ let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
           prog.top_level_defns)
        (Expr.existing_names prog.e))
 
-let program_to_source_code ?(use_newlines : bool option)
-    (prog : ('tag_e, 'tag_p) program) : string =
+let to_source_code ?(use_newlines : bool option) (prog : ('tag_e, 'tag_p) t) :
+    string =
   let use_newlines = Option.value ~default:true use_newlines in
   let type_defns_str : string list =
     List.map
@@ -112,6 +111,8 @@ let program_to_source_code ?(use_newlines : bool option)
     type_defns_str @ top_level_defns_str @ [ e_str ]
   in
   String.concat ~sep:(if use_newlines then "\n" else " ") str_parts
+
+type ('tag_e, 'tag_p) program = ('tag_e, 'tag_p) t
 
 module QCheck_testing (TagExpr : sig
   type t
@@ -145,7 +146,7 @@ end) : sig
 
   include
     QCheck_testing_sig
-      with type t = (TagExpr.t, TagPat.t) program
+      with type t = (TagExpr.t, TagPat.t) t
        and type gen_options := gen_options
        and type print_options =
         Expr.QCheck_testing(TagExpr)(TagPat).expr_print_method

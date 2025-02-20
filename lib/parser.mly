@@ -4,21 +4,21 @@ open Utils
 
 
 
-open Program
 
-let add_variant_type_definition_to_program (p : plain_program) (vt : VariantType.t) : plain_program =
+
+let add_variant_type_definition_to_program (p : Program.plain_t) (vt : VariantType.t) : Program.plain_t =
   {
     p with
     custom_types = (VariantType vt) :: p.custom_types;
   }
 
-let add_quotient_type_definition_to_program (p : plain_program) (qt : QuotientType.plain_t) : plain_program =
+let add_quotient_type_definition_to_program (p : Program.plain_t) (qt : QuotientType.plain_t) : Program.plain_t =
   {
     p with
     custom_types = (QuotientType qt) :: p.custom_types;
   }
 
-let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_level_defn) : plain_program =
+let add_top_level_definition_to_program (p : Program.plain_t) (defn : Program.plain_top_level_defn) : Program.plain_t =
   {
     p with
     top_level_defns = defn :: p.top_level_defns;
@@ -74,11 +74,11 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 %type <QuotientType.plain_t> quotient_type_definition
 
 %type <(string * Vtype.t)> top_level_defn_param
-%type <plain_top_level_defn> top_level_defn
+%type <Program.plain_top_level_defn> top_level_defn
 
 // Main program
 
-%start <plain_program> prog
+%start <Program.plain_t> prog
 
 %%
 
@@ -203,8 +203,8 @@ top_level_defn_param:
 ;
 
 top_level_defn:
-  | LET fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { { recursive=false; name=fname; param; return_t; body=e } }
-  | LET REC fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { { recursive=true; name=fname; param; return_t; body=e } }
+  | LET fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.{ recursive=false; name=fname; param; return_t; body=e } }
+  | LET REC fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.{ recursive=true; name=fname; param; return_t; body=e } }
 ;
 
 prog:

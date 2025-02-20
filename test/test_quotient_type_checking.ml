@@ -1,7 +1,6 @@
 open Core
 open OUnit2
 open Pq_lang
-open Program
 open Quotient_type_checking
 open Testing_utils
 
@@ -21,8 +20,9 @@ let manual_tests : test list =
              sprintf "Typing error: %s\n" (Typing.print_typing_error err))
       >>= fun inp_typed_program ->
       inp_typed_program |> TestingTypeChecker.typed_program_get_program
-      |> fmap_expr ~f:(fun (t, ()) -> ({ t } : Quotient_type_checking.expr_tag))
-      |> fmap_pattern ~f:(fun (t, ()) ->
+      |> Program.fmap_expr ~f:(fun (t, ()) ->
+             ({ t } : Quotient_type_checking.expr_tag))
+      |> Program.fmap_pattern ~f:(fun (t, ()) ->
              ({ t } : Quotient_type_checking.pattern_tag))
       |> fun inp_for_quotient_type_checking ->
       match

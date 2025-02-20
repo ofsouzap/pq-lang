@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Varname
-open Program
 
 (* TODO - stop using LispBuilder, just use Core.Sexp instead *)
 
@@ -74,7 +73,7 @@ type tag_quotient_type = (expr_tag, pattern_tag) QuotientType.t
 type tag_custom_type = (expr_tag, pattern_tag) CustomType.t
 [@@deriving sexp, equal]
 
-type tag_program = (expr_tag, pattern_tag) program [@@deriving sexp, equal]
+type tag_program = (expr_tag, pattern_tag) Program.t [@@deriving sexp, equal]
 
 type quotient_typing_error =
   | QuotientConstraintCheckFailed
@@ -577,7 +576,7 @@ module FlatPattern = struct
     List.fold_result ~init:(existing_names, [])
       ~f:(fun
           (existing_names, acc_defns_rev)
-          (defn : (expr_tag, pattern_tag) top_level_defn)
+          (defn : (expr_tag, pattern_tag) Program.top_level_defn)
         ->
         of_expr ~existing_names defn.body >>| fun (existing_names, body') ->
         ( existing_names,

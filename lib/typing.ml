@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Expr
-open Program
 
 type typing_error =
   | UndefinedVariable of string
@@ -256,7 +255,7 @@ module type TypeCheckerSig = functor
 
   val typed_program_get_program :
     ('tag_e, 'tag_p) typed_program ->
-    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.program
+    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t
 
   val check_vtype : checked_type_ctx -> Vtype.t -> (unit, typing_error) Result.t
 
@@ -273,7 +272,7 @@ module type TypeCheckerSig = functor
   val check_type_ctx : TypeCtx.t -> (checked_type_ctx, typing_error) Result.t
 
   val type_program :
-    ('tag_e, 'tag_p) program ->
+    ('tag_e, 'tag_p) Program.t ->
     (('tag_e, 'tag_p) typed_program, typing_error) Result.t
 end
 
@@ -288,10 +287,10 @@ functor
     let checked_empty_type_ctx = TypeCtx.empty
 
     type ('tag_e, 'tag_p) typed_program =
-      (Vtype.t * 'tag_e, Vtype.t * 'tag_p) program
+      (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t
 
     let typed_program_get_program (tp : ('tag_e, 'tag_p) typed_program) :
-        (Vtype.t * 'tag_e, Vtype.t * 'tag_p) program =
+        (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t =
       tp
 
     let rec check_vtype (ctx : checked_type_ctx) :
@@ -667,11 +666,12 @@ functor
       |> Result.all
 
     type ('tag_e, 'tag_p) type_program_tlds_acc = {
-      defns_rev : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) top_level_defn list;
+      defns_rev :
+        (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.top_level_defn list;
       defns_var_ctx : VarCtx.t;
     }
 
-    let type_program (prog : ('tag_e, 'tag_p) program) :
+    let type_program (prog : ('tag_e, 'tag_p) Program.t) :
         (('tag_e, 'tag_p) typed_program, typing_error) Result.t =
       let open Result in
       TypeCtx.create ~custom_types:prog.custom_types >>= fun type_ctx ->
@@ -718,7 +718,12 @@ functor
       let var_ctx = tld_fold_final_acc.defns_var_ctx in
       let tlds = tld_fold_final_acc.defns_rev |> List.rev in
       type_expr (type_ctx, var_ctx) prog.e >>| fun typed_e ->
-      { custom_types = custom_types_typed; top_level_defns = tlds; e = typed_e }
+      Program.
+        {
+          custom_types = custom_types_typed;
+          top_level_defns = tlds;
+          e = typed_e;
+        }
   end
 
 module SimpleTypeChecker =
@@ -730,6 +735,6 @@ let type_expr ~(type_ctx : SetTypingTypeContext.t) (e : ('tag_e, 'tag_p) Expr.t)
   SimpleTypeChecker.check_type_ctx type_ctx >>= fun type_ctx ->
   SimpleTypeChecker.type_expr (type_ctx, ListTypingVarContext.empty) e
 
-let type_program (prog : ('tag_e, 'tag_p) program) :
+let type_program (prog : ('tag_e, 'tag_p) Program.t) :
     (('tag_e, 'tag_p) SimpleTypeChecker.typed_program, typing_error) Result.t =
   SimpleTypeChecker.type_program prog

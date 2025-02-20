@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Varname
-open Program
 
 type expr_tag = unit [@@deriving sexp, equal]
 type pattern_tag = unit [@@deriving sexp, equal]
