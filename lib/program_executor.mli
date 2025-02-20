@@ -1,8 +1,6 @@
 (** This module provides functionality for directly executing an Expr of a
     program. *)
 
-open Varname
-
 (** The data that the executor tags the interpreted Expr with *)
 type expr_tag = unit [@@deriving sexp, equal]
 
@@ -11,11 +9,11 @@ type pattern_tag = unit [@@deriving sexp, equal]
 
 (** Properties of a closure *)
 type closure_props = {
-  param : varname * Vtype.t;  (** The function's parameter's name and type *)
+  param : Varname.t * Vtype.t;  (** The function's parameter's name and type *)
   out_type : Vtype.t;  (** The output type of the function *)
   body : (expr_tag, pattern_tag) Expr.typed_t;  (** The body of the function *)
   store : store;  (** The store to use when executing the function *)
-  recursive : [ `Recursive of varname | `NonRecursive ];
+  recursive : [ `Recursive of Varname.t | `NonRecursive ];
       (** Whether the function is recursive or not. If so, the name of the
           function itself, that is made re-accessible when executing the
           function *)
@@ -41,11 +39,11 @@ and store [@@deriving sexp, equal]
 val empty_store : store
 
 (** Get a named variable's value from a store *)
-val store_get : store -> varname -> value option
+val store_get : store -> Varname.t -> value option
 
 (** Set a named variable's value to the provided value in the provided store and
     return the resulting store *)
-val store_set : store -> key:varname -> value:value -> store
+val store_set : store -> key:Varname.t -> value:value -> store
 
 (** Check if two stores are equal. This is, they have the exact same set of
     keys, and each key maps to the same value in both stores *)
@@ -53,14 +51,14 @@ val store_compare : store -> store -> bool
 
 (** Traverse the entire store's variable names and values in arbitrary order
     into a list *)
-val store_traverse : store -> (varname * value) list
+val store_traverse : store -> (Varname.t * value) list
 
 (** Details of a typing error. Fields are optional in case they can't be
     provided *)
 type typing_error = {
   expected_type : string option;
   actual_type : string option;
-  variable_name : varname option;
+  variable_name : Varname.t option;
   custom_message : string option;
 }
 [@@deriving sexp, equal]
@@ -73,7 +71,7 @@ type exec_err =
       (** Error when forming a type context from a program *)
   | TypingError of typing_error
       (** Execution was halted due to a typing error *)
-  | UndefinedVarError of varname
+  | UndefinedVarError of Varname.t
       (** Execution was halted due to usage of an undefined variable of the
           provided name *)
   | MisplacedFixError  (** Fix node was inappropriately used in the Expr *)

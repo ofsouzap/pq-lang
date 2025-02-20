@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Varname
 
 type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) Expr.t StringMap.t
 [@@deriving sexp, equal]
@@ -16,8 +15,8 @@ val simply_find_unifier :
 (** Rename a variable in the body of a unifier's substitutions. This doesn't
     affect the names that are substituted *)
 val rename_var_in_body :
-  old_name:varname ->
-  new_name:varname ->
+  old_name:Varname.t ->
+  new_name:Varname.t ->
   ('tag_e, 'tag_p) unifier ->
   ('tag_e, 'tag_p) unifier
 

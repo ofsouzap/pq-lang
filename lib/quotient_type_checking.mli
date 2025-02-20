@@ -1,5 +1,4 @@
 open Core
-open Varname
 
 module type LispBuilderSig = sig
   (** The type of a node in the builder *)
@@ -130,15 +129,15 @@ end
 module Smt : sig
   module State : sig
     type var_defn = {
-      name : varname;
+      name : Varname.t;
       kind :
-        [ `NonRec of (varname * Vtype.t) option | `Rec of varname * Vtype.t ];
+        [ `NonRec of (Varname.t * Vtype.t) option | `Rec of Varname.t * Vtype.t ];
       return_t : Vtype.t;
       body : FlatPattern.flat_expr;
     }
     [@@deriving sexp, equal]
 
-    type top_level_elem = VarDecl of varname * Vtype.t | VarDefn of var_defn
+    type top_level_elem = VarDecl of Varname.t * Vtype.t | VarDefn of var_defn
     [@@deriving sexp, equal]
 
     type variant_type_constructor_info = {

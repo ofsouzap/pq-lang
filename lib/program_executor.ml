@@ -1,16 +1,15 @@
 open Core
 open Utils
-open Varname
 
 type expr_tag = unit [@@deriving sexp, equal]
 type pattern_tag = unit [@@deriving sexp, equal]
 
 type closure_props = {
-  param : varname * Vtype.t;
+  param : Varname.t * Vtype.t;
   out_type : Vtype.t;
   body : (expr_tag, pattern_tag) Expr.typed_t;
   store : store;
-  recursive : [ `Recursive of varname | `NonRecursive ];
+  recursive : [ `Recursive of Varname.t | `NonRecursive ];
 }
 [@@deriving sexp, equal]
 
@@ -23,9 +22,9 @@ and value =
   | VariantTypeValue of VariantType.t * string * value
 [@@deriving sexp, equal]
 
-and store = value VarnameMap.t [@@deriving sexp, equal]
+and store = value Varname.Map.t [@@deriving sexp, equal]
 
-let empty_store = (VarnameMap.empty : store)
+let empty_store = (Varname.Map.empty : store)
 let store_get store key = Map.find store key
 let store_set store ~key ~value = Map.set store ~key ~data:value
 let store_compare = equal_store
@@ -42,7 +41,7 @@ let rec value_type = function
 type typing_error = {
   expected_type : string option;
   actual_type : string option;
-  variable_name : varname option;
+  variable_name : Varname.t option;
   custom_message : string option;
 }
 [@@deriving sexp, equal]
@@ -75,7 +74,7 @@ let show_typing_error (terr : typing_error) : string =
 type exec_err =
   | TypeContextCreationError of Typing.typing_error
   | TypingError of typing_error
-  | UndefinedVarError of varname
+  | UndefinedVarError of Varname.t
   | MisplacedFixError
   | FixApplicationError
   | MaxRecursionDepthExceeded
@@ -102,7 +101,7 @@ let show_exec_res = function
   | Error e -> print_exec_err e
 
 let rec match_pattern (p : 'tag_p Pattern.t) (v : value) :
-    (varname * value) list option =
+    (Varname.t * value) list option =
   let open Option in
   match (p, v) with
   | PatName (_, xname, xtype), v ->
@@ -261,7 +260,7 @@ struct
     | Match (_, e1, _, cs) -> (
         eval ~type_ctx store e1 >>= fun v1 ->
         let matched_c_e :
-            ((varname * value) list * (expr_tag, pattern_tag) Expr.typed_t)
+            ((Varname.t * value) list * (expr_tag, pattern_tag) Expr.typed_t)
             option =
           Nonempty_list.fold ~init:None
             ~f:(fun acc (p, c_e) ->
@@ -293,7 +292,7 @@ struct
     >>= fun type_ctx ->
     let store =
       List.fold
-        ~init:(VarnameMap.empty : store)
+        ~init:(Varname.Map.empty : store)
         ~f:(fun acc defn ->
           let plain_typed_body =
             defn.body

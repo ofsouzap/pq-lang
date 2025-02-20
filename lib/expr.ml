@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Varname
 
 type ('tag_e, 'tag_p) t =
   | UnitLit of 'tag_e
@@ -200,7 +199,7 @@ let rec to_plain_expr (e : ('tag_e, 'tag_p) t) : plain_t =
             cs )
   | Constructor (_, cname, e) -> Constructor ((), cname, to_plain_expr e)
 
-let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
+let rec rename_var ~(old_name : Varname.t) ~(new_name : Varname.t) = function
   | UnitLit _ as e -> e
   | IntLit _ as e -> e
   | BoolLit _ as e -> e
@@ -383,7 +382,7 @@ end) : sig
   type gen_options = {
     t : gen_vtype option;
     variant_types : VariantType.t list;
-    top_level_defns : (varname * (Vtype.t * Vtype.t)) list;
+    top_level_defns : (Varname.t * (Vtype.t * Vtype.t)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;
@@ -455,7 +454,7 @@ end = struct
   type gen_options = {
     t : gen_vtype option;
     variant_types : VariantType.t list;
-    top_level_defns : (varname * (Vtype.t * Vtype.t)) list;
+    top_level_defns : (Varname.t * (Vtype.t * Vtype.t)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;
@@ -499,7 +498,7 @@ end = struct
           (_ : Vtype.t),
           ((_ : int), (ctx : (string * Vtype.t) list)),
           (_ : TagExpr.t) ) (tf : Vtype.t -> bool) :
-        (varname * Vtype.t) Gen.t option =
+        (Varname.t * Vtype.t) Gen.t option =
       (* Shorthand for generating a variable node for an existing variable with a given type in the context, filtered by a function of its type *)
       match
         List.filter_map

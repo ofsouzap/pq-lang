@@ -1,9 +1,8 @@
 open Core
 open Utils
-open Varname
 
 type 'a t =
-  | PatName of 'a * varname * Vtype.t
+  | PatName of 'a * Varname.t * Vtype.t
   | PatPair of 'a * 'a t * 'a t
   | PatConstructor of 'a * string * 'a t
 [@@deriving sexp, equal]
@@ -27,7 +26,7 @@ let rec fmap ~(f : 'a -> 'b) : 'a t -> 'b t = function
   | PatPair (v, p1, p2) -> PatPair (f v, fmap ~f p1, fmap ~f p2)
   | PatConstructor (v, cname, p) -> PatConstructor (f v, cname, fmap ~f p)
 
-let rec rename_var ~(old_name : varname) ~(new_name : varname) = function
+let rec rename_var ~(old_name : Varname.t) ~(new_name : Varname.t) = function
   | PatName (v, xname, xtype) ->
       PatName
         (v, (if equal_string xname old_name then new_name else xname), xtype)
@@ -43,7 +42,7 @@ let rec existing_names : 'a t -> StringSet.t = function
   | PatConstructor (_, c_name, p) ->
       Set.union (StringSet.singleton c_name) (existing_names p)
 
-let rec defined_vars : 'a t -> (varname * Vtype.t) list = function
+let rec defined_vars : 'a t -> (Varname.t * Vtype.t) list = function
   | PatName (_, xname, xtype) -> [ (xname, xtype) ]
   | PatPair (_, p1, p2) -> defined_vars p1 @ defined_vars p2
   | PatConstructor (_, _, p) -> defined_vars p
@@ -158,7 +157,7 @@ functor
 
     let rec shrink () : this_t QCheck.Shrink.t =
       let open QCheck.Iter in
-      fun (p, (defined_vars : (varname * Vtype.t) list)) ->
+      fun (p, (defined_vars : (Varname.t * Vtype.t) list)) ->
         match p with
         | PatName (v, xname, t) ->
             QCheck.Shrink.(

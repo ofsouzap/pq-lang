@@ -1,9 +1,8 @@
 open Utils
-open Varname
 
 (** A pattern in the language *)
 type 'a t =
-  | PatName of 'a * varname * Vtype.t
+  | PatName of 'a * Varname.t * Vtype.t
       (** A named and typed variable in a pattern *)
   | PatPair of 'a * 'a t * 'a t  (** A pair pattern *)
   | PatConstructor of 'a * string * 'a t  (** A constructor pattern *)
@@ -25,14 +24,14 @@ val node_val : 'a t -> 'a
 val fmap : f:('a -> 'b) -> 'a t -> 'b t
 
 (** Rename a variable in a pattern *)
-val rename_var : old_name:varname -> new_name:varname -> 'a t -> 'a t
+val rename_var : old_name:Varname.t -> new_name:Varname.t -> 'a t -> 'a t
 
 (** Get all names used in a pattern *)
 val existing_names : 'a t -> StringSet.t
 
 (** Get the list of variables and their types that this pattern introduces to
     its case expression's variable context *)
-val defined_vars : 'a t -> (varname * Vtype.t) list
+val defined_vars : 'a t -> (Varname.t * Vtype.t) list
 
 (** Convert a pattern to a source code representation *)
 val to_source_code : 'a t -> string

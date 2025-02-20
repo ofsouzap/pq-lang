@@ -2,7 +2,6 @@
 
 open Core
 open Utils
-open Varname
 
 (** Expressions in the language. Tagged with arbitrary values on each node. *)
 type ('tag_e, 'tag_p) t =
@@ -86,8 +85,8 @@ val to_plain_expr : ('tag_e, 'tag_p) t -> plain_t
 
 (** Rename a variable in an expression *)
 val rename_var :
-  old_name:varname ->
-  new_name:varname ->
+  old_name:Varname.t ->
+  new_name:Varname.t ->
   ('tag_e, 'tag_p) t ->
   ('tag_e, 'tag_p) t
 
@@ -145,7 +144,7 @@ module QCheck_testing : functor
   type gen_options = {
     t : gen_vtype option;
     variant_types : VariantType.t list;
-    top_level_defns : (varname * (Vtype.t * Vtype.t)) list;
+    top_level_defns : (Varname.t * (Vtype.t * Vtype.t)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
     mrd : int;

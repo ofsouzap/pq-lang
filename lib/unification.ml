@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Varname
 
 type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) Expr.t StringMap.t
 [@@deriving sexp, equal]
@@ -44,7 +43,7 @@ let simply_find_unifier ~(bound_names_in_from : StringSet.t)
   in
   aux ~bound_names_in_from StringMap.empty (from_expr, to_expr)
 
-let rename_var_in_body ~(old_name : varname) ~(new_name : varname)
+let rename_var_in_body ~(old_name : Varname.t) ~(new_name : Varname.t)
     (unifier : ('tag_e, 'tag_p) unifier) : ('tag_e, 'tag_p) unifier =
   Map.map unifier ~f:(Expr.rename_var ~old_name ~new_name)
 

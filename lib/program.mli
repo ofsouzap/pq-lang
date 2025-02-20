@@ -1,11 +1,10 @@
 open Utils
-open Varname
 
 (** A top-level function definition *)
 type ('tag_e, 'tag_p) top_level_defn = {
   recursive : bool;
   name : string;
-  param : varname * Vtype.t;
+  param : Varname.t * Vtype.t;
   return_t : Vtype.t;
   body : ('tag_e, 'tag_p) Expr.t;
 }
@@ -70,7 +69,7 @@ module QCheck_testing : functor
   val gen_top_level_defn :
     expr_v_gen:TagExpr.t QCheck.Gen.t ->
     pat_v_gen:TagPat.t QCheck.Gen.t ->
-    top_level_defns:(varname * (Vtype.t * Vtype.t)) list ->
+    top_level_defns:(Varname.t * (Vtype.t * Vtype.t)) list ->
     variant_types:VariantType.t list ->
     mrd:int ->
     (TagExpr.t, TagPat.t) top_level_defn QCheck.Gen.t

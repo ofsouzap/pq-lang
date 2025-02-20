@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Varname
 
 (* TODO - stop using LispBuilder, just use Core.Sexp instead *)
 
@@ -93,9 +92,9 @@ type quotient_typing_error =
 (** Generate a fresh variable name, given a set of the currently-defined names
 *)
 let generate_fresh_varname ?(seed_name : string option)
-    (existing_names : StringSet.t) : varname * StringSet.t =
+    (existing_names : StringSet.t) : Varname.t * StringSet.t =
   let name_base = Option.value seed_name ~default:"x" in
-  let rec loop (i : int) : varname =
+  let rec loop (i : int) : Varname.t =
     let candidate = sprintf "%s%d" name_base i in
     if Set.mem existing_names candidate then loop (i + 1) else candidate
   in
@@ -107,10 +106,10 @@ module FlatPattern = struct
   type t =
     | FlatPatPair of
         pattern_tag
-        * (pattern_tag * varname * Vtype.t)
-        * (pattern_tag * varname * Vtype.t)
+        * (pattern_tag * Varname.t * Vtype.t)
+        * (pattern_tag * Varname.t * Vtype.t)
     | FlatPatConstructor of
-        pattern_tag * string * (pattern_tag * varname * Vtype.t)
+        pattern_tag * string * (pattern_tag * Varname.t * Vtype.t)
   [@@deriving sexp, equal]
 
   type flat_pattern = t [@@deriving sexp, equal]
@@ -134,7 +133,7 @@ module FlatPattern = struct
     | LtEq of expr_tag * flat_expr * flat_expr
     | If of expr_tag * flat_expr * flat_expr * flat_expr
     | Var of expr_tag * string
-    | Let of expr_tag * varname * flat_expr * flat_expr
+    | Let of expr_tag * Varname.t * flat_expr * flat_expr
     | App of expr_tag * flat_expr * flat_expr
     | Match of
         expr_tag
@@ -147,7 +146,7 @@ module FlatPattern = struct
   type flat_top_level_defn = {
     recursive : bool;
     name : string;
-    param : varname * Vtype.t;
+    param : Varname.t * Vtype.t;
     return_t : Vtype.t;
     body : flat_expr;
   }
@@ -190,12 +189,13 @@ module FlatPattern = struct
 
   (** Get the list of variables and their types that this pattern introduces to
       its case expression's variable context *)
-  let defined_vars : t -> (varname * Vtype.t) list = function
+  let defined_vars : t -> (Varname.t * Vtype.t) list = function
     | FlatPatPair (_, (_, x1name, x1type), (_, x2name, x2type)) ->
         [ (x1name, x1type); (x2name, x2type) ]
     | FlatPatConstructor (_, _, (_, xname, xtype)) -> [ (xname, xtype) ]
 
-  let rec expr_rename_var ~(old_name : varname) ~(new_name : varname) = function
+  let rec expr_rename_var ~(old_name : Varname.t) ~(new_name : Varname.t) =
+    function
     | UnitLit _ as e -> e
     | IntLit _ as e -> e
     | BoolLit _ as e -> e
@@ -630,15 +630,15 @@ module Smt = struct
       solver *)
   module State = struct
     type var_defn = {
-      name : varname;
+      name : Varname.t;
       kind :
-        [ `NonRec of (varname * Vtype.t) option | `Rec of varname * Vtype.t ];
+        [ `NonRec of (Varname.t * Vtype.t) option | `Rec of Varname.t * Vtype.t ];
       return_t : Vtype.t;
       body : FlatPattern.flat_expr;
     }
     [@@deriving sexp, equal]
 
-    type top_level_elem = VarDecl of varname * Vtype.t | VarDefn of var_defn
+    type top_level_elem = VarDecl of Varname.t * Vtype.t | VarDefn of var_defn
     [@@deriving sexp, equal]
 
     module VtypePairMap = Map.Make (struct
@@ -829,8 +829,8 @@ module Smt = struct
       }
 
     (** Add a variable declaration to the state *)
-    let state_add_var_decl ((xname : varname), (xtype : Vtype.t)) (state : t) :
-        t =
+    let state_add_var_decl ((xname : Varname.t), (xtype : Vtype.t)) (state : t)
+        : t =
       {
         state with
         top_level_rev = VarDecl (xname, xtype) :: state.top_level_rev;
@@ -1206,7 +1206,7 @@ module Smt = struct
                   [ Atom eq_fun_name; List [ t_node; t_node ]; bool_node ] )
               |> fun decl_node ->
               (* Assertion nodes *)
-              let create_assert_node (bindings : (varname * Vtype.t) list)
+              let create_assert_node (bindings : (Varname.t * Vtype.t) list)
                   (l : FlatPattern.flat_expr) (r : FlatPattern.flat_expr) :
                   (node, quotient_typing_error) Result.t =
                 List.fold_result bindings ~init:([], [])

@@ -333,7 +333,7 @@ module TestingVarCtx : sig
          and type arb_options = TestingTypeCtx.t
   end
 end = struct
-  type t = (Varname.varname * Vtype.t) list
+  type t = (Varname.t * Vtype.t) list
   type this_t = t
 
   let empty = []

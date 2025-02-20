@@ -1,9 +1,8 @@
 open Core
 open Utils
-open Varname
 
 type ('tag_e, 'tag_p) eqcons = {
-  bindings : (varname * Vtype.t) list;
+  bindings : (Varname.t * Vtype.t) list;
   body : 'tag_p Pattern.t * ('tag_e, 'tag_p) Expr.t;
 }
 [@@deriving sexp, equal]
