@@ -1,6 +1,5 @@
 open Core
 open Utils
-open Variant_types
 open Vtype
 open Pattern
 open Expr
@@ -123,7 +122,7 @@ module type TypingTypeContext = sig
   val type_defn_exists : t -> string -> bool
 
   val find_variant_type_with_constructor :
-    t -> string -> (variant_type * variant_type_constructor) option
+    t -> string -> (VariantType.t * VariantType.constructor) option
 
   val type_defns_to_ordered_list : t -> plain_custom_type list
   val subtype : t -> vtype -> vtype -> (bool, typing_error) Result.t
@@ -164,7 +163,7 @@ module SetTypingTypeContext : TypingTypeContext = struct
     Option.is_some (find_type_defn_by_name ctx vt_name)
 
   let find_variant_type_with_constructor (ctx : t) (c_name : string) :
-      (variant_type * variant_type_constructor) option =
+      (VariantType.t * VariantType.constructor) option =
     Map.fold_until ctx.custom_types ~init:()
       ~f:(fun ~key:_ ~(data : ('tag_e, 'tag_p) custom_type) () ->
         match data with

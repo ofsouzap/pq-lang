@@ -177,7 +177,7 @@ module Smt : sig
       (pair_type_info, quotient_typing_error) result
 
     val state_get_vtype_special_eq_fun_name : t -> Vtype.vtype -> string option
-    val state_add_variant_type : Variant_types.variant_type -> t -> t
+    val state_add_variant_type : VariantType.t -> t -> t
     val state_add_var_decl : string * Vtype.vtype -> t -> t
     val state_add_var_defn : var_defn -> t -> (t, quotient_typing_error) result
   end

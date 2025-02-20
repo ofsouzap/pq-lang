@@ -1,4 +1,3 @@
-open Variant_types
 open Vtype
 open Pattern
 open Expr
@@ -69,7 +68,7 @@ module type TypingTypeContext = sig
   (** Find a variant type in the type context with a variant of the specified
       name. If multiple exist, only one is returned *)
   val find_variant_type_with_constructor :
-    t -> string -> (variant_type * variant_type_constructor) option
+    t -> string -> (VariantType.t * VariantType.constructor) option
 
   (** Get a list of the variant types defined in the context *)
   val type_defns_to_ordered_list : t -> plain_custom_type list

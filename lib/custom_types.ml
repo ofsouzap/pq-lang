@@ -1,10 +1,9 @@
 open Core
 open Utils
 open Vtype
-open Variant_types
 
 type ('tag_e, 'tag_p) custom_type =
-  | VariantType of variant_type
+  | VariantType of VariantType.t
   | QuotientType of ('tag_e, 'tag_p) QuotientType.t
 [@@deriving sexp, equal]
 
@@ -19,7 +18,7 @@ let custom_type_name : ('tag_e, 'tag_p) custom_type -> string = function
   | QuotientType qt -> qt.name
 
 let existing_names : ('tag_e, 'tag_p) custom_type -> StringSet.t = function
-  | VariantType vt -> Variant_types.existing_names vt
+  | VariantType vt -> VariantType.existing_names vt
   | QuotientType qt -> QuotientType.existing_names qt
 
 let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) :

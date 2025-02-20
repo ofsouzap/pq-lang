@@ -4,7 +4,6 @@ open Core
 open Utils
 open Vtype
 open Varname
-open Variant_types
 open Pattern
 
 (** Expressions in the language. Tagged with arbitrary values on each node. *)
@@ -159,7 +158,7 @@ module QCheck_testing : functor
 
   type gen_options = {
     t : gen_vtype option;
-    variant_types : variant_type list;
+    variant_types : VariantType.t list;
     top_level_defns : (varname * (vtype * vtype)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;

@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Vtype
-open Variant_types
 open Varname
 open Expr
 open Custom_types
@@ -814,9 +813,9 @@ module Smt = struct
       | _ -> None
 
     (** Add a variant type definition to the state *)
-    let state_add_variant_type ((vt_name, vt_cs) : variant_type) (state : t) : t
-        =
-      let constructor_info ((c_name, c_t) : variant_type_constructor) :
+    let state_add_variant_type ((vt_name, vt_cs) : VariantType.t) (state : t) :
+        t =
+      let constructor_info ((c_name, c_t) : VariantType.constructor) :
           variant_type_constructor_info =
         {
           name = c_name;

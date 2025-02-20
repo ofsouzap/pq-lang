@@ -2,7 +2,6 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
-open Variant_types
 open Custom_types
 open Typing
 
@@ -44,7 +43,7 @@ module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
   (** Add a variant type to the type context *)
-  val add_variant : t -> variant_type -> t
+  val add_variant : t -> VariantType.t -> t
 
   (** Add a quotient type to the type context *)
   val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
@@ -54,7 +53,7 @@ module TestingTypeCtx : sig
 
   (** If there are any defined variant types, get a generator for a random one
       of them *)
-  val variant_gen_opt : t -> variant_type QCheck.Gen.t option
+  val variant_gen_opt : t -> VariantType.t QCheck.Gen.t option
 
   (** Get the type context as a sexp *)
   val sexp_of_t : t -> Sexp.t

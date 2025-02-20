@@ -2,7 +2,6 @@
     program. *)
 
 open Vtype
-open Variant_types
 open Varname
 
 (** The data that the executor tags the interpreted Expr with *)
@@ -32,7 +31,7 @@ and value =
   | Bool of bool  (** A boolean value *)
   | Closure of closure_props  (** A function closure *)
   | Pair of value * value  (** A pair value *)
-  | VariantTypeValue of variant_type * string * value
+  | VariantTypeValue of VariantType.t * string * value
       (** A value of a variant type, with the type itself and the constructor
           name specified *)
 [@@deriving sexp, equal]

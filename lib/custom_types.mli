@@ -1,11 +1,10 @@
 open Utils
 open Vtype
-open Variant_types
 
 (** A user-defined type. Either a variant type definition or a quotient type
     definition *)
 type ('tag_e, 'tag_p) custom_type =
-  | VariantType of variant_type
+  | VariantType of VariantType.t
   | QuotientType of ('tag_e, 'tag_p) QuotientType.t
 [@@deriving sexp, equal]
 

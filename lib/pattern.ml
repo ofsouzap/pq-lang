@@ -65,8 +65,7 @@ module QCheck_testing : functor
    end)
   -> sig
   type gen_options = {
-    get_variant_type_constructors :
-      string -> Variant_types.variant_type_constructor list;
+    get_variant_type_constructors : string -> VariantType.constructor list;
     v_gen : Tag.t QCheck.Gen.t;
     t : vtype;
   }
@@ -89,8 +88,7 @@ functor
     type t = this_t
 
     type gen_options = {
-      get_variant_type_constructors :
-        string -> Variant_types.variant_type_constructor list;
+      get_variant_type_constructors : string -> VariantType.constructor list;
       v_gen : Tag.t QCheck.Gen.t;
       t : vtype;
     }
@@ -101,7 +99,6 @@ functor
 
     let gen (opts : gen_options) : this_t QCheck.Gen.t =
       let open QCheck.Gen in
-      let open Variant_types in
       let v_gen = opts.v_gen in
       let rec gen_new_varname (vars : (string * vtype) list) :
           string QCheck.Gen.t =
@@ -139,7 +136,7 @@ functor
               gen t2 vars1 >|= fun (p2, vars2) -> (PatPair (v, p1, p2), vars2)
             );
           ]
-      and gen_variant (cs : variant_type_constructor list)
+      and gen_variant (cs : VariantType.constructor list)
           (vars : (string * vtype) list) :
           (* Generate a pattern that types as the specified variant type *)
           this_t QCheck.Gen.t =

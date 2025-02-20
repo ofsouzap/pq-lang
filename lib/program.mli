@@ -1,6 +1,5 @@
 open Utils
 open Vtype
-open Variant_types
 open Varname
 open Expr
 open Custom_types
@@ -80,7 +79,7 @@ module QCheck_testing : functor
     expr_v_gen:TagExpr.t QCheck.Gen.t ->
     pat_v_gen:TagPat.t QCheck.Gen.t ->
     top_level_defns:(varname * (vtype * vtype)) list ->
-    variant_types:variant_type list ->
+    variant_types:VariantType.t list ->
     mrd:int ->
     (TagExpr.t, TagPat.t) top_level_defn QCheck.Gen.t
 

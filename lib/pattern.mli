@@ -45,8 +45,7 @@ module QCheck_testing : functor
    end)
   -> sig
   type gen_options = {
-    get_variant_type_constructors :
-      string -> Variant_types.variant_type_constructor list;
+    get_variant_type_constructors : string -> VariantType.constructor list;
     v_gen : Tag.t QCheck.Gen.t;
     t : vtype;
   }

@@ -2,7 +2,6 @@ open Core
 open Utils
 open Vtype
 open Varname
-open Variant_types
 open Pattern
 
 type ('tag_e, 'tag_p) expr =
@@ -392,7 +391,7 @@ end) : sig
 
   type gen_options = {
     t : gen_vtype option;
-    variant_types : variant_type list;
+    variant_types : VariantType.t list;
     top_level_defns : (varname * (vtype * vtype)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -464,7 +463,7 @@ end = struct
 
   type gen_options = {
     t : gen_vtype option;
-    variant_types : variant_type list;
+    variant_types : VariantType.t list;
     top_level_defns : (varname * (vtype * vtype)) list;
     v_gen : TagExpr.t QCheck.Gen.t;
     pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -718,7 +717,7 @@ end = struct
           let rec_cases = standard_rec_gen_cases (self, t, (d, ctx), v) t in
           if d > 0 then oneof (base_cases @ rec_cases) else oneof base_cases)
         param
-    and gen_variant ((vt_name, cs) : variant_type)
+    and gen_variant ((vt_name, cs) : VariantType.t)
         (param : int * (string * vtype) list) : (TagExpr.t, TagPat.t) expr Gen.t
         =
       (* Generate an expression that types as the provided variant type *)

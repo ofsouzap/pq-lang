@@ -2,7 +2,6 @@ open Core
 open Utils
 open Vtype
 open Varname
-open Variant_types
 open Expr
 open Custom_types
 
@@ -80,7 +79,7 @@ let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
   Set.union
     (List.fold ~init:StringSet.empty
        ~f:(fun acc -> function
-         | VariantType vt -> Variant_types.existing_names vt |> Set.union acc
+         | VariantType vt -> VariantType.existing_names vt |> Set.union acc
          | QuotientType qt -> QuotientType.existing_names qt |> Set.union acc)
        prog.custom_types)
     (Set.union
@@ -99,7 +98,7 @@ let program_to_source_code ?(use_newlines : bool option)
   let type_defns_str : string list =
     List.map
       ~f:(function
-        | VariantType vt -> variant_type_to_source_code vt
+        | VariantType vt -> VariantType.to_source_code vt
         | QuotientType qt -> QuotientType.to_source_code ~use_newlines qt)
       prog.custom_types
   in
@@ -140,7 +139,7 @@ end) : sig
     expr_v_gen:TagExpr.t QCheck.Gen.t ->
     pat_v_gen:TagPat.t QCheck.Gen.t ->
     top_level_defns:(varname * (vtype * vtype)) list ->
-    variant_types:variant_type list ->
+    variant_types:VariantType.t list ->
     mrd:int ->
     (TagExpr.t, TagPat.t) top_level_defn QCheck.Gen.t
 
@@ -179,7 +178,7 @@ end = struct
   }
 
   type gen_variant_types_list_acc = {
-    variant_types : variant_type list;
+    variant_types : VariantType.t list;
     variant_type_names : StringSet.t;
     constructor_names : StringSet.t;
   }
@@ -195,7 +194,7 @@ end = struct
         if n <= 0 then
           return (List.map ~f:(fun vt -> VariantType vt) acc.variant_types)
         else
-          Variant_types.QCheck_testing.gen
+          VariantType.QCheck_testing.gen
             {
               used_variant_type_names = acc.variant_type_names;
               used_variant_type_constructor_names = acc.constructor_names;
@@ -223,7 +222,7 @@ end = struct
   let gen_top_level_defn ~(expr_v_gen : TagExpr.t QCheck.Gen.t)
       ~(pat_v_gen : TagPat.t QCheck.Gen.t)
       ~(top_level_defns : (varname * (vtype * vtype)) list)
-      ~(variant_types : variant_type list) ~(mrd : int) :
+      ~(variant_types : VariantType.t list) ~(mrd : int) :
       (TagExpr.t, TagPat.t) top_level_defn QCheck.Gen.t =
     let open QCheck.Gen in
     let top_level_names =
@@ -263,7 +262,7 @@ end = struct
   }
 
   let gen_top_level_defns_list ~(expr_v_gen : TagExpr.t QCheck.Gen.t)
-      ~(pat_v_gen : TagPat.t QCheck.Gen.t) ~(variant_types : variant_type list)
+      ~(pat_v_gen : TagPat.t QCheck.Gen.t) ~(variant_types : VariantType.t list)
       ~(max_top_level_defns : int) ~(mrd : int) :
       (TagExpr.t, TagPat.t) top_level_defn list QCheck.Gen.t =
     let open QCheck.Gen in

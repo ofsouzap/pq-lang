@@ -2,7 +2,6 @@ open Core
 open Pq_lang
 open Utils
 open Vtype
-open Variant_types
 open Pattern
 open Custom_types
 open Typing
@@ -83,10 +82,10 @@ let override_equal_typing_error (a : Typing.typing_error)
 module TestingTypeCtx : sig
   include Typing.TypingTypeContext
 
-  val add_variant : t -> variant_type -> t
+  val add_variant : t -> VariantType.t -> t
   val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
   val from_list : ('tag_e, 'tag_p) custom_type list -> t
-  val variant_gen_opt : t -> variant_type QCheck.Gen.t option
+  val variant_gen_opt : t -> VariantType.t QCheck.Gen.t option
   val sexp_of_t : t -> Sexp.t
 
   module QCheck_testing : sig
@@ -124,7 +123,7 @@ end = struct
     Option.is_some (find_type_defn_by_name ctx vt_name)
 
   let find_variant_type_with_constructor (ctx : t) (c_name : string) :
-      (variant_type * variant_type_constructor) option =
+      (VariantType.t * VariantType.constructor) option =
     let open Option in
     List.find_map ctx ~f:(function
       | VariantType ((_, cs) as vt) ->
@@ -168,7 +167,7 @@ end = struct
         | QuotientType _, VariantType _ -> Ok false)
     | VTypeCustom _, _ -> Ok false
 
-  let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
+  let add_variant (ctx : t) (vt : VariantType.t) : t = VariantType vt :: ctx
 
   let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) QuotientType.t) : t =
     QuotientType (QuotientType.to_plain_quotient_type qt) :: ctx
@@ -176,7 +175,7 @@ end = struct
   let type_defns_to_ordered_list = Fn.id
   let from_list = List.map ~f:to_plain_custom_type
 
-  let variant_gen_opt (ctx : t) : variant_type QCheck.Gen.t option =
+  let variant_gen_opt (ctx : t) : VariantType.t QCheck.Gen.t option =
     let open QCheck.Gen in
     let choices =
       List.filter_map
@@ -213,8 +212,8 @@ end = struct
         (fun self
              ( (rem_variant_types, rem_quotient_types),
                (type_ctx : plain_custom_type list) ) ->
-          let variant_type_gen : variant_type QCheck.Gen.t =
-            Variant_types.QCheck_testing.gen
+          let variant_type_gen : VariantType.t QCheck.Gen.t =
+            VariantType.QCheck_testing.gen
               {
                 mrd = opts.mrd;
                 used_variant_type_names =
@@ -256,10 +255,10 @@ end = struct
 
     let print () : t QCheck.Print.t =
       let print_variant_type_constructor :
-          variant_type_constructor QCheck.Print.t =
+          VariantType.constructor QCheck.Print.t =
         QCheck.Print.(pair string vtype_to_source_code)
       in
-      let print_variant_type : variant_type QCheck.Print.t =
+      let print_variant_type : VariantType.t QCheck.Print.t =
         QCheck.Print.(pair Fn.id (list print_variant_type_constructor))
       in
       let print_quotient_type_eqcons : QuotientType.plain_eqcons QCheck.Print.t
@@ -290,7 +289,7 @@ end = struct
       QCheck.Shrink.(
         list ~shrink:(function
           | VariantType vt ->
-              Variant_types.QCheck_testing.shrink () vt >|= fun vt ->
+              VariantType.QCheck_testing.shrink () vt >|= fun vt ->
               VariantType vt
           | QuotientType qt -> nil qt >|= fun qt -> QuotientType qt))
 

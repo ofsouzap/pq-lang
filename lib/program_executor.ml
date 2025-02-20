@@ -1,7 +1,6 @@
 open Core
 open Utils
 open Vtype
-open Variant_types
 open Varname
 open Pattern
 open Program
@@ -24,7 +23,7 @@ and value =
   | Bool of bool
   | Closure of closure_props
   | Pair of value * value
-  | VariantTypeValue of variant_type * string * value
+  | VariantTypeValue of VariantType.t * string * value
 [@@deriving sexp, equal]
 
 and store = value VarnameMap.t [@@deriving sexp, equal]

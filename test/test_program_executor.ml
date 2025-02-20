@@ -3,7 +3,6 @@ open OUnit2
 open Pq_lang
 open Utils
 open Vtype
-open Variant_types
 open Pattern
 open Custom_types
 open Program
@@ -338,19 +337,19 @@ let test_cases_match : basic_test_case list =
 let test_cases_constructor : basic_test_case list =
   let open Expr in
   let mapf
-      ((variant_types : variant_type list), (y : plain_expr), (z : exec_res)) =
+      ((variant_types : VariantType.t list), (y : plain_expr), (z : exec_res)) =
     ( Expr.to_source_code y,
       type_expr
         ~custom_types:(List.map ~f:(fun vt -> VariantType vt) variant_types)
         y,
       z )
   in
-  let vt_list : variant_type =
+  let vt_list : VariantType.t =
     ( "list",
       [ ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeCustom "list")) ]
     )
   in
-  let vt_int_box : variant_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
+  let vt_int_box : VariantType.t = ("int_box", [ ("IntBox", VTypeInt) ]) in
   List.map ~f:mapf
     [
       ( [ vt_list ],

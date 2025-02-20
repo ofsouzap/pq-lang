@@ -1,12 +1,12 @@
 %{
 open Utils
 open Vtype
-open Variant_types
+
 open Pattern
 open Expr
 open Program
 
-let add_variant_type_definition_to_program (p : plain_program) (vt : variant_type) : plain_program =
+let add_variant_type_definition_to_program (p : plain_program) (vt : VariantType.t) : plain_program =
   {
     p with
     custom_types = (VariantType vt) :: p.custom_types;
@@ -52,10 +52,10 @@ let add_top_level_definition_to_program (p : plain_program) (defn : plain_top_le
 %type <plain_pattern> pattern
 %type <plain_pattern> contained_pattern
 
-%type <variant_type_constructor> variant_type_constructor
-%type <variant_type_constructor list> variant_type_definition_constructors_no_leading_pipe
-%type <variant_type_constructor list> variant_type_definition_constructors
-%type <variant_type> variant_type_definition
+%type <VariantType.constructor> variant_type_constructor
+%type <VariantType.constructor list> variant_type_definition_constructors_no_leading_pipe
+%type <VariantType.constructor list> variant_type_definition_constructors
+%type <VariantType.t> variant_type_definition
 
 %type <string * vtype> typed_name
 
