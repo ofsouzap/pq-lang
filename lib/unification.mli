@@ -1,7 +1,7 @@
 open Core
 open Utils
 open Varname
-open Ast
+open Expr
 
 type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) expr StringMap.t
 [@@deriving sexp, equal]
@@ -25,5 +25,5 @@ val rename_var_in_body :
 (** Apply a unifier to an expression *)
 val apply_to_expr :
   unifier:('tag_e, 'tag_p) unifier ->
-  ('tag_e, 'tag_p) Ast.expr ->
-  ('tag_e, 'tag_p) Ast.expr
+  ('tag_e, 'tag_p) Expr.expr ->
+  ('tag_e, 'tag_p) Expr.expr

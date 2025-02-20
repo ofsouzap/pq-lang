@@ -1,7 +1,7 @@
 open Core
 open OUnit2
 open Pq_lang
-open Ast
+open Expr
 open Testing_utils
 
 let test_cases_equality : test list =
@@ -74,7 +74,7 @@ let test_cases_equality : test list =
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:1000 ~name:"AST to source code"
+  Test.make ~count:1000 ~name:"Expr to source code"
     unit_program_arbitrary_with_default_options (fun prog ->
       let e = prog.e in
       match run_frontend_string (ast_to_source_code e) with
@@ -82,7 +82,7 @@ let test_cases_to_source_code_inv =
           if equal_plain_expr e prog.e then true
           else
             Test.fail_reportf
-              "Got different AST. Expected:\n\n%s\n\nActual:\n\n%s"
+              "Got different Expr. Expected:\n\n%s\n\nActual:\n\n%s"
               (Unit_ast_qcheck_testing.print
                  (PrintSexp (sexp_of_unit, sexp_of_unit))
                  e)
@@ -284,11 +284,11 @@ module StringInt_doubletagged_tests =
     end)
 
 let suite =
-  "AST Tests"
+  "Expr Tests"
   >::: [
          "Equality Tests" >::: test_cases_equality;
          QCheck_runner.to_ounit2_test test_cases_to_source_code_inv;
-         "AST node value"
+         "Expr node value"
          >::: List.map
                 ~f:(fun (name, test) ->
                   name >::: [ QCheck_runner.to_ounit2_test test ])
@@ -310,7 +310,7 @@ let suite =
                       QCheck.(list int)
                       (equal_list equal_int) );
                 ];
-         "AST expr node map val"
+         "Expr expr node map val"
          >::: List.map
                 ~f:(fun (name, test) ->
                   name >::: [ QCheck_runner.to_ounit2_test test ])
@@ -325,7 +325,7 @@ let suite =
                     String_singletagged_tests
                     .create_test_cases_expr_node_map_val );
                 ];
-         "AST fmap root"
+         "Expr fmap root"
          >::: List.map
                 ~f:(fun (name, test) ->
                   name >::: [ QCheck_runner.to_ounit2_test test ])

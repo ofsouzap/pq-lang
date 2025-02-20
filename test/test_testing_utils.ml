@@ -4,7 +4,7 @@ open QCheck
 open Pq_lang
 open Utils
 open Vtype
-open Ast
+open Expr
 open Custom_types
 open Typing
 open Testing_utils
@@ -89,7 +89,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                      e
                  with
                  | Ok e_typed -> (
-                     let e_type = e_typed |> Ast.expr_node_val |> fst in
+                     let e_type = e_typed |> Expr.expr_node_val |> fst in
                      match
                        TestingTypeChecker.type_expr
                          (type_ctx, TestingVarCtx.empty)
@@ -97,7 +97,7 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                      with
                      | Ok e_shrunk_typed ->
                          let e_shrunk_type =
-                           e_shrunk_typed |> Ast.expr_node_val |> fst
+                           e_shrunk_typed |> Expr.expr_node_val |> fst
                          in
                          if equal_vtype e_type e_shrunk_type then true
                          else
@@ -119,7 +119,7 @@ let create_typed_expr_gen_test (name : string)
     (Test.make ~name ~count:1000
        (let open QCheck.Gen in
         let gen :
-            (TestingTypeCtx.t * (vtype * (unit, unit) Ast.expr)) QCheck.Gen.t =
+            (TestingTypeCtx.t * (vtype * (unit, unit) Expr.expr)) QCheck.Gen.t =
           types_gen >>= fun (type_ctx, t) ->
           Unit_ast_qcheck_testing.gen
             {
@@ -158,7 +158,7 @@ let create_typed_expr_gen_test (name : string)
                TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
              with
              | Ok e_typed ->
-                 let et = e_typed |> Ast.expr_node_val |> fst in
+                 let et = e_typed |> Expr.expr_node_val |> fst in
                  equal_vtype t et
              | Error _ -> false)))
 

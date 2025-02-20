@@ -4,7 +4,7 @@ open Utils
 open Vtype
 open Variant_types
 open Pattern
-open Ast
+open Expr
 open Quotient_types
 open Custom_types
 open Typing
@@ -413,7 +413,7 @@ module UnitTag = struct
   let equal = equal_unit
 end
 
-module Unit_ast_qcheck_testing = Ast.QCheck_testing (UnitTag) (UnitTag)
+module Unit_ast_qcheck_testing = Expr.QCheck_testing (UnitTag) (UnitTag)
 module Unit_program_qcheck_testing = Program.QCheck_testing (UnitTag) (UnitTag)
 
 let unit_program_arbitrary_with_default_options =

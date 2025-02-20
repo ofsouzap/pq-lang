@@ -64,18 +64,19 @@ type ('tag_e, 'tag_p) expr =
       (** Constructor for a variant data type *)
 [@@deriving sexp, equal]
 
-(** Extract the value attached to a single node of a tagged AST expression *)
+(** Extract the value attached to a single node of a tagged Expr expression *)
 val expr_node_val : ('tag_e, 'tag_p) expr -> 'tag_e
 
-(** Map a function onto the value of a single node of a tagged AST expression *)
+(** Map a function onto the value of a single node of a tagged Expr expression
+*)
 val expr_node_map_val :
   f:('tag_e -> 'tag_e) -> ('tag_e, 'tag_p) expr -> ('tag_e, 'tag_p) expr
 
-(** Map a function onto all values in an entire tagged AST expression *)
+(** Map a function onto all values in an entire tagged Expr expression *)
 val fmap :
   f:('tag_e1 -> 'tag_e2) -> ('tag_e1, 'tag_p) expr -> ('tag_e2, 'tag_p) expr
 
-(** Map a function onto all patterns in an entire tagged AST expression with
+(** Map a function onto all patterns in an entire tagged Expr expression with
     tagged patterns *)
 val fmap_pattern :
   f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) expr -> ('tag_e, 'tag_p2) expr
@@ -94,7 +95,7 @@ type ('a, 'b) typed_expr = (vtype * 'a, vtype * 'b) expr
 (** An expression in the language with typing information *)
 type plain_typed_expr = (unit, unit) typed_expr [@@deriving sexp, equal]
 
-(** Delete an AST's tagging data to form a plain AST *)
+(** Delete an Expr's tagging data to form a plain Expr *)
 val expr_to_plain_expr : ('tag_e, 'tag_p) expr -> plain_expr
 
 (** Rename a variable in an expression *)
@@ -110,7 +111,7 @@ val of_pattern :
 
 exception AstConverionFixError
 
-(** Convert an AST expression into source code that corresponds to the AST
+(** Convert an Expr expression into source code that corresponds to the Expr
     representation. If the input has a malformed usage of the Fix node, this
     will raise a `AstConversionFixError` exception. *)
 val ast_to_source_code : ?use_newlines:bool -> ('tag_e, 'tag_p) expr -> string
@@ -123,27 +124,27 @@ module QCheck_testing : functor
      type t
    end)
   -> sig
-  (** The printing method for an AST representation of a program *)
+  (** The printing method for an Expr representation of a program *)
   type ast_print_method =
-    | NoPrint  (** Don't print the AST *)
+    | NoPrint  (** Don't print the Expr *)
     | PrintSexp of (TagExpr.t -> Sexp.t) * (TagPat.t -> Sexp.t)
-        (** Print the sexp of the AST, using the provided sexp_of_ functions for
-            the values in the AST and the patterns *)
+        (** Print the sexp of the Expr, using the provided sexp_of_ functions
+            for the values in the Expr and the patterns *)
     | PrintExprSource
-        (** Print the source code representation of the AST, ignoring the
+        (** Print the source code representation of the Expr, ignoring the
             tagging values *)
 
-  (** Take an AST printing method and return a function that implements the
+  (** Take an Expr printing method and return a function that implements the
       printing method. Returns None if no printing is specified. *)
   val get_ast_printer_opt :
     ast_print_method -> ((TagExpr.t, TagPat.t) expr -> string) option
 
-  (** Take an AST printing method and return a function that implements the
+  (** Take an Expr printing method and return a function that implements the
       printing method. Returns a function always returning the empty string if
       no printing is specified. *)
   val get_ast_printer : ast_print_method -> (TagExpr.t, TagPat.t) expr -> string
 
-  (** A default AST printing method *)
+  (** A default Expr printing method *)
   val default_ast_print_method : ast_print_method
 
   type gen_vtype =

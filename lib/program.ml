@@ -3,7 +3,7 @@ open Utils
 open Vtype
 open Varname
 open Variant_types
-open Ast
+open Expr
 open Quotient_types
 open Custom_types
 
@@ -56,9 +56,9 @@ let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) program) :
     top_level_defns =
       List.map
         ~f:(fun defn ->
-          { defn with body = Ast.fmap ~f defn.body; return_t = defn.return_t })
+          { defn with body = Expr.fmap ~f defn.body; return_t = defn.return_t })
         prog.top_level_defns;
-    e = Ast.fmap ~f prog.e;
+    e = Expr.fmap ~f prog.e;
   }
 
 let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) program) :
@@ -70,11 +70,11 @@ let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) program) :
         ~f:(fun defn ->
           {
             defn with
-            body = Ast.fmap_pattern ~f defn.body;
+            body = Expr.fmap_pattern ~f defn.body;
             return_t = defn.return_t;
           })
         prog.top_level_defns;
-    e = Ast.fmap_pattern ~f prog.e;
+    e = Expr.fmap_pattern ~f prog.e;
   }
 
 let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
@@ -90,9 +90,9 @@ let existing_names (prog : ('tag_e, 'tag_p) program) : StringSet.t =
             Set.union (Set.add acc defn.name)
               (Set.union
                  (StringSet.singleton (fst defn.param))
-                 (Ast.existing_names defn.body)))
+                 (Expr.existing_names defn.body)))
           prog.top_level_defns)
-       (Ast.existing_names prog.e))
+       (Expr.existing_names prog.e))
 
 let program_to_source_code ?(use_newlines : bool option)
     (prog : ('tag_e, 'tag_p) program) : string =
@@ -133,8 +133,8 @@ end) : sig
 
   type arb_options = {
     gen : gen_options;
-    print : Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method;
-    shrink : Ast.QCheck_testing(TagExpr)(TagPat).shrink_options;
+    print : Expr.QCheck_testing(TagExpr)(TagPat).ast_print_method;
+    shrink : Expr.QCheck_testing(TagExpr)(TagPat).shrink_options;
   }
 
   val gen_top_level_defn :
@@ -150,14 +150,14 @@ end) : sig
       with type t = (TagExpr.t, TagPat.t) program
        and type gen_options := gen_options
        and type print_options =
-        Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method
+        Expr.QCheck_testing(TagExpr)(TagPat).ast_print_method
        and type shrink_options =
-        Ast.QCheck_testing(TagExpr)(TagPat).shrink_options
+        Expr.QCheck_testing(TagExpr)(TagPat).shrink_options
        and type arb_options := arb_options
 end = struct
   type t = (TagExpr.t, TagPat.t) program
 
-  module Ast_qcheck_testing = Ast.QCheck_testing (TagExpr) (TagPat)
+  module Ast_qcheck_testing = Expr.QCheck_testing (TagExpr) (TagPat)
 
   type gen_options = {
     mrd : int;

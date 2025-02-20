@@ -829,7 +829,7 @@ end = struct
         <+> (shrink opts e3 >|= fun e3' -> If (v, e1, e2, e3'))
     | Var _ -> empty
     | Let _ ->
-        (* Because of let-rec definitions needing a specific form when using AST to source code,
+        (* Because of let-rec definitions needing a specific form when using Expr to source code,
            this would need a filtered shrink function which I can't be bothered to write at the moment *)
         empty
     | App (v, e1, e2) ->

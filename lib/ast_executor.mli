@@ -1,21 +1,22 @@
-(** This module provides functionality for directly executing an AST of a
+(** This module provides functionality for directly executing an Expr of a
     program. *)
 
 open Vtype
 open Variant_types
 open Varname
 
-(** The data that the executor tags the interpreted AST with *)
+(** The data that the executor tags the interpreted Expr with *)
 type ast_tag = unit [@@deriving sexp, equal]
 
-(** The data that the executor tags the interpreted AST patterns with *)
+(** The data that the executor tags the interpreted Expr patterns with *)
 type pattern_tag = unit [@@deriving sexp, equal]
 
 (** Properties of a closure *)
 type closure_props = {
   param : varname * vtype;  (** The function's parameter's name and type *)
   out_type : vtype;  (** The output type of the function *)
-  body : (ast_tag, pattern_tag) Ast.typed_expr;  (** The body of the function *)
+  body : (ast_tag, pattern_tag) Expr.typed_expr;
+      (** The body of the function *)
   store : store;  (** The store to use when executing the function *)
   recursive : [ `Recursive of varname | `NonRecursive ];
       (** Whether the function is recursive or not. If so, the name of the
@@ -24,7 +25,7 @@ type closure_props = {
 }
 [@@deriving sexp, equal]
 
-(** A resulting value from executing an AST *)
+(** A resulting value from executing an Expr *)
 and value =
   | Unit  (** The unit value *)
   | Int of int  (** An integer value *)
@@ -78,7 +79,7 @@ type exec_err =
   | UndefinedVarError of varname
       (** Execution was halted due to usage of an undefined variable of the
           provided name *)
-  | MisplacedFixError  (** Fix node was inappropriately used in the AST *)
+  | MisplacedFixError  (** Fix node was inappropriately used in the Expr *)
   | FixApplicationError
       (** Application of the Fix node was done on an invalid target *)
   | MaxRecursionDepthExceeded
@@ -95,13 +96,13 @@ type exec_err =
 (** Print human-readable string representation of an execution error *)
 val print_exec_err : exec_err -> string
 
-(** The result of executing an AST *)
+(** The result of executing an Expr *)
 type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
 
 (** String representation of an execution result *)
 val show_exec_res : exec_res -> string
 
-(** Provides AST execution functionality, given a typing context and variable
+(** Provides Expr execution functionality, given a typing context and variable
     context used for a type checker implementation *)
 module Executor : functor
   (TypeCtx : Typing.TypingTypeContext)
@@ -114,7 +115,7 @@ module Executor : functor
     exec_res
 end
 
-(** An implementation of the AST executor using the simple type checker
+(** An implementation of the Expr executor using the simple type checker
     implementation *)
 module SimpleExecutor : sig
   include module type of

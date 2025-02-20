@@ -22,7 +22,7 @@ let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
 
 let type_expr ?(custom_types : plain_custom_type list option)
     ?(top_level_defns : (unit, unit) top_level_defn list option)
-    (e : Ast.plain_expr) : (unit, unit) SimpleTypeChecker.typed_program =
+    (e : Expr.plain_expr) : (unit, unit) SimpleTypeChecker.typed_program =
   match
     type_program
       {
@@ -35,11 +35,11 @@ let type_expr ?(custom_types : plain_custom_type list option)
   | Error err ->
       failwith
         (sprintf "Typing error:\nExpression: %s\nError: %s"
-           (Ast.ast_to_source_code ~use_newlines:true e)
+           (Expr.ast_to_source_code ~use_newlines:true e)
            (print_typing_error err))
 
 let test_cases_unit_value : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf ((x : plain_expr), (y : value)) =
     (ast_to_source_code x, type_expr x, Ok y)
   in
@@ -50,7 +50,7 @@ let test_cases_unit_value : basic_test_case list =
     ]
 
 let test_cases_arithmetic : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf ((x : plain_expr), (y : int)) =
     (ast_to_source_code x, type_expr x, Ok (Int y))
   in
@@ -83,7 +83,7 @@ let test_cases_arithmetic : basic_test_case list =
     ]
 
 let test_cases_booleans : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf ((x : plain_expr), (y : bool)) =
     (ast_to_source_code x, type_expr x, Ok (Bool y))
   in
@@ -108,7 +108,7 @@ let test_cases_booleans : basic_test_case list =
     ]
 
 let test_cases_pairs : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf ((x : plain_expr), (y : value)) =
     (ast_to_source_code x, type_expr x, Ok y)
   in
@@ -124,7 +124,7 @@ let test_cases_pairs : basic_test_case list =
     ]
 
 let test_cases_integer_comparisons : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf ((x : plain_expr), (y : bool)) =
     (ast_to_source_code x, type_expr x, Ok (Bool y))
   in
@@ -153,7 +153,7 @@ let test_cases_integer_comparisons : basic_test_case list =
     ]
 
 let test_cases_control_flow : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
   in
@@ -176,7 +176,7 @@ let test_cases_control_flow : basic_test_case list =
     ]
 
 let test_cases_variables : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf ((x : plain_expr), (y : exec_res)) =
     (ast_to_source_code x, type_expr x, y)
   in
@@ -202,7 +202,7 @@ let test_cases_variables : basic_test_case list =
     ]
 
 let test_cases_match : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf
       ( (custom_types : plain_custom_type list option),
         (x : plain_expr),
@@ -336,7 +336,7 @@ let test_cases_match : basic_test_case list =
     ]
 
 let test_cases_constructor : basic_test_case list =
-  let open Ast in
+  let open Expr in
   let mapf
       ((variant_types : variant_type list), (y : plain_expr), (z : exec_res)) =
     ( ast_to_source_code y,
@@ -391,7 +391,7 @@ let create_test
     ~printer:Ast_executor.show_exec_res
 
 let suite =
-  "AST Executor"
+  "Expr Executor"
   >::: [
          "Unit Value" >::: List.map ~f:create_test test_cases_unit_value;
          "Arithmetic" >::: List.map ~f:create_test test_cases_arithmetic;

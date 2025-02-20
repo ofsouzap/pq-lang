@@ -2,7 +2,7 @@ open Core
 open Utils
 open Varname
 open Pattern
-open Ast
+open Expr
 
 type ('tag_e, 'tag_p) unifier = ('tag_e, 'tag_p) expr StringMap.t
 [@@deriving sexp, equal]
@@ -48,7 +48,7 @@ let simply_find_unifier ~(bound_names_in_from : StringSet.t)
 
 let rename_var_in_body ~(old_name : varname) ~(new_name : varname)
     (unifier : ('tag_e, 'tag_p) unifier) : ('tag_e, 'tag_p) unifier =
-  Map.map unifier ~f:(Ast.rename_var ~old_name ~new_name)
+  Map.map unifier ~f:(Expr.rename_var ~old_name ~new_name)
 
 let rec apply_to_expr ~(unifier : ('tag_e, 'tag_p) unifier) :
     ('tag_e, 'tag_p) expr -> ('tag_e, 'tag_p) expr = function

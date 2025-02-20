@@ -2,7 +2,7 @@ open Utils
 open Vtype
 open Variant_types
 open Varname
-open Ast
+open Expr
 open Custom_types
 
 (** A top-level function definition *)
@@ -86,8 +86,8 @@ module QCheck_testing : functor
 
   type arb_options = {
     gen : gen_options;
-    print : Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method;
-    shrink : Ast.QCheck_testing(TagExpr)(TagPat).shrink_options;
+    print : Expr.QCheck_testing(TagExpr)(TagPat).ast_print_method;
+    shrink : Expr.QCheck_testing(TagExpr)(TagPat).shrink_options;
   }
 
   include
@@ -95,8 +95,8 @@ module QCheck_testing : functor
       with type t = (TagExpr.t, TagPat.t) program
        and type gen_options := gen_options
        and type print_options =
-        Ast.QCheck_testing(TagExpr)(TagPat).ast_print_method
+        Expr.QCheck_testing(TagExpr)(TagPat).ast_print_method
        and type shrink_options =
-        Ast.QCheck_testing(TagExpr)(TagPat).shrink_options
+        Expr.QCheck_testing(TagExpr)(TagPat).shrink_options
        and type arb_options := arb_options
 end

@@ -121,7 +121,7 @@ module UnitTag : sig
 end
 
 module Unit_ast_qcheck_testing : sig
-  include module type of Ast.QCheck_testing (UnitTag) (UnitTag)
+  include module type of Expr.QCheck_testing (UnitTag) (UnitTag)
 end
 
 module Unit_program_qcheck_testing : sig

@@ -2,7 +2,7 @@ open Utils
 open Varname
 open Vtype
 open Pattern
-open Ast
+open Expr
 
 (** A single equality constructor on a quotient type *)
 type ('tag_e, 'tag_p) quotient_type_eqcons = {

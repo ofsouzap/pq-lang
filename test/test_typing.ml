@@ -4,7 +4,7 @@ open Pq_lang
 open Utils
 open Vtype
 open Pattern
-open Ast
+open Expr
 open Custom_types
 open Typing
 open Testing_utils
@@ -12,7 +12,7 @@ open Testing_utils
 (* TODO - tests for type context checking *)
 
 module Vtype_ast_qcheck_testing =
-  Ast.QCheck_testing
+  Expr.QCheck_testing
     (struct
       type t = vtype
     end)
@@ -301,7 +301,9 @@ let test_cases_expr_typing_full_check : test list =
     in
     match out with
     | Ok e_typed ->
-        let typed_out = e_typed |> Ast.fmap ~f:fst |> Ast.fmap_pattern ~f:fst in
+        let typed_out =
+          e_typed |> Expr.fmap ~f:fst |> Expr.fmap_pattern ~f:fst
+        in
         assert_equal
           ~cmp:(equal_expr equal_vtype equal_vtype)
           ~printer:

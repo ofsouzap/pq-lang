@@ -3,7 +3,7 @@ open Utils
 open Variant_types
 open Vtype
 open Pattern
-open Ast
+open Expr
 open Quotient_types
 open Custom_types
 open Program
@@ -723,7 +723,7 @@ module SimpleTypeChecker =
   TypeChecker (SetTypingTypeContext) (ListTypingVarContext)
 
 let type_expr ~(type_ctx : SetTypingTypeContext.t)
-    (e : ('tag_e, 'tag_p) Ast.expr) :
+    (e : ('tag_e, 'tag_p) Expr.expr) :
     (('tag_e, 'tag_p) typed_expr, typing_error) Result.t =
   let open Result in
   SimpleTypeChecker.check_type_ctx type_ctx >>= fun type_ctx ->

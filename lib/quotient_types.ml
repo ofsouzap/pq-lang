@@ -3,7 +3,7 @@ open Utils
 open Varname
 open Vtype
 open Pattern
-open Ast
+open Expr
 
 type ('tag_e, 'tag_p) quotient_type_eqcons = {
   bindings : (varname * vtype) list;
@@ -25,12 +25,12 @@ let eqcons_existing_names (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) :
   in
   let p, e = eqcons.body in
   Set.union bindings_names
-    (Set.union (Pattern.existing_names p) (Ast.existing_names e))
+    (Set.union (Pattern.existing_names p) (Expr.existing_names e))
 
 let eqcons_fmap_expr ~(f : 'tag_e1 -> 'tag_e2)
     (eqcons : ('tag_e1, 'tag_p) quotient_type_eqcons) :
     ('tag_e2, 'tag_p) quotient_type_eqcons =
-  { eqcons with body = (fst eqcons.body, snd eqcons.body |> Ast.fmap ~f) }
+  { eqcons with body = (fst eqcons.body, snd eqcons.body |> Expr.fmap ~f) }
 
 let eqcons_fmap_pattern ~(f : 'tag_p1 -> 'tag_p2)
     (eqcons : ('tag_e, 'tag_p1) quotient_type_eqcons) :
@@ -39,7 +39,7 @@ let eqcons_fmap_pattern ~(f : 'tag_p1 -> 'tag_p2)
     eqcons with
     body =
       ( fst eqcons.body |> Pattern.fmap ~f,
-        snd eqcons.body |> Ast.fmap_pattern ~f );
+        snd eqcons.body |> Expr.fmap_pattern ~f );
   }
 
 let eqcons_to_plain_eqcons (eqcons : ('tag_e, 'tag_p) quotient_type_eqcons) :

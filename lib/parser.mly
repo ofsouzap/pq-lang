@@ -3,7 +3,7 @@ open Utils
 open Vtype
 open Variant_types
 open Pattern
-open Ast
+open Expr
 open Quotient_types
 open Program
 

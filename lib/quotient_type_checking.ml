@@ -3,7 +3,7 @@ open Utils
 open Vtype
 open Variant_types
 open Varname
-open Ast
+open Expr
 open Quotient_types
 open Custom_types
 open Program
@@ -107,7 +107,7 @@ let generate_fresh_varname ?(seed_name : string option)
   let new_name = loop 0 in
   (new_name, Set.add existing_names new_name)
 
-(** Provides functionality for flattened patterns in AST expressions *)
+(** Provides functionality for flattened patterns in Expr expressions *)
 module FlatPattern = struct
   type t =
     | FlatPatPair of
@@ -422,7 +422,7 @@ module FlatPattern = struct
               Nonempty_list.singleton (flattened_p1_case_p, flattened_p1_case_e)
             ) ) *)
 
-  (** Convert an AST expression to a flat expression *)
+  (** Convert an Expr expression to a flat expression *)
   let rec of_ast ~(existing_names : StringSet.t) :
       tag_expr -> (StringSet.t * flat_expr, quotient_typing_error) Result.t =
     let open Result in
@@ -538,7 +538,7 @@ module FlatPattern = struct
           (fun existing_names e' -> (existing_names, Constructor (v, name, e')))
           ~existing_names e
 
-  (** Convert a flat AST expression to a non-flat AST expression *)
+  (** Convert a flat Expr expression to a non-flat Expr expression *)
   let rec to_non_flat_expr : flat_expr -> tag_expr = function
     | UnitLit v -> UnitLit v
     | IntLit (v, n) -> IntLit (v, n)
@@ -1305,7 +1305,7 @@ module Smt = struct
               List.fold_result qt.eqconss ~init:(existing_names, [])
                 ~f:(fun (existing_names, acc_rev) eqcons ->
                   fst eqcons.body
-                  |> Ast.of_pattern ~convert_tag:pattern_tag_to_ast_tag
+                  |> Expr.of_pattern ~convert_tag:pattern_tag_to_ast_tag
                   |> FlatPattern.of_ast ~existing_names
                   >>= fun (existing_names, flat_l) ->
                   snd eqcons.body |> FlatPattern.of_ast ~existing_names
@@ -1411,7 +1411,7 @@ let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
         List.fold ~init:eqcons.body
           ~f:(fun (p, e) (old_name, new_name) ->
             ( Pattern.rename_var ~old_name ~new_name p,
-              Ast.rename_var ~old_name ~new_name e ))
+              Expr.rename_var ~old_name ~new_name e ))
           renames_list;
     } )
 
@@ -1443,10 +1443,10 @@ let perform_quotient_match_check ~(existing_names : StringSet.t)
              Unification.simply_find_unifier
                ~bound_names_in_from:StringSet.empty
                ~from_expr:
-                 (case_p |> Ast.of_pattern ~convert_tag:pattern_tag_to_ast_tag)
+                 (case_p |> Expr.of_pattern ~convert_tag:pattern_tag_to_ast_tag)
                ~to_expr:
                  (fst eqcons.body
-                 |> Ast.of_pattern ~convert_tag:pattern_tag_to_ast_tag)
+                 |> Expr.of_pattern ~convert_tag:pattern_tag_to_ast_tag)
              |> function
              | Error () -> None
              | Ok unifier -> Some (unifier, eqcons)))

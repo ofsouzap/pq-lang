@@ -3,7 +3,7 @@ open OUnit2
 open Pq_lang
 open Utils
 open Pattern
-open Ast
+open Expr
 open Quotient_types
 open Program
 open Parser
@@ -16,7 +16,7 @@ type test_case_no_variant_types =
 type test_case_full_prog =
   string * string * token list * (plain_program, frontend_error) Result.t
 
-type test_case_precedence = string * string * Ast.plain_expr
+type test_case_precedence = string * string * Expr.plain_expr
 
 let test_cases_unit_value : test_case_no_variant_types list =
   List.map
