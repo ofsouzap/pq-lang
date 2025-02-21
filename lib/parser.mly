@@ -1,10 +1,12 @@
 %{
 open Utils
 
-
-
-
-
+module Pattern = Pattern.StdPattern
+module Expr = Expr.StdExpr
+module Unifier = Unifier.StdUnifier
+module QuotientType = QuotientType.StdQuotientType
+module CustomType = CustomType.StdCustomType
+module Program = Program.StdProgram
 
 let add_variant_type_definition_to_program (p : Program.plain_t) (vt : VariantType.t) : Program.plain_t =
   {
