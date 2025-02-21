@@ -1,7 +1,7 @@
 open Core
 open OUnit2
 open Pq_lang
-open Quotient_type_checking
+open QuotientTypeChecker
 open Testing_utils
 
 let manual_tests : test list =
@@ -21,13 +21,12 @@ let manual_tests : test list =
       >>= fun inp_typed_program ->
       inp_typed_program |> TestingTypeChecker.typed_program_get_program
       |> Program.fmap_expr ~f:(fun (t, ()) ->
-             ({ t } : Quotient_type_checking.expr_tag))
+             ({ t } : QuotientTypeChecker.expr_tag))
       |> Program.fmap_pattern ~f:(fun (t, ()) ->
-             ({ t } : Quotient_type_checking.pattern_tag))
+             ({ t } : QuotientTypeChecker.pattern_tag))
       |> fun inp_for_quotient_type_checking ->
       match
-        ( Quotient_type_checking.check_program inp_for_quotient_type_checking,
-          exp )
+        (QuotientTypeChecker.check_program inp_for_quotient_type_checking, exp)
       with
       | Ok (), `Valid -> Ok ()
       | Ok (), `Invalid ->

@@ -16,15 +16,15 @@ let () =
     |> Result.map_error ~f:(fun err ->
            sprintf "Typing error: %s" (TypeChecker.print_typing_error err))
     >>= fun tp ->
-    Quotient_type_checking.check_program
+    QuotientTypeChecker.check_program
       (TypeChecker.SimpleTypeChecker.typed_program_get_program tp
       |> Program.fmap_pattern ~f:(fun (t, ()) ->
-             ({ t } : Quotient_type_checking.pattern_tag))
+             ({ t } : QuotientTypeChecker.pattern_tag))
       |> Program.fmap_expr ~f:(fun (t, ()) ->
-             ({ t } : Quotient_type_checking.expr_tag)))
+             ({ t } : QuotientTypeChecker.expr_tag)))
     |> Result.map_error ~f:(fun err ->
            sprintf "Quotient type checking error: %s"
-             (err |> Quotient_type_checking.sexp_of_quotient_typing_error
+             (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
             |> Sexp.to_string_hum))
     >>= fun () ->
     Program_executor.SimpleExecutor.execute_program tp
