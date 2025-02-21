@@ -1065,7 +1065,20 @@ end
 module StdExpr : sig
   module Pattern = Pattern.StdPattern
   include StdS with module Pattern := Pattern
+
+  (** Create a possibly-open expression from a pattern *)
+  val of_pattern :
+    convert_tag:('tag_p -> 'tag_e) -> 'tag_p Pattern.t -> ('tag_e, 'tag_p) t
 end = struct
   module Pattern = Pattern.StdPattern
   include MakeStd (Pattern)
+
+  let rec of_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
+      'tag_p Pattern.t -> ('tag_e, 'tag_p) t = function
+    | PatName (v, xname, _) -> Var (convert_tag v, xname)
+    | PatPair (v, p1, p2) ->
+        Pair
+          (convert_tag v, of_pattern ~convert_tag p1, of_pattern ~convert_tag p2)
+    | PatConstructor (v, cname, p) ->
+        Constructor (convert_tag v, cname, of_pattern ~convert_tag p)
 end
