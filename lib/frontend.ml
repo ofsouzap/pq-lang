@@ -3,7 +3,7 @@ open Core
 type frontend_error = LexingError of char | ParsingError
 [@@deriving sexp, equal]
 
-type run_frontend_res = (Program.plain_t, frontend_error) Result.t
+type run_frontend_res = (Program.StdProgram.plain_t, frontend_error) Result.t
 [@@deriving sexp, equal]
 
 let lex_parse_from_lexbuf (lexbuf : Lexing.lexbuf) : run_frontend_res =
