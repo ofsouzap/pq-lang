@@ -15,7 +15,7 @@
   customType
   program
   typeChecker
-  quotient_type_checking
+  quotientTypeChecker
   parsing_errors
   parser
   lexer

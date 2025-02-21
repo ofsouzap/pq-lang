@@ -12,8 +12,8 @@ let () =
            Test_program_executor.suite;
            Test_program_executor_store.suite;
            Test_interpreting_integration.suite;
-           Test_type_checker.suite;
-           Test_quotient_type_checking.suite;
+           Test_typeChecker.suite;
+           Test_quotientTypeChecker.suite;
          ]
   in
   run_test_tt_main suite
