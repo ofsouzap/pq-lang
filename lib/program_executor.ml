@@ -72,7 +72,7 @@ let show_typing_error (terr : typing_error) : string =
   |> String.concat ~sep:", "
 
 type exec_err =
-  | TypeContextCreationError of Typing.typing_error
+  | TypeContextCreationError of TypeChecker.typing_error
   | TypingError of typing_error
   | UndefinedVarError of Varname.t
   | MisplacedFixError
@@ -84,7 +84,9 @@ type exec_err =
 
 let print_exec_err = function
   | TypeContextCreationError terr ->
-      "[TYPE CONTEXT CREATION ERROR: " ^ Typing.print_typing_error terr ^ "]"
+      "[TYPE CONTEXT CREATION ERROR: "
+      ^ TypeChecker.print_typing_error terr
+      ^ "]"
   | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
   | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
   | MisplacedFixError -> "[MISPLACED FIX NODE]"
@@ -141,10 +143,10 @@ let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
         (TypingError { empty_typing_error with expected_type = Some "Closure" })
 
 module Executor
-    (TypeCtx : Typing.TypingTypeContext)
-    (VarCtx : Typing.TypingVarContext) =
+    (TypeCtx : TypeChecker.TypingTypeContext)
+    (VarCtx : TypeChecker.TypingVarContext) =
 struct
-  module TypeChecker = Typing.TypeChecker (TypeCtx) (VarCtx)
+  module TypeChecker = TypeChecker.TypeChecker (TypeCtx) (VarCtx)
 
   (** Evaluate a subexpression, then apply a continuation function to the result
       if it an integer and give a typing error otherwise *)
@@ -325,4 +327,4 @@ struct
 end
 
 module SimpleExecutor =
-  Executor (Typing.SetTypingTypeContext) (Typing.ListTypingVarContext)
+  Executor (TypeChecker.SetTypingTypeContext) (TypeChecker.ListTypingVarContext)

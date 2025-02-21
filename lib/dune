@@ -14,7 +14,7 @@
   quotientType
   customType
   program
-  typing
+  typeChecker
   quotient_type_checking
   parsing_errors
   parser

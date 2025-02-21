@@ -17,7 +17,7 @@ let manual_tests : test list =
       >>= fun inp_prog ->
       TestingTypeChecker.type_program inp_prog
       |> Result.map_error ~f:(fun err ->
-             sprintf "Typing error: %s\n" (Typing.print_typing_error err))
+             sprintf "Typing error: %s\n" (TypeChecker.print_typing_error err))
       >>= fun inp_typed_program ->
       inp_typed_program |> TestingTypeChecker.typed_program_get_program
       |> Program.fmap_expr ~f:(fun (t, ()) ->

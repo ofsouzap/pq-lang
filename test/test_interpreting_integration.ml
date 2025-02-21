@@ -48,7 +48,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
   let open Result in
   match Frontend.run_frontend_string inp with
   | Ok prog -> (
-      match Typing.type_program prog with
+      match TypeChecker.type_program prog with
       | Ok typed_prog ->
           let result : Program_executor.exec_res =
             Program_executor.SimpleExecutor.execute_program typed_prog
@@ -57,7 +57,8 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
             ~printer:Program_executor.show_exec_res exp result
       | Error err ->
           failwith
-            (sprintf "Error in typing: %s" (Typing.print_typing_error err)))
+            (sprintf "Error in typing: %s" (TypeChecker.print_typing_error err))
+      )
   | Error err ->
       failwith
         (sprintf "Error in frontend: %s"

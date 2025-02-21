@@ -36,7 +36,7 @@ let test_cases_expr_typing : test list =
   let open Result in
   let create_test
       ( (type_ctx :
-          (SetTypingTypeContext.t, Typing.typing_error) Result.t option),
+          (SetTypingTypeContext.t, TypeChecker.typing_error) Result.t option),
         (e : Expr.plain_t),
         (t : (Vtype.t, typing_error) Result.t) ) : test =
     Expr.to_source_code e >:: fun _ ->
@@ -47,7 +47,7 @@ let test_cases_expr_typing : test list =
           failwith
             (sprintf "Error creating type context: %s" (print_typing_error err))
     in
-    let out = Typing.type_expr ~type_ctx e in
+    let out = TypeChecker.type_expr ~type_ctx e in
     match (out, t) with
     | Ok e_typed, Ok exp_t ->
         let out_t = e_typed |> Expr.node_val |> fst in
@@ -316,7 +316,7 @@ let test_cases_expr_typing_full_check : test list =
     name >:: fun _ ->
     let open Result in
     let out =
-      Typing.type_expr
+      TypeChecker.type_expr
         ~type_ctx:(Option.value ~default:SetTypingTypeContext.empty type_ctx)
         e
     in
@@ -521,7 +521,8 @@ let test_cases_arb_compound_expr_typing : test list =
   in
   let create_test
       ( (name : string),
-        (type_ctx : (TestingTypeCtx.t, Typing.typing_error) Result.t option),
+        (type_ctx :
+          (TestingTypeCtx.t, TypeChecker.typing_error) Result.t option),
         (e_gen : TestingTypeCtx.t -> (Vtype.t * Expr.plain_t) Gen.t) ) : test =
     let type_ctx : TestingTypeCtx.t =
       Option.value ~default:(Ok TestingTypeCtx.empty) type_ctx |> function

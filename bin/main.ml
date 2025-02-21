@@ -12,12 +12,12 @@ let () =
                | LexingError c -> sprintf "Lexing error: %c" c
                | ParsingError -> "Parsing error"))
     >>= fun prog ->
-    Typing.type_program prog
+    TypeChecker.type_program prog
     |> Result.map_error ~f:(fun err ->
-           sprintf "Typing error: %s" (Typing.print_typing_error err))
+           sprintf "Typing error: %s" (TypeChecker.print_typing_error err))
     >>= fun tp ->
     Quotient_type_checking.check_program
-      (Typing.SimpleTypeChecker.typed_program_get_program tp
+      (TypeChecker.SimpleTypeChecker.typed_program_get_program tp
       |> Program.fmap_pattern ~f:(fun (t, ()) ->
              ({ t } : Quotient_type_checking.pattern_tag))
       |> Program.fmap_expr ~f:(fun (t, ()) ->

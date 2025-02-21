@@ -67,7 +67,7 @@ type typing_error = {
 val empty_typing_error : typing_error
 
 type exec_err =
-  | TypeContextCreationError of Typing.typing_error
+  | TypeContextCreationError of TypeChecker.typing_error
       (** Error when forming a type context from a program *)
   | TypingError of typing_error
       (** Execution was halted due to a typing error *)
@@ -100,13 +100,13 @@ val show_exec_res : exec_res -> string
 (** Provides Expr execution functionality, given a typing context and variable
     context used for a type checker implementation *)
 module Executor : functor
-  (TypeCtx : Typing.TypingTypeContext)
-  (VarCtx : Typing.TypingVarContext)
+  (TypeCtx : TypeChecker.TypingTypeContext)
+  (VarCtx : TypeChecker.TypingVarContext)
   -> sig
   (** Execute a typed program using the type checker constructed from TypeCtx
       and VarCtx *)
   val execute_program :
-    ('tag_e, 'tag_p) Typing.TypeChecker(TypeCtx)(VarCtx).typed_program ->
+    ('tag_e, 'tag_p) TypeChecker.TypeChecker(TypeCtx)(VarCtx).typed_program ->
     exec_res
 end
 
@@ -114,5 +114,7 @@ end
     implementation *)
 module SimpleExecutor : sig
   include module type of
-      Executor (Typing.SetTypingTypeContext) (Typing.ListTypingVarContext)
+      Executor
+        (TypeChecker.SetTypingTypeContext)
+        (TypeChecker.ListTypingVarContext)
 end

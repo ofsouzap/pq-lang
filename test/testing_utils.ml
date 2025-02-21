@@ -69,15 +69,15 @@ let override_equal_exec_res (a : exec_res) (b : exec_res) : bool =
   | Error e1, Error e2 -> override_equal_exec_err e1 e2
   | _ -> equal_exec_res a b
 
-let override_equal_typing_error (a : Typing.typing_error)
-    (b : Typing.typing_error) : bool =
+let override_equal_typing_error (a : TypeChecker.typing_error)
+    (b : TypeChecker.typing_error) : bool =
   match (a, b) with
   | TypeMismatch (ta1, ta2, _), TypeMismatch (tb1, tb2, _) ->
       Vtype.equal ta1 tb1 && Vtype.equal ta2 tb2
-  | _ -> Typing.equal_typing_error a b
+  | _ -> TypeChecker.equal_typing_error a b
 
 module TestingTypeCtx : sig
-  include Typing.TypingTypeContext
+  include TypeChecker.TypingTypeContext
 
   val add_variant : t -> VariantType.t -> t
   val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
@@ -317,7 +317,7 @@ let default_testing_type_ctx_arb =
     }
 
 module TestingVarCtx : sig
-  include Typing.TypingVarContext
+  include TypeChecker.TypingVarContext
 
   val varnames_of_type : Vtype.t -> t -> string list
   val to_list : t -> (string * Vtype.t) list

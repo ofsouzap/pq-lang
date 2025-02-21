@@ -34,11 +34,11 @@ val override_equal_exec_res :
 (** A variation of the default typing error equality function, that ignores
     error messages *)
 val override_equal_typing_error :
-  Typing.typing_error -> Typing.typing_error -> bool
+  TypeChecker.typing_error -> TypeChecker.typing_error -> bool
 
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
-  include Typing.TypingTypeContext
+  include TypeChecker.TypingTypeContext
 
   (** Add a variant type to the type context *)
   val add_variant : t -> VariantType.t -> t
@@ -82,7 +82,7 @@ val default_testing_type_ctx_arb : TestingTypeCtx.t QCheck.arbitrary
 
 (** Implementation of a variable context useful for tests *)
 module TestingVarCtx : sig
-  include Typing.TypingVarContext
+  include TypeChecker.TypingVarContext
 
   (** Get a list of all the variables who have the given type *)
   val varnames_of_type : Vtype.t -> t -> string list
