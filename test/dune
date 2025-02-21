@@ -8,7 +8,7 @@
   test_utils
   test_expr
   test_program
-  test_typing
+  test_type_checker
   test_quotient_type_checking
   test_lexer_parser
   test_program_executor

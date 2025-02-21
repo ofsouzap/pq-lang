@@ -12,7 +12,7 @@ let () =
            Test_program_executor.suite;
            Test_program_executor_store.suite;
            Test_interpreting_integration.suite;
-           Test_typing.suite;
+           Test_type_checker.suite;
            Test_quotient_type_checking.suite;
          ]
   in
