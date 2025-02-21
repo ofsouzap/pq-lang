@@ -3,7 +3,7 @@ open Pq_lang
 open Utils
 open Typing
 open Parser
-open Program_executor
+open ProgramExecutor
 
 let default_max_gen_rec_depth : int = 10
 let default_max_variant_type_count : int = 5

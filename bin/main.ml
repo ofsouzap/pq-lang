@@ -27,10 +27,10 @@ let () =
              (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
             |> Sexp.to_string_hum))
     >>= fun () ->
-    Program_executor.SimpleExecutor.execute_program tp
+    ProgramExecutor.SimpleExecutor.execute_program tp
     |> Result.map_error ~f:(fun err ->
-           sprintf "Execution error: %s" (Program_executor.print_exec_err err))
-    >>| fun v -> Program_executor.sexp_of_value v |> Sexp.to_string_hum
+           sprintf "Execution error: %s" (ProgramExecutor.print_exec_err err))
+    >>| fun v -> ProgramExecutor.sexp_of_value v |> Sexp.to_string_hum
   in
   match res with
   | Ok ok_msg -> printf "%s\n" ok_msg

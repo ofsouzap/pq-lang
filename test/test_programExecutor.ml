@@ -4,17 +4,17 @@ open Pq_lang
 open Utils
 open Expr
 open Typing
-open Program_executor
+open ProgramExecutor
 open Testing_utils
 
 type basic_test_case =
   string * (unit, unit) SimpleTypeChecker.typed_program * exec_res
 
-let make_store (vars : (string * Program_executor.value) list) :
-    Program_executor.store =
+let make_store (vars : (string * ProgramExecutor.value) list) :
+    ProgramExecutor.store =
   List.fold_left vars
     ~f:(fun store (name, value) -> store_set store ~key:name ~value)
-    ~init:Program_executor.empty_store
+    ~init:ProgramExecutor.empty_store
 
 let type_expr ?(custom_types : CustomType.plain_t list option)
     ?(top_level_defns : (unit, unit) Program.top_level_defn list option)
@@ -107,12 +107,12 @@ let test_cases_pairs : basic_test_case list =
   List.map ~f:mapf
     [
       ( Expr.Pair ((), IntLit ((), 1), BoolLit ((), true)),
-        Program_executor.Pair (Int 1, Bool true) );
+        ProgramExecutor.Pair (Int 1, Bool true) );
       ( Pair
           ( (),
             Add ((), IntLit ((), 2), IntLit ((), 4)),
             BOr ((), BoolLit ((), true), BoolLit ((), false)) ),
-        Program_executor.Pair (Int 6, Bool true) );
+        ProgramExecutor.Pair (Int 6, Bool true) );
     ]
 
 let test_cases_integer_comparisons : basic_test_case list =
@@ -378,9 +378,9 @@ let create_test
       (inp : (unit, unit) SimpleTypeChecker.typed_program),
       (exp : exec_res) ) =
   name >:: fun _ ->
-  let out = Program_executor.SimpleExecutor.execute_program inp in
+  let out = ProgramExecutor.SimpleExecutor.execute_program inp in
   assert_equal exp out ~cmp:override_equal_exec_res
-    ~printer:Program_executor.show_exec_res
+    ~printer:ProgramExecutor.show_exec_res
 
 let suite =
   "Expr Executor"

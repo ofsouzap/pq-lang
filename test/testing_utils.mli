@@ -24,12 +24,12 @@ val token_printer : Parser.token list -> string
 (** A variation of the default `exec_err` equality function, that considers all
     typing errors equal *)
 val override_equal_exec_err :
-  Program_executor.exec_err -> Program_executor.exec_err -> bool
+  ProgramExecutor.exec_err -> ProgramExecutor.exec_err -> bool
 
 (** A variation of the default `exec_res` equality function, that considers all
     typing errors equal *)
 val override_equal_exec_res :
-  Program_executor.exec_res -> Program_executor.exec_res -> bool
+  ProgramExecutor.exec_res -> ProgramExecutor.exec_res -> bool
 
 (** A variation of the default typing error equality function, that ignores
     error messages *)

@@ -11,6 +11,6 @@
   test_typeChecker
   test_quotientTypeChecker
   test_lexer_parser
-  test_program_executor
-  test_program_executor_store
+  test_programExecutor
+  test_programExecutor_store
   test_interpreting_integration))

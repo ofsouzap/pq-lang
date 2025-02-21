@@ -20,7 +20,7 @@
   parser
   lexer
   frontend
-  program_executor)
+  programExecutor)
  (private_modules debug_tools)
  (preprocess
   (pps ppx_jane)))

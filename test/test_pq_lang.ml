@@ -9,8 +9,8 @@ let () =
            Test_expr.suite;
            Test_program.suite;
            Test_lexer_parser.suite;
-           Test_program_executor.suite;
-           Test_program_executor_store.suite;
+           Test_programExecutor.suite;
+           Test_programExecutor_store.suite;
            Test_interpreting_integration.suite;
            Test_typeChecker.suite;
            Test_quotientTypeChecker.suite;

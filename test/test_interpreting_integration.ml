@@ -1,7 +1,7 @@
 open Core
 open OUnit2
 open Pq_lang
-open Program_executor
+open ProgramExecutor
 open Testing_utils
 
 let program_triangles (x : int) =
@@ -50,11 +50,11 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
   | Ok prog -> (
       match TypeChecker.type_program prog with
       | Ok typed_prog ->
-          let result : Program_executor.exec_res =
-            Program_executor.SimpleExecutor.execute_program typed_prog
+          let result : ProgramExecutor.exec_res =
+            ProgramExecutor.SimpleExecutor.execute_program typed_prog
           in
           assert_equal ~cmp:override_equal_exec_res
-            ~printer:Program_executor.show_exec_res exp result
+            ~printer:ProgramExecutor.show_exec_res exp result
       | Error err ->
           failwith
             (sprintf "Error in typing: %s" (TypeChecker.print_typing_error err))
