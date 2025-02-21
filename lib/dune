@@ -10,7 +10,7 @@
   varname
   pattern
   expr
-  unification
+  unifier
   quotientType
   customType
   program

@@ -60,8 +60,7 @@ type tag_expr = (expr_tag, pattern_tag) Expr.t [@@deriving sexp, equal]
 let pattern_tag_to_expr_tag (v : pattern_tag) : expr_tag =
   ({ t = v.t } : expr_tag)
 
-type tag_unifier = (expr_tag, pattern_tag) Unification.unifier
-[@@deriving sexp, equal]
+type tag_unifier = (expr_tag, pattern_tag) Unifier.t [@@deriving sexp, equal]
 
 type tag_quotient_type_eqcons = (expr_tag, pattern_tag) QuotientType.eqcons
 [@@deriving sexp, equal]
@@ -1439,8 +1438,7 @@ let perform_quotient_match_check ~(existing_names : StringSet.t)
       (* Iterating through each case of the match *)
       List.fold_result ~init:existing_names
         (List.filter_map fresh_name_eqconss ~f:(fun eqcons ->
-             Unification.simply_find_unifier
-               ~bound_names_in_from:StringSet.empty
+             Unifier.simply_find_unifier ~bound_names_in_from:StringSet.empty
                ~from_expr:
                  (case_p |> Expr.of_pattern ~convert_tag:pattern_tag_to_expr_tag)
                ~to_expr:
@@ -1459,7 +1457,7 @@ let perform_quotient_match_check ~(existing_names : StringSet.t)
               eqcons.bindings
           in
           let l =
-            Unification.apply_to_expr ~unifier:expr_to_eqcons_unifier case_e
+            Unifier.apply_to_expr ~unifier:expr_to_eqcons_unifier case_e
           in
           let r = reform_match_with_arg (snd eqcons.body) in
           FlatPattern.of_expr ~existing_names l

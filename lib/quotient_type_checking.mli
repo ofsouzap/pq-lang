@@ -25,8 +25,7 @@ type tag_expr = (expr_tag, pattern_tag) Expr.t [@@deriving sexp, equal]
 
 val pattern_tag_to_expr_tag : pattern_tag -> expr_tag
 
-type tag_unifier = (expr_tag, pattern_tag) Unification.unifier
-[@@deriving sexp, equal]
+type tag_unifier = (expr_tag, pattern_tag) Unifier.t [@@deriving sexp, equal]
 
 type tag_quotient_type_eqcons = (expr_tag, pattern_tag) QuotientType.eqcons
 [@@deriving sexp, equal]
