@@ -1,9 +1,9 @@
 open Core
 open Pq_lang
 module Program = Program.StdProgram
-module TypeChecker = TypeChecker.StdSimpleTypeChecker
 module QuotientTypeChecker = QuotientTypeChecker.Make
-module ProgramExecutor = ProgramExecutor.MakeStd (TypeChecker)
+module ProgramExecutor = ProgramExecutor.SimpleExecutor
+module TypeChecker = ProgramExecutor.TypeChecker
 
 let () =
   let open Result in
@@ -34,7 +34,7 @@ let () =
     ProgramExecutor.execute_program tp
     |> Result.map_error ~f:(fun err ->
            sprintf "Execution error: %s" (ProgramExecutor.print_exec_err err))
-    >>| fun v -> ProgramExecutor.sexp_of_value v |> Sexp.to_string_hum
+    >>| fun v -> ProgramExecutor.Store.sexp_of_value v |> Sexp.to_string_hum
   in
   match res with
   | Ok ok_msg -> printf "%s\n" ok_msg
