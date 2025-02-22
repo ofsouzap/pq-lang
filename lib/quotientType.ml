@@ -79,7 +79,7 @@ module type S = sig
 end
 
 module Make (Expr : Expr.S) :
-  S with module Pattern := Expr.Pattern and module Expr := Expr = struct
+  S with module Pattern = Expr.Pattern and module Expr = Expr = struct
   module Pattern = Expr.Pattern
   module Expr = Expr
 
@@ -200,12 +200,6 @@ module Make (Expr : Expr.S) :
       qt
 end
 
-module StdQuotientType : sig
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  include S with module Pattern := Pattern and module Expr := Expr
-end = struct
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  include Make (Expr)
-end
+module StdQuotientType :
+  S with module Pattern = Pattern.StdPattern and module Expr = Expr.StdExpr =
+  Make (Expr.StdExpr)

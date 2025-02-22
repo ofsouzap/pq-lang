@@ -53,12 +53,11 @@ module type S = sig
   end
 end
 
-module StdPattern : sig
-  type 'a t =
-    | PatName of 'a * Varname.t * Vtype.t
-        (** A named and typed variable in a pattern *)
-    | PatPair of 'a * 'a t * 'a t  (** A pair pattern *)
-    | PatConstructor of 'a * string * 'a t  (** A constructor pattern *)
+type 'a std_pattern =
+  | PatName of 'a * Varname.t * Vtype.t
+      (** A named and typed variable in a pattern *)
+  | PatPair of 'a * 'a std_pattern * 'a std_pattern  (** A pair pattern *)
+  | PatConstructor of 'a * string * 'a std_pattern  (** A constructor pattern *)
+[@@deriving sexp, equal]
 
-  include S with type 'a t := 'a t
-end
+module StdPattern : S with type 'a t = 'a std_pattern

@@ -78,10 +78,7 @@ module type S = sig
 end
 
 module Make (Expr : Expr.S) :
-  S with module Pattern := Expr.Pattern and module Expr := Expr
+  S with module Pattern = Expr.Pattern and module Expr = Expr
 
-module StdQuotientType : sig
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  include S with module Pattern := Pattern and module Expr := Expr
-end
+module StdQuotientType :
+  S with module Pattern = Pattern.StdPattern and module Expr = Expr.StdExpr

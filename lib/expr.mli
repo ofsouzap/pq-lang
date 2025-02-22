@@ -187,15 +187,14 @@ end
 
 (** Make a standard expression implementation from some pattern implementation
 *)
-module MakeStd (Pattern : Pattern.S) : StdS with module Pattern := Pattern
+module MakeStd (Pattern : Pattern.S) : StdS with module Pattern = Pattern
 
 (** The standard expression implementation with the standard pattern
     implementation *)
 module StdExpr : sig
-  module Pattern = Pattern.StdPattern
-  include StdS with module Pattern := Pattern
-
+  include StdS with module Pattern = Pattern.StdPattern
+  (*
   (** Create a possibly-open expression from a pattern *)
   val of_pattern :
-    convert_tag:('tag_p -> 'tag_e) -> 'tag_p Pattern.t -> ('tag_e, 'tag_p) t
+    convert_tag:('tag_p -> 'tag_e) -> 'tag_p Pattern.t -> ('tag_e, 'tag_p) t *)
 end
