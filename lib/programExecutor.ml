@@ -4,149 +4,301 @@ open Utils
 type expr_tag = unit [@@deriving sexp, equal]
 type pattern_tag = unit [@@deriving sexp, equal]
 
-type closure_props = {
-  param : Varname.t * Vtype.t;
-  out_type : Vtype.t;
-  body : (expr_tag, pattern_tag) Expr.typed_t;
-  store : store;
-  recursive : [ `Recursive of Varname.t | `NonRecursive ];
-}
-[@@deriving sexp, equal]
+module type S = sig
+  module Pattern : Pattern.S
+  module Expr : Expr.S with module Pattern = Pattern
 
-and value =
-  | Unit
-  | Int of int
-  | Bool of bool
-  | Closure of closure_props
-  | Pair of value * value
-  | VariantTypeValue of VariantType.t * string * value
-[@@deriving sexp, equal]
+  module Program :
+    Program.S with module Pattern = Pattern and module Expr = Expr
 
-and store = value Varname.Map.t [@@deriving sexp, equal]
+  module TypingError :
+    TypeChecker.TypingError.S
+      with module Pattern = Pattern
+       and module Expr = Expr
 
-let empty_store = (Varname.Map.empty : store)
-let store_get store key = Map.find store key
-let store_set store ~key ~value = Map.set store ~key ~data:value
-let store_compare = equal_store
-let store_traverse = Map.to_alist ~key_order:`Increasing
+  module TypeCtx :
+    TypeChecker.TypeContext.S with module CustomType = Program.CustomType
 
-let rec value_type = function
-  | Unit -> Vtype.VTypeUnit
-  | Int _ -> Vtype.VTypeInt
-  | Bool _ -> Vtype.VTypeBool
-  | Closure closure -> Vtype.VTypeFun (snd closure.param, closure.out_type)
-  | Pair (v1, v2) -> Vtype.VTypePair (value_type v1, value_type v2)
-  | VariantTypeValue ((vt_name, _), _, _) -> Vtype.VTypeCustom vt_name
+  module VarCtx : TypeChecker.VarContext.S
 
-type typing_error = {
-  expected_type : string option;
-  actual_type : string option;
-  variable_name : Varname.t option;
-  custom_message : string option;
-}
-[@@deriving sexp, equal]
+  module TypeChecker :
+    TypeChecker.S
+      with module Pattern = Pattern
+       and module Expr = Expr
+       and module Program = Program
+       and module TypingError = TypingError
+       and module TypeCtx = TypeCtx
+       and module VarCtx = VarCtx
 
-let empty_typing_error =
-  {
-    expected_type = None;
-    actual_type = None;
-    variable_name = None;
-    custom_message = None;
+  module Store : sig
+    (** Properties of a closure *)
+    type closure_props = {
+      param : Varname.t * Vtype.t;
+          (** The function's parameter's name and type *)
+      out_type : Vtype.t;  (** The output type of the function *)
+      body : (expr_tag, pattern_tag) Expr.typed_t;
+          (** The body of the function *)
+      store : store;  (** The store to use when executing the function *)
+      recursive : [ `Recursive of Varname.t | `NonRecursive ];
+          (** Whether the function is recursive or not. If so, the name of the
+              function itself, that is made re-accessible when executing the
+              function *)
+    }
+    [@@deriving sexp, equal]
+
+    (** A resulting value from executing an Expr *)
+    and value =
+      | Unit  (** The unit value *)
+      | Int of int  (** An integer value *)
+      | Bool of bool  (** A boolean value *)
+      | Closure of closure_props  (** A function closure *)
+      | Pair of value * value  (** A pair value *)
+      | VariantTypeValue of VariantType.t * string * value
+          (** A value of a variant type, with the type itself and the
+              constructor name specified *)
+    [@@deriving sexp, equal]
+
+    (** A store, containing the values of variables under the current context *)
+    and store [@@deriving sexp, equal]
+
+    (** The empty store *)
+    val empty_store : store
+
+    (** Get a named variable's value from a store *)
+    val store_get : store -> Varname.t -> value option
+
+    (** Set a named variable's value to the provided value in the provided store
+        and return the resulting store *)
+    val store_set : store -> key:Varname.t -> value:value -> store
+
+    (** Check if two stores are equal. This is, they have the exact same set of
+        keys, and each key maps to the same value in both stores *)
+    val store_compare : store -> store -> bool
+
+    (** Traverse the entire store's variable names and values in arbitrary order
+        into a list *)
+    val store_traverse : store -> (Varname.t * value) list
+  end
+
+  (** Details of a typing error. Fields are optional in case they can't be
+      provided *)
+  type typing_error = {
+    expected_type : string option;
+    actual_type : string option;
+    variable_name : Varname.t option;
+    custom_message : string option;
   }
+  [@@deriving sexp, equal]
 
-let show_typing_error (terr : typing_error) : string =
-  (terr.variable_name
-  |> Option.value_map
-       ~f:(fun vname -> [ "Variable name: " ^ vname ])
-       ~default:[])
-  @ (terr.expected_type
+  (** Details for a typing error that are the default empty values *)
+  val empty_typing_error : typing_error
+
+  type exec_err =
+    | TypeContextCreationError of TypingError.t
+        (** Error when forming a type context from a program *)
+    | TypingError of typing_error
+        (** Execution was halted due to a typing error *)
+    | UndefinedVarError of Varname.t
+        (** Execution was halted due to usage of an undefined variable of the
+            provided name *)
+    | MisplacedFixError  (** Fix node was inappropriately used in the Expr *)
+    | FixApplicationError
+        (** Application of the Fix node was done on an invalid target *)
+    | MaxRecursionDepthExceeded
+        (** The maximum recursion depth of the execution has been exceeded so
+            the program was terminated *)
+    | IncompleteMatchError
+        (** No cases could be found that match the provided value in a match
+            statement *)
+    | UnknownVariantTypeConstructor of string
+        (** No variant type could be found with a constructor of the specified
+            name *)
+  [@@deriving sexp, equal]
+
+  (** Print human-readable string representation of an execution error *)
+  val print_exec_err : exec_err -> string
+
+  (** The result of executing an Expr *)
+  type exec_res = (Store.value, exec_err) Result.t [@@deriving sexp, equal]
+
+  (** String representation of an execution result *)
+  val show_exec_res : exec_res -> string
+
+  (** Execute a typed program using the type checker constructed from TypeCtx
+      and VarCtx *)
+  val execute_program : ('tag_e, 'tag_p) TypeChecker.typed_program -> exec_res
+end
+
+module MakeStd
+    (TypeChecker :
+      TypeChecker.S
+        with module Pattern = Pattern.StdPattern
+         and module Expr = Expr.StdExpr
+         and module Program = Program.StdProgram
+         and module TypingError = TypeChecker.TypingError.StdTypingError
+         and module TypeCtx.CustomType = CustomType.StdCustomType
+         and module TypeCtx.TypingError = TypeChecker.TypingError.StdTypingError) :
+  S
+    with module Pattern := Pattern.StdPattern
+     and module Expr := Expr.StdExpr
+     and module Program := Program.StdProgram
+     and module TypingError := TypeChecker.TypingError
+     and module TypeCtx := TypeChecker.TypeCtx
+     and module VarCtx := TypeChecker.VarCtx
+     and module TypeChecker := TypeChecker = struct
+  module Pattern = TypeChecker.Pattern
+  module Expr = TypeChecker.Expr
+  module QuotientType = TypeChecker.Program.QuotientType
+  module CustomType = TypeChecker.Program.CustomType
+  module Program = TypeChecker.Program
+  module TypingError = TypeChecker.TypingError
+  module TypeCtx = TypeChecker.TypeCtx
+  module VarCtx = TypeChecker.VarCtx
+
+  module Store = struct
+    type closure_props = {
+      param : Varname.t * Vtype.t;
+      out_type : Vtype.t;
+      body : (expr_tag, pattern_tag) Expr.typed_t;
+      store : store;
+      recursive : [ `Recursive of Varname.t | `NonRecursive ];
+    }
+    [@@deriving sexp, equal]
+
+    and value =
+      | Unit
+      | Int of int
+      | Bool of bool
+      | Closure of closure_props
+      | Pair of value * value
+      | VariantTypeValue of VariantType.t * string * value
+    [@@deriving sexp, equal]
+
+    and store = value Varname.Map.t [@@deriving sexp, equal]
+
+    let empty_store = (Varname.Map.empty : store)
+    let store_get store key = Map.find store key
+    let store_set store ~key ~value = Map.set store ~key ~data:value
+    let store_compare = equal_store
+
+    let store_traverse : store -> (Varname.t * value) list =
+      Map.to_alist ~key_order:`Increasing
+
+    let rec value_type = function
+      | Unit -> Vtype.VTypeUnit
+      | Int _ -> Vtype.VTypeInt
+      | Bool _ -> Vtype.VTypeBool
+      | Closure closure -> Vtype.VTypeFun (snd closure.param, closure.out_type)
+      | Pair (v1, v2) -> Vtype.VTypePair (value_type v1, value_type v2)
+      | VariantTypeValue ((vt_name, _), _, _) -> Vtype.VTypeCustom vt_name
+  end
+
+  open Store
+
+  type typing_error = {
+    expected_type : string option;
+    actual_type : string option;
+    variable_name : Varname.t option;
+    custom_message : string option;
+  }
+  [@@deriving sexp, equal]
+
+  let empty_typing_error =
+    {
+      expected_type = None;
+      actual_type = None;
+      variable_name = None;
+      custom_message = None;
+    }
+
+  let show_typing_error (terr : typing_error) : string =
+    (terr.variable_name
     |> Option.value_map
-         ~f:(fun vname -> [ "Expected type: " ^ vname ])
+         ~f:(fun vname -> [ "Variable name: " ^ vname ])
          ~default:[])
-  @ (terr.actual_type
-    |> Option.value_map
-         ~f:(fun vname -> [ "Actual type: " ^ vname ])
-         ~default:[])
-  @ (terr.custom_message
-    |> Option.value_map ~f:(fun vname -> [ vname ]) ~default:[])
-  |> String.concat ~sep:", "
+    @ (terr.expected_type
+      |> Option.value_map
+           ~f:(fun vname -> [ "Expected type: " ^ vname ])
+           ~default:[])
+    @ (terr.actual_type
+      |> Option.value_map
+           ~f:(fun vname -> [ "Actual type: " ^ vname ])
+           ~default:[])
+    @ (terr.custom_message
+      |> Option.value_map ~f:(fun vname -> [ vname ]) ~default:[])
+    |> String.concat ~sep:", "
 
-type exec_err =
-  | TypeContextCreationError of TypeChecker.typing_error
-  | TypingError of typing_error
-  | UndefinedVarError of Varname.t
-  | MisplacedFixError
-  | FixApplicationError
-  | MaxRecursionDepthExceeded
-  | IncompleteMatchError
-  | UnknownVariantTypeConstructor of string
-[@@deriving sexp, equal]
+  type exec_err =
+    | TypeContextCreationError of TypingError.t
+    | TypingError of typing_error
+    | UndefinedVarError of Varname.t
+    | MisplacedFixError
+    | FixApplicationError
+    | MaxRecursionDepthExceeded
+    | IncompleteMatchError
+    | UnknownVariantTypeConstructor of string
+  [@@deriving sexp, equal]
 
-let print_exec_err = function
-  | TypeContextCreationError terr ->
-      "[TYPE CONTEXT CREATION ERROR: "
-      ^ TypeChecker.print_typing_error terr
-      ^ "]"
-  | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
-  | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
-  | MisplacedFixError -> "[MISPLACED FIX NODE]"
-  | FixApplicationError -> "[Fix APPLICATION ERROR]"
-  | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]"
-  | IncompleteMatchError -> "[INCOMPLETE MATCH]"
-  | UnknownVariantTypeConstructor x ->
-      "[UNKNOWN VARIANT TYPE CONSTRUCTOR: " ^ x ^ "]"
+  let print_exec_err = function
+    | TypeContextCreationError terr ->
+        "[TYPE CONTEXT CREATION ERROR: " ^ TypingError.print terr ^ "]"
+    | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
+    | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
+    | MisplacedFixError -> "[MISPLACED FIX NODE]"
+    | FixApplicationError -> "[Fix APPLICATION ERROR]"
+    | MaxRecursionDepthExceeded -> "[MAXIMUM RECURSION DEPTH EXCEEDED]"
+    | IncompleteMatchError -> "[INCOMPLETE MATCH]"
+    | UnknownVariantTypeConstructor x ->
+        "[UNKNOWN VARIANT TYPE CONSTRUCTOR: " ^ x ^ "]"
 
-type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
+  type exec_res = (value, exec_err) Result.t [@@deriving sexp, equal]
 
-let show_exec_res = function
-  | Ok v -> sexp_of_value v |> Sexp.to_string_hum
-  | Error e -> print_exec_err e
+  let show_exec_res = function
+    | Ok v -> sexp_of_value v |> Sexp.to_string_hum
+    | Error e -> print_exec_err e
 
-let rec match_pattern (p : 'tag_p Pattern.t) (v : value) :
-    (Varname.t * value) list option =
-  let open Option in
-  match (p, v) with
-  | PatName (_, xname, xtype), v ->
-      if value_type v |> Vtype.equal xtype then Some [ (xname, v) ] else None
-  | PatPair (_, p1, p2), Pair (v1, v2) ->
-      match_pattern p1 v1 >>= fun m1 ->
-      match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)
-  | PatPair _, _ -> None
-  | PatConstructor (_, p_c_name, p1), VariantTypeValue (_, v_c_name, v') ->
-      if equal_string p_c_name v_c_name then match_pattern p1 v' else None
-  | PatConstructor _, _ -> None
+  let rec match_pattern (p : 'tag_p Pattern.t) (v : value) :
+      (Varname.t * value) list option =
+    let open Option in
+    match (p, v) with
+    | PatName (_, xname, xtype), v ->
+        if value_type v |> Vtype.equal xtype then Some [ (xname, v) ] else None
+    | PatPair (_, p1, p2), Pair (v1, v2) ->
+        match_pattern p1 v1 >>= fun m1 ->
+        match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)
+    | PatPair _, _ -> None
+    | PatConstructor (_, p_c_name, p1), VariantTypeValue (_, v_c_name, v') ->
+        if equal_string p_c_name v_c_name then match_pattern p1 v' else None
+    | PatConstructor _, _ -> None
 
-(** Apply a function to the execution value if it is an integer, otherwise
-    return a typing error *)
-let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
-  match x with
-  | Int i -> cnt i
-  | _ ->
-      Error (TypingError { empty_typing_error with expected_type = Some "Int" })
+  (** Apply a function to the execution value if it is an integer, otherwise
+      return a typing error *)
+  let apply_to_int (cnt : int -> exec_res) (x : value) : exec_res =
+    match x with
+    | Int i -> cnt i
+    | _ ->
+        Error
+          (TypingError { empty_typing_error with expected_type = Some "Int" })
 
-(** Apply a function to the execution value if it is a boolean, otherwise return
-    a typing error *)
-let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
-  match x with
-  | Bool b -> cnt b
-  | _ ->
-      Error
-        (TypingError { empty_typing_error with expected_type = Some "Bool" })
+  (** Apply a function to the execution value if it is a boolean, otherwise
+      return a typing error *)
+  let apply_to_bool (cnt : bool -> exec_res) (x : value) : exec_res =
+    match x with
+    | Bool b -> cnt b
+    | _ ->
+        Error
+          (TypingError { empty_typing_error with expected_type = Some "Bool" })
 
-(** Apply a function to the execution value if it is a function, otherwise
-    return a typing error *)
-let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res =
-  match x with
-  | Closure x -> cnt x
-  | _ ->
-      Error
-        (TypingError { empty_typing_error with expected_type = Some "Closure" })
-
-module Executor
-    (TypeCtx : TypeChecker.TypingTypeContext)
-    (VarCtx : TypeChecker.TypingVarContext) =
-struct
-  module TypeChecker = TypeChecker.TypeChecker (TypeCtx) (VarCtx)
+  (** Apply a function to the execution value if it is a function, otherwise
+      return a typing error *)
+  let apply_to_closure (cnt : closure_props -> exec_res) (x : value) : exec_res
+      =
+    match x with
+    | Closure x -> cnt x
+    | _ ->
+        Error
+          (TypingError
+             { empty_typing_error with expected_type = Some "Closure" })
 
   (** Evaluate a subexpression, then apply a continuation function to the result
       if it an integer and give a typing error otherwise *)
@@ -326,5 +478,66 @@ struct
       Expr.fmap_pattern ~f:(fun (t, _) -> (t, ())))
 end
 
-module SimpleExecutor =
-  Executor (TypeChecker.SetTypingTypeContext) (TypeChecker.ListTypingVarContext)
+module SimpleExecutor : sig
+  module Pattern = Pattern.StdPattern
+  module Expr = Expr.StdExpr
+  module CustomType = CustomType.StdCustomType
+  module Program = Program.StdProgram
+
+  module TypingError :
+    TypeChecker.TypingError.S
+      with module Pattern = Program.Pattern
+       and module Expr = Program.Expr
+
+  module TypeCtx :
+    TypeChecker.TypeContext.S
+      with module CustomType = Program.CustomType
+       and module TypingError = TypingError
+
+  module VarCtx = TypeChecker.VarContext.ListTypingVarContext
+
+  module TypeChecker :
+    TypeChecker.S
+      with module Pattern = Program.Pattern
+       and module Expr = Program.Expr
+       and module Program = Program
+       and module TypingError = TypingError
+       and module TypeCtx = TypeCtx
+       and module VarCtx = VarCtx
+
+  include
+    S
+      with module Pattern := Program.Expr.Pattern
+       and module Expr := Program.Expr
+       and module Program := Program
+       and module TypingError := TypingError
+       and module TypeCtx := TypeCtx
+       and module VarCtx := VarCtx
+       and module TypeChecker := TypeChecker
+end = struct
+  module Pattern = Pattern.StdPattern
+  module Expr = Expr.StdExpr
+  module CustomType = CustomType.StdCustomType
+  module Program = Program.StdProgram
+  module TypingError = TypeChecker.TypingError.StdTypingError
+
+  module TypeCtx = struct
+    module CustomType = CustomType
+    module TypingError = TypingError
+    include TypeChecker.TypeContext.MakeSet (CustomType) (TypingError)
+  end
+
+  module VarCtx = TypeChecker.VarContext.ListTypingVarContext
+
+  module TypeChecker = struct
+    module Pattern = Pattern
+    module Expr = Expr
+    module Program = Program
+    module TypingError = TypingError
+    module TypeCtx = TypeCtx
+    module VarCtx = VarCtx
+    include TypeChecker.MakeStd (TypeCtx) (VarCtx)
+  end
+
+  include MakeStd (TypeChecker)
+end
