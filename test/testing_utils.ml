@@ -1,9 +1,14 @@
 open Core
 open Pq_lang
 open Utils
-open Typing
 open Parser
-open ProgramExecutor
+module ProgramExecutor = ProgramExecutor.SimpleExecutor
+module Program = ProgramExecutor.Program
+module TypeChecker = ProgramExecutor.TypeChecker
+module CustomType = Program.CustomType
+module QuotientType = CustomType.QuotientType
+module Expr = Program.Expr
+module Pattern = Program.Pattern
 
 let default_max_gen_rec_depth : int = 10
 let default_max_variant_type_count : int = 5
@@ -59,25 +64,33 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string_hum sexp_of_token) tokens)
 
-let override_equal_exec_err (a : exec_err) (b : exec_err) : bool =
+let override_equal_exec_err (a : ProgramExecutor.exec_err)
+    (b : ProgramExecutor.exec_err) : bool =
   match (a, b) with
   | TypingError _, TypingError _ -> true
-  | _ -> equal_exec_err a b
+  | _ -> ProgramExecutor.equal_exec_err a b
 
-let override_equal_exec_res (a : exec_res) (b : exec_res) : bool =
+let override_equal_exec_res (a : ProgramExecutor.exec_res)
+    (b : ProgramExecutor.exec_res) : bool =
   match (a, b) with
   | Error e1, Error e2 -> override_equal_exec_err e1 e2
-  | _ -> equal_exec_res a b
+  | _ -> ProgramExecutor.equal_exec_res a b
 
-let override_equal_typing_error (a : TypeChecker.typing_error)
-    (b : TypeChecker.typing_error) : bool =
+let override_equal_typing_error (a : TypeChecker.TypingError.t)
+    (b : TypeChecker.TypingError.t) : bool =
   match (a, b) with
   | TypeMismatch (ta1, ta2, _), TypeMismatch (tb1, tb2, _) ->
       Vtype.equal ta1 tb1 && Vtype.equal ta2 tb2
-  | _ -> TypeChecker.equal_typing_error a b
+  | _ -> TypeChecker.TypingError.equal a b
 
 module TestingTypeCtx : sig
-  include TypeChecker.TypingTypeContext
+  module CustomType = CustomType
+  module TypingError = TypeChecker.TypingError
+
+  include
+    Pq_lang.TypeChecker.TypeContext.S
+      with module CustomType := CustomType
+       and module TypingError := TypeChecker.TypingError
 
   val add_variant : t -> VariantType.t -> t
   val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
@@ -102,7 +115,8 @@ module TestingTypeCtx : sig
          and type arb_options := gen_options
   end
 end = struct
-  open Typing
+  module CustomType = CustomType
+  module TypingError = TypeChecker.TypingError
 
   type t = CustomType.plain_t list
   type this_t = t
@@ -110,7 +124,7 @@ end = struct
   let empty = []
 
   let create ~(custom_types : ('tag_e, 'tag_p) CustomType.t list) :
-      (t, typing_error) Result.t =
+      (t, TypeChecker.TypingError.t) Result.t =
     Ok (List.map ~f:CustomType.to_plain_custom_type custom_types)
 
   let find_type_defn_by_name ctx td_name =
@@ -130,7 +144,7 @@ end = struct
       | CustomType.QuotientType _ -> None)
 
   let rec subtype (ctx : t) (t1 : Vtype.t) (t2 : Vtype.t) :
-      (bool, typing_error) Result.t =
+      (bool, TypeChecker.TypingError.t) Result.t =
     let open Result in
     match (t1, t2) with
     | VTypeInt, VTypeInt | VTypeBool, VTypeBool | VTypeUnit, VTypeUnit ->
@@ -148,10 +162,12 @@ end = struct
     | VTypeFun _, _ -> Ok false
     | VTypeCustom c1_name, VTypeCustom c2_name -> (
         find_type_defn_by_name ctx c1_name
-        |> Result.of_option ~error:(UndefinedTypeName c1_name)
+        |> Result.of_option
+             ~error:(TypeChecker.TypingError.UndefinedTypeName c1_name)
         >>= fun ct1 ->
         find_type_defn_by_name ctx c2_name
-        |> Result.of_option ~error:(UndefinedTypeName c2_name)
+        |> Result.of_option
+             ~error:(TypeChecker.TypingError.UndefinedTypeName c2_name)
         >>= fun ct2 ->
         match (ct1, ct2) with
         | VariantType (vt1_name, _), VariantType (vt2_name, _) ->
@@ -317,7 +333,7 @@ let default_testing_type_ctx_arb =
     }
 
 module TestingVarCtx : sig
-  include TypeChecker.TypingVarContext
+  include Pq_lang.TypeChecker.VarContext.S
 
   val varnames_of_type : Vtype.t -> t -> string list
   val to_list : t -> (string * Vtype.t) list
@@ -400,7 +416,29 @@ end = struct
   end
 end
 
-module TestingTypeChecker = TypeChecker (TestingTypeCtx) (TestingVarCtx)
+module TestingTypeChecker : sig
+  module Pattern = Pq_lang.Pattern.StdPattern
+  module Expr = Pq_lang.Expr.StdExpr
+  module Program = Pq_lang.Program.StdProgram
+
+  module TypingError :
+    Pq_lang.TypeChecker.TypingError.S
+      with module Pattern = Program.Expr.Pattern
+       and module Expr = Program.Expr
+
+  module TypeCtx = TestingTypeCtx
+  module VarCtx = TestingVarCtx
+
+  include
+    Pq_lang.TypeChecker.S
+      with module Pattern := Program.Expr.Pattern
+       and module Expr := Program.Expr
+       and module Program := Program
+       and module TypingError := TypingError
+       and module TypeCtx := TypeCtx
+       and module VarCtx := VarCtx
+end =
+  Pq_lang.TypeChecker.MakeStd (TestingTypeCtx) (TestingVarCtx)
 
 module UnitTag = struct
   type t = unit [@@deriving sexp, equal]
