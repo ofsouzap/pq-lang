@@ -6,21 +6,20 @@ module Expr = Expr.StdExpr
 module Unifier = Unifier.StdUnifier
 module QuotientType = QuotientType.StdQuotientType
 module CustomType = CustomType.StdCustomType
-module Program = Program.StdProgram
 
-let add_variant_type_definition_to_program (p : Program.plain_t) (vt : VariantType.t) : Program.plain_t =
+let add_variant_type_definition_to_program (p : Program.StdProgram.plain_t) (vt : VariantType.t) : Program.StdProgram.plain_t =
   {
     p with
     custom_types = (VariantType vt) :: p.custom_types;
   }
 
-let add_quotient_type_definition_to_program (p : Program.plain_t) (qt : QuotientType.plain_t) : Program.plain_t =
+let add_quotient_type_definition_to_program (p : Program.StdProgram.plain_t) (qt : QuotientType.plain_t) : Program.StdProgram.plain_t =
   {
     p with
     custom_types = (QuotientType qt) :: p.custom_types;
   }
 
-let add_top_level_definition_to_program (p : Program.plain_t) (defn : Program.plain_top_level_defn) : Program.plain_t =
+let add_top_level_definition_to_program (p : Program.StdProgram.plain_t) (defn : Program.StdProgram.plain_top_level_defn) : Program.StdProgram.plain_t =
   {
     p with
     top_level_defns = defn :: p.top_level_defns;
@@ -76,11 +75,11 @@ let add_top_level_definition_to_program (p : Program.plain_t) (defn : Program.pl
 %type <QuotientType.plain_t> quotient_type_definition
 
 %type <(string * Vtype.t)> top_level_defn_param
-%type <Program.plain_top_level_defn> top_level_defn
+%type <Program.StdProgram.plain_top_level_defn> top_level_defn
 
 // Main program
 
-%start <Program.plain_t> prog
+%start <Program.StdProgram.plain_t> prog
 
 %%
 
@@ -205,8 +204,8 @@ top_level_defn_param:
 ;
 
 top_level_defn:
-  | LET fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.{ recursive=false; name=fname; param; return_t; body=e } }
-  | LET REC fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.{ recursive=true; name=fname; param; return_t; body=e } }
+  | LET fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.StdProgram.{ recursive=false; name=fname; param; return_t; body=e } }
+  | LET REC fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.StdProgram.{ recursive=true; name=fname; param; return_t; body=e } }
 ;
 
 prog:
