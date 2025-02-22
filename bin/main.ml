@@ -1,5 +1,9 @@
 open Core
 open Pq_lang
+module Program = Program.StdProgram
+module TypeChecker = TypeChecker.StdSimpleTypeChecker
+module QuotientTypeChecker = QuotientTypeChecker.Make
+module ProgramExecutor = ProgramExecutor.MakeStd (TypeChecker)
 
 let () =
   let open Result in
@@ -14,10 +18,10 @@ let () =
     >>= fun prog ->
     TypeChecker.type_program prog
     |> Result.map_error ~f:(fun err ->
-           sprintf "Typing error: %s" (TypeChecker.print_typing_error err))
+           sprintf "Typing error: %s" (TypeChecker.TypingError.print err))
     >>= fun tp ->
     QuotientTypeChecker.check_program
-      (TypeChecker.SimpleTypeChecker.typed_program_get_program tp
+      (TypeChecker.typed_program_get_program tp
       |> Program.fmap_pattern ~f:(fun (t, ()) ->
              ({ t } : QuotientTypeChecker.pattern_tag))
       |> Program.fmap_expr ~f:(fun (t, ()) ->
@@ -27,7 +31,7 @@ let () =
              (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
             |> Sexp.to_string_hum))
     >>= fun () ->
-    ProgramExecutor.SimpleExecutor.execute_program tp
+    ProgramExecutor.execute_program tp
     |> Result.map_error ~f:(fun err ->
            sprintf "Execution error: %s" (ProgramExecutor.print_exec_err err))
     >>| fun v -> ProgramExecutor.sexp_of_value v |> Sexp.to_string_hum
