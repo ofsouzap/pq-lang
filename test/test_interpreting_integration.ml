@@ -1,7 +1,8 @@
 open Core
 open OUnit2
 open Pq_lang
-open ProgramExecutor
+module ProgramExecutor = Pq_lang.ProgramExecutor.SimpleExecutor
+open ProgramExecutor.Store
 open Testing_utils
 
 let program_triangles (x : int) =
@@ -43,7 +44,8 @@ predOrZero %d
 |}
     x
 
-let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
+let create_test
+    ((name : string), (inp : string), (exp : ProgramExecutor.exec_res)) : test =
   name >:: fun _ ->
   let open Result in
   match Frontend.run_frontend_string inp with
@@ -51,7 +53,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
       match TypeChecker.type_program prog with
       | Ok typed_prog ->
           let result : ProgramExecutor.exec_res =
-            ProgramExecutor.SimpleExecutor.execute_program typed_prog
+            ProgramExecutor.execute_program typed_prog
           in
           assert_equal ~cmp:override_equal_exec_res
             ~printer:ProgramExecutor.show_exec_res exp result

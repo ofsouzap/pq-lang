@@ -1,7 +1,7 @@
 open Core
 open OUnit2
-open Pq_lang
-open ProgramExecutor
+module ProgramExecutor = Pq_lang.ProgramExecutor.SimpleExecutor
+open ProgramExecutor.Store
 
 let key_arb = QCheck.string_printable
 
