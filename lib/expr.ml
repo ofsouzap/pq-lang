@@ -5,7 +5,55 @@ module type S = sig
   module Pattern : Pattern.S
 
   (** Expressions in the language. Tagged with arbitrary values on each node. *)
-  type ('tag_e, 'tag_p) t [@@deriving sexp, equal]
+  type ('tag_e, 'tag_p) t =
+    (* Unit type *)
+    | UnitLit of 'tag_e  (** The literal of the unit type *)
+    (* Integer arithmetic *)
+    | IntLit of 'tag_e * int  (** An integer literal *)
+    | Add of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Addition *)
+    | Neg of 'tag_e * ('tag_e, 'tag_p) t  (** Negation *)
+    | Subtr of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Subtraction *)
+    | Mult of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Multiplication *)
+    (* Boolean algebra *)
+    | BoolLit of 'tag_e * bool  (** A boolean literal *)
+    | BNot of 'tag_e * ('tag_e, 'tag_p) t  (** Boolean negation *)
+    | BOr of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Boolean OR *)
+    | BAnd of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Boolean AND *)
+    (* Pairs *)
+    | Pair of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Pair *)
+    (* Comparisons *)
+    | Eq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Equality *)
+    | Gt of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Greater than *)
+    | GtEq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Greater than or equal to *)
+    | Lt of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Less than *)
+    | LtEq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Less than or equal to *)
+    (* Control flow *)
+    | If of
+        'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** If-then-else *)
+    (* Variables and functions *)
+    | Var of 'tag_e * string  (** Variable references *)
+    | Let of 'tag_e * string * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Let binding *)
+    | App of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Function application *)
+    (* Pattern matching *)
+    | Match of
+        'tag_e
+        * ('tag_e, 'tag_p) t
+        * Vtype.t
+        * ('tag_p Pattern.t * ('tag_e, 'tag_p) t) Nonempty_list.t
+        (** Match expression *)
+    (* Variant data types *)
+    | Constructor of 'tag_e * string * ('tag_e, 'tag_p) t
+        (** Constructor for a variant data type *)
+  [@@deriving sexp, equal]
 
   (** Extract the value attached to a single node of a tagged Expr expression *)
   val node_val : ('tag_e, 'tag_p) t -> 'tag_e
@@ -123,140 +171,60 @@ module type S = sig
   end
 end
 
-(** Signature of an expression with the standard construction, for some pattern
-    implementation *)
-module type StdS = sig
-  module Pattern : Pattern.S
-
-  type ('tag_e, 'tag_p) std_expr =
-    (* Unit type *)
-    | UnitLit of 'tag_e  (** The literal of the unit type *)
-    (* Integer arithmetic *)
-    | IntLit of 'tag_e * int  (** An integer literal *)
-    | Add of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Addition *)
-    | Neg of 'tag_e * ('tag_e, 'tag_p) std_expr  (** Negation *)
-    | Subtr of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Subtraction *)
-    | Mult of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Multiplication *)
-    (* Boolean algebra *)
-    | BoolLit of 'tag_e * bool  (** A boolean literal *)
-    | BNot of 'tag_e * ('tag_e, 'tag_p) std_expr  (** Boolean negation *)
-    | BOr of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Boolean OR *)
-    | BAnd of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Boolean AND *)
-    (* Pairs *)
-    | Pair of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Pair *)
-    (* Comparisons *)
-    | Eq of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Equality *)
-    | Gt of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Greater than *)
-    | GtEq of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Greater than or equal to *)
-    | Lt of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Less than *)
-    | LtEq of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Less than or equal to *)
-    (* Control flow *)
-    | If of
-        'tag_e
-        * ('tag_e, 'tag_p) std_expr
-        * ('tag_e, 'tag_p) std_expr
-        * ('tag_e, 'tag_p) std_expr  (** If-then-else *)
-    (* Variables and functions *)
-    | Var of 'tag_e * string  (** Variable references *)
-    | Let of
-        'tag_e * string * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Let binding *)
-    | App of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Function application *)
-    (* Pattern matching *)
-    | Match of
-        'tag_e
-        * ('tag_e, 'tag_p) std_expr
-        * Vtype.t
-        * ('tag_p Pattern.t * ('tag_e, 'tag_p) std_expr) Nonempty_list.t
-        (** Match expression *)
-    (* Variant data types *)
-    | Constructor of 'tag_e * string * ('tag_e, 'tag_p) std_expr
-        (** Constructor for a variant data type *)
-  [@@deriving sexp, equal]
-
-  include
-    S
-      with module Pattern := Pattern
-       and type ('tag_e, 'tag_p) t = ('tag_e, 'tag_p) std_expr
-end
-
 (** Make a standard expression implementation from some pattern implementation
 *)
-module MakeStd (Pattern : Pattern.S) : StdS with module Pattern = Pattern =
-struct
+module Make (Pattern : Pattern.S) : S with module Pattern = Pattern = struct
   module Pattern = Pattern
 
-  type ('tag_e, 'tag_p) std_expr =
+  type ('tag_e, 'tag_p) t =
     (* Unit type *)
     | UnitLit of 'tag_e  (** The literal of the unit type *)
     (* Integer arithmetic *)
     | IntLit of 'tag_e * int  (** An integer literal *)
-    | Add of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Addition *)
-    | Neg of 'tag_e * ('tag_e, 'tag_p) std_expr  (** Negation *)
-    | Subtr of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
+    | Add of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Addition *)
+    | Neg of 'tag_e * ('tag_e, 'tag_p) t  (** Negation *)
+    | Subtr of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
         (** Subtraction *)
-    | Mult of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
+    | Mult of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
         (** Multiplication *)
     (* Boolean algebra *)
     | BoolLit of 'tag_e * bool  (** A boolean literal *)
-    | BNot of 'tag_e * ('tag_e, 'tag_p) std_expr  (** Boolean negation *)
-    | BOr of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Boolean OR *)
-    | BAnd of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
+    | BNot of 'tag_e * ('tag_e, 'tag_p) t  (** Boolean negation *)
+    | BOr of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Boolean OR *)
+    | BAnd of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
         (** Boolean AND *)
     (* Pairs *)
-    | Pair of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Pair *)
+    | Pair of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Pair *)
     (* Comparisons *)
-    | Eq of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Equality *)
-    | Gt of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
+    | Eq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Equality *)
+    | Gt of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
         (** Greater than *)
-    | GtEq of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
+    | GtEq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
         (** Greater than or equal to *)
-    | Lt of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
-        (** Less than *)
-    | LtEq of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
+    | Lt of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t  (** Less than *)
+    | LtEq of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
         (** Less than or equal to *)
     (* Control flow *)
     | If of
-        'tag_e
-        * ('tag_e, 'tag_p) std_expr
-        * ('tag_e, 'tag_p) std_expr
-        * ('tag_e, 'tag_p) std_expr  (** If-then-else *)
+        'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** If-then-else *)
     (* Variables and functions *)
     | Var of 'tag_e * string  (** Variable references *)
-    | Let of
-        'tag_e * string * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
+    | Let of 'tag_e * string * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
         (** Let binding *)
-    | App of 'tag_e * ('tag_e, 'tag_p) std_expr * ('tag_e, 'tag_p) std_expr
+    | App of 'tag_e * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
         (** Function application *)
     (* Pattern matching *)
     | Match of
         'tag_e
-        * ('tag_e, 'tag_p) std_expr
+        * ('tag_e, 'tag_p) t
         * Vtype.t
-        * ('tag_p Pattern.t * ('tag_e, 'tag_p) std_expr) Nonempty_list.t
+        * ('tag_p Pattern.t * ('tag_e, 'tag_p) t) Nonempty_list.t
         (** Match expression *)
     (* Variant data types *)
-    | Constructor of 'tag_e * string * ('tag_e, 'tag_p) std_expr
+    | Constructor of 'tag_e * string * ('tag_e, 'tag_p) t
         (** Constructor for a variant data type *)
   [@@deriving sexp, equal]
-
-  type ('tag_e, 'tag_p) t = ('tag_e, 'tag_p) std_expr [@@deriving sexp, equal]
 
   let node_map_val_with_result ~(f : 'tag_e -> 'tag_e) :
       ('tag_e, 'tag_p) t -> 'tag_e * ('tag_e, 'tag_p) t = function
@@ -1105,21 +1073,18 @@ end
 
 (** The standard expression implementation with the standard pattern
     implementation *)
-module StdExpr : sig
-  include StdS with module Pattern = Pattern.StdPattern
+module StdExpr : S with module Pattern = Pattern.StdPattern =
+  Make (Pattern.StdPattern)
 
-  (** Create a possibly-open expression from a pattern *)
-  val of_pattern :
-    convert_tag:('tag_p -> 'tag_e) -> 'tag_p Pattern.t -> ('tag_e, 'tag_p) t
-end = struct
-  include MakeStd (Pattern.StdPattern)
-
-  let rec of_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
-      'tag_p Pattern.t -> ('tag_e, 'tag_p) t = function
-    | PatName (v, xname, _) -> Var (convert_tag v, xname)
-    | PatPair (v, p1, p2) ->
-        Pair
-          (convert_tag v, of_pattern ~convert_tag p1, of_pattern ~convert_tag p2)
-    | PatConstructor (v, cname, p) ->
-        Constructor (convert_tag v, cname, of_pattern ~convert_tag p)
-end
+let rec std_expr_of_std_pattern ~(convert_tag : 'tag_p -> 'tag_e) :
+    'tag_p Pattern.StdPattern.t -> ('tag_e, 'tag_p) StdExpr.t =
+  let open StdExpr in
+  function
+  | PatName (v, xname, _) -> Var (convert_tag v, xname)
+  | PatPair (v, p1, p2) ->
+      Pair
+        ( convert_tag v,
+          std_expr_of_std_pattern ~convert_tag p1,
+          std_expr_of_std_pattern ~convert_tag p2 )
+  | PatConstructor (v, cname, p) ->
+      Constructor (convert_tag v, cname, std_expr_of_std_pattern ~convert_tag p)

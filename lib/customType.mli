@@ -34,9 +34,6 @@ module type S = sig
 end
 
 module Make (QuotientType : QuotientType.S) :
-  S with module QuotientType := QuotientType
+  S with module QuotientType = QuotientType
 
-module StdCustomType : sig
-  module QuotientType = QuotientType.StdQuotientType
-  include S with module QuotientType := QuotientType
-end
+module StdCustomType : S with module QuotientType = QuotientType.StdQuotientType

@@ -35,7 +35,9 @@ module type S = sig
 end
 
 module Make (QuotientType : QuotientType.S) :
-  S with module QuotientType := QuotientType = struct
+  S with module QuotientType = QuotientType = struct
+  module QuotientType = QuotientType
+
   type ('tag_e, 'tag_p) t =
     | VariantType of VariantType.t
     | QuotientType of ('tag_e, 'tag_p) QuotientType.t
@@ -70,10 +72,6 @@ module Make (QuotientType : QuotientType.S) :
     | QuotientType qt -> QuotientType (QuotientType.to_plain_quotient_type qt)
 end
 
-module StdCustomType : sig
-  module QuotientType = QuotientType.StdQuotientType
-  include S with module QuotientType := QuotientType
-end = struct
-  module QuotientType = QuotientType.StdQuotientType
-  include Make (QuotientType)
-end
+module StdCustomType :
+  S with module QuotientType = QuotientType.StdQuotientType =
+  Make (QuotientType.StdQuotientType)

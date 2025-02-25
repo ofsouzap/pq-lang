@@ -103,21 +103,14 @@ end
 
 module Make (CustomType : CustomType.S) :
   S
-    with module Pattern := CustomType.QuotientType.Pattern
-     and module Expr := CustomType.QuotientType.Expr
-     and module QuotientType := CustomType.QuotientType
-     and module CustomType := CustomType
+    with module Pattern = CustomType.QuotientType.Pattern
+     and module Expr = CustomType.QuotientType.Expr
+     and module QuotientType = CustomType.QuotientType
+     and module CustomType = CustomType
 
-module StdProgram : sig
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module QuotientType = QuotientType.StdQuotientType
-  module CustomType = CustomType.StdCustomType
-
-  include
-    S
-      with module Pattern := Pattern
-       and module Expr := Expr
-       and module QuotientType := QuotientType
-       and module CustomType := CustomType
-end
+module StdProgram :
+  S
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module QuotientType = QuotientType.StdQuotientType
+     and module CustomType = CustomType.StdCustomType

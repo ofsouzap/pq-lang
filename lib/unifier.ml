@@ -31,7 +31,9 @@ module type S = sig
     ('tag_e, 'tag_p) Expr.t
 end
 
-module StdUnifier : S with module Expr = Expr.StdExpr = struct
+module StdUnifier :
+  S with module Pattern = Pattern.StdPattern and module Expr = Expr.StdExpr =
+struct
   module Pattern = Pattern.StdPattern
   module Expr = Expr.StdExpr
 

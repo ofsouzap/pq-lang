@@ -104,13 +104,14 @@ end
 
 module Make (CustomType : CustomType.S) :
   S
-    with module Pattern := CustomType.QuotientType.Pattern
-     and module Expr := CustomType.QuotientType.Expr
-     and module QuotientType := CustomType.QuotientType
-     and module CustomType := CustomType = struct
+    with module Pattern = CustomType.QuotientType.Pattern
+     and module Expr = CustomType.QuotientType.Expr
+     and module QuotientType = CustomType.QuotientType
+     and module CustomType = CustomType = struct
   module Pattern = CustomType.QuotientType.Pattern
   module Expr = CustomType.QuotientType.Expr
   module QuotientType = CustomType.QuotientType
+  module CustomType = CustomType
 
   (** A top-level function definition *)
   type ('tag_e, 'tag_p) top_level_defn = {
@@ -468,22 +469,10 @@ module Make (CustomType : CustomType.S) :
   end
 end
 
-module StdProgram : sig
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module QuotientType = QuotientType.StdQuotientType
-  module CustomType = CustomType.StdCustomType
-
-  include
-    S
-      with module Pattern := Pattern
-       and module Expr := Expr
-       and module QuotientType := QuotientType
-       and module CustomType := CustomType
-end = struct
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module QuotientType = QuotientType.StdQuotientType
-  module CustomType = CustomType.StdCustomType
-  include Make (CustomType)
-end
+module StdProgram :
+  S
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module QuotientType = QuotientType.StdQuotientType
+     and module CustomType = CustomType.StdCustomType =
+  Make (CustomType.StdCustomType)
