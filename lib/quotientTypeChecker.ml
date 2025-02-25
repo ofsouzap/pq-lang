@@ -246,6 +246,11 @@ module type S = sig
 end
 
 module Make : S = struct
+  (* Required for exposing Expr.std_expr_of_std_pattern *)
+  open Expr
+
+  (* Required for exposing Pattern.std_pattern constructors *)
+  open Pattern
   module Pattern = Pattern.StdPattern
   module Expr = Expr.StdExpr
   module Unifier = Unifier.StdUnifier
@@ -544,7 +549,7 @@ module Make : S = struct
     (** Convert a flat pattern to a regular pattern *)
     let to_non_flat_pattern : t -> tag_pattern = function
       | FlatPatPair (v, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)) ->
-          Pattern.PatPair
+          PatPair
             (v, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
       | FlatPatConstructor (v, c_name, (x1_v, x1_name, x1_t)) ->
           PatConstructor (v, c_name, PatName (x1_v, x1_name, x1_t))
@@ -613,8 +618,8 @@ module Make : S = struct
         let new_binding_name_2, existing_names =
           generate_fresh_varname ~seed_name:"snd" existing_names
         in
-        let p1_t = (Pattern.Pattern.node_val p1).t in
-        let p2_t = (Pattern.Pattern.node_val p2).t in
+        let p1_t = (Pattern.node_val p1).t in
+        let p2_t = (Pattern.node_val p2).t in
         flatten_case_pattern ~existing_names (p2, e)
         >>= fun (existing_names, flattened_p2_case_p, flattened_p2_case_e) ->
         flatten_case_pattern ~existing_names
@@ -659,7 +664,7 @@ module Make : S = struct
         let new_binding_name, existing_names =
           generate_fresh_varname ~seed_name:"val" existing_names
         in
-        let p1_t = (Pattern.Pattern.node_val p1).t in
+        let p1_t = (Pattern.node_val p1).t in
         flatten_case_pattern ~existing_names (p1, e)
         >>| fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
         ( existing_names,
@@ -1577,7 +1582,8 @@ module Make : S = struct
                 List.fold_result qt.eqconss ~init:(existing_names, [])
                   ~f:(fun (existing_names, acc_rev) eqcons ->
                     fst eqcons.body
-                    |> Expr.of_pattern ~convert_tag:pattern_tag_to_expr_tag
+                    |> std_expr_of_std_pattern
+                         ~convert_tag:pattern_tag_to_expr_tag
                     |> FlatPattern.of_expr ~existing_names
                     >>= fun (existing_names, flat_l) ->
                     snd eqcons.body |> FlatPattern.of_expr ~existing_names
@@ -1720,10 +1726,12 @@ module Make : S = struct
                Unifier.simply_find_unifier ~bound_names_in_from:StringSet.empty
                  ~from_expr:
                    (case_p
-                   |> Expr.of_pattern ~convert_tag:pattern_tag_to_expr_tag)
+                   |> std_expr_of_std_pattern
+                        ~convert_tag:pattern_tag_to_expr_tag)
                  ~to_expr:
                    (fst eqcons.body
-                   |> Expr.of_pattern ~convert_tag:pattern_tag_to_expr_tag)
+                   |> std_expr_of_std_pattern
+                        ~convert_tag:pattern_tag_to_expr_tag)
                |> function
                | Error () -> None
                | Ok unifier -> Some (unifier, eqcons)))

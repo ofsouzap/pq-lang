@@ -54,13 +54,10 @@ module TypingError : sig
   end
 
   module Make (Pattern : Pattern.S) (Expr : Expr.S) :
-    S with module Pattern := Pattern and module Expr := Expr
+    S with module Pattern = Pattern and module Expr = Expr
 
-  module StdTypingError : sig
-    module Pattern = Pattern.StdPattern
-    module Expr = Expr.StdExpr
-    include S with module Pattern := Pattern and module Expr := Expr
-  end
+  module StdTypingError :
+    S with module Pattern = Pattern.StdPattern and module Expr = Expr.StdExpr
 end = struct
   module type S = sig
     module Pattern : Pattern.S
@@ -114,7 +111,10 @@ end = struct
   end
 
   module Make (Pattern : Pattern.S) (Expr : Expr.S) :
-    S with module Pattern := Pattern and module Expr := Expr = struct
+    S with module Pattern = Pattern and module Expr = Expr = struct
+    module Pattern = Pattern
+    module Expr = Expr
+
     type t =
       | UndefinedVariable of string
       | EqconsVariableNotInBindings of string * Vtype.t
@@ -225,18 +225,13 @@ end = struct
             c_name
   end
 
-  module StdTypingError : sig
-    module Pattern = Pattern.StdPattern
-    module Expr = Expr.StdExpr
-    include S with module Pattern := Pattern and module Expr := Expr
-  end = struct
-    module Pattern = Pattern.StdPattern
-    module Expr = Expr.StdExpr
-    include Make (Pattern) (Expr)
-  end
+  module StdTypingError :
+    S with module Pattern = Pattern.StdPattern and module Expr = Expr.StdExpr =
+    Make (Pattern.StdPattern) (Expr.StdExpr)
 end
 
 (** Typing context for types (e.g. if a type of a certain name exists) *)
+
 module TypeContext : sig
   module type S = sig
     module CustomType : CustomType.S
@@ -280,22 +275,13 @@ module TypeContext : sig
         TypingError.S
           with module Pattern = CustomType.QuotientType.Pattern
            and module Expr = CustomType.QuotientType.Expr) :
-    S with module CustomType := CustomType and module TypingError := TypingError
+    S with module CustomType = CustomType and module TypingError = TypingError
 
   (** Typing context of types using a simple set-based approach *)
-  module StdSetTypeContext : sig
-    module CustomType : CustomType.S
-
-    module TypingError :
-      TypingError.S
-        with module Pattern = CustomType.QuotientType.Pattern
-         and module Expr = CustomType.QuotientType.Expr
-
-    include
-      S
-        with module CustomType := CustomType
-         and module TypingError := TypingError
-  end
+  module StdSetTypeContext :
+    S
+      with module CustomType = CustomType.StdCustomType
+       and module TypingError = TypingError.StdTypingError
 end = struct
   module type S = sig
     module CustomType : CustomType.S
@@ -339,8 +325,11 @@ end = struct
         TypingError.S
           with module Pattern = CustomType.QuotientType.Pattern
            and module Expr = CustomType.QuotientType.Expr) :
-    S with module CustomType := CustomType and module TypingError := TypingError =
+    S with module CustomType = CustomType and module TypingError = TypingError =
   struct
+    module CustomType = CustomType
+    module TypingError = TypingError
+
     type t = {
       custom_types : CustomType.plain_t StringMap.t;
       custom_types_order : string list;
@@ -434,23 +423,12 @@ end = struct
   end
 
   (** Typing context of types using a simple set-based approach *)
-  module StdSetTypeContext : sig
-    module CustomType : CustomType.S
 
-    module TypingError :
-      TypingError.S
-        with module Pattern = CustomType.QuotientType.Pattern
-         and module Expr = CustomType.QuotientType.Expr
-
-    include
-      S
-        with module CustomType := CustomType
-         and module TypingError := TypingError
-  end = struct
-    module CustomType = CustomType.StdCustomType
-    module TypingError = TypingError.StdTypingError
-    include MakeSet (CustomType) (TypingError)
-  end
+  module StdSetTypeContext :
+    S
+      with module CustomType = CustomType.StdCustomType
+       and module TypingError = TypingError.StdTypingError =
+    MakeSet (CustomType.StdCustomType) (TypingError.StdTypingError)
 end
 
 (** Typing contexts of variables *)
@@ -585,6 +563,7 @@ end
 
 (** Functor for creating modules providing type-checking functionality *)
 
+(** Functor for creating modules providing type-checking functionality *)
 module MakeStd
     (TypeCtx :
       TypeContext.S
@@ -592,18 +571,22 @@ module MakeStd
          and module TypingError = TypingError.StdTypingError)
     (VarCtx : VarContext.S) :
   S
-    with module Pattern := Pattern.StdPattern
-     and module Expr := Expr.StdExpr
-     and module Program := Program.StdProgram
-     and module TypingError := TypingError.StdTypingError
-     and module TypeCtx := TypeCtx
-     and module VarCtx := VarCtx = struct
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module Program = Program.StdProgram
+     and module TypingError = TypingError.StdTypingError
+     and module TypeCtx = TypeCtx
+     and module VarCtx = VarCtx = struct
+  (* Required for referring to the std_pattern constructors *)
+  open Pattern
   module Pattern = Pattern.StdPattern
   module Expr = Expr.StdExpr
   module QuotientType = QuotientType.StdQuotientType
   module CustomType = CustomType.StdCustomType
   module Program = Program.StdProgram
   module TypingError = TypingError.StdTypingError
+  module TypeCtx = TypeCtx
+  module VarCtx = VarCtx
 
   type checked_type_ctx = TypeCtx.t
 
@@ -635,14 +618,11 @@ module MakeStd
     let open Result in
     let ( <: ) = TypeCtx.subtype type_ctx in
     match orig_p with
-    | Pattern.PatName (v, x_name, x_t) ->
+    | PatName (v, x_name, x_t) ->
         check_vtype type_ctx x_t >>= fun () ->
         if VarCtx.exists var_ctx x_name then
           Error (PatternMultipleVariableDefinitions x_name)
-        else
-          Ok
-            ( Pattern.PatName ((x_t, v), x_name, x_t),
-              VarCtx.add var_ctx x_name x_t )
+        else Ok (PatName ((x_t, v), x_name, x_t), VarCtx.add var_ctx x_name x_t)
     | PatPair (v, p1, p2) ->
         type_pattern ctx p1 >>= fun (p1_typed, var_ctx_from_p1) ->
         type_pattern (type_ctx, var_ctx_from_p1) p2
@@ -650,8 +630,7 @@ module MakeStd
         let p1_t = Pattern.node_val p1_typed |> fst in
         let p2_t = Pattern.node_val p2_typed |> fst in
         Ok
-          ( Pattern.PatPair
-              ((Vtype.VTypePair (p1_t, p2_t), v), p1_typed, p2_typed),
+          ( PatPair ((Vtype.VTypePair (p1_t, p2_t), v), p1_typed, p2_typed),
             var_ctx_final )
     | PatConstructor (v, c_name, p) -> (
         match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
@@ -662,7 +641,7 @@ module MakeStd
             c_t <: p_t >>= fun subpattern_type_matches ->
             if subpattern_type_matches then
               Ok
-                ( Pattern.PatConstructor
+                ( PatConstructor
                     ((Vtype.VTypeCustom vt_name, v), c_name, p_typed),
                   var_ctx_from_p )
             else
@@ -1043,47 +1022,17 @@ module MakeStd
       { custom_types = custom_types_typed; top_level_defns = tlds; e = typed_e }
 end
 
-module StdSimpleTypeChecker : sig
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module Program = Program.StdProgram
-
-  module TypingError :
-    TypingError.S
-      with module Pattern = Program.Expr.Pattern
-       and module Expr = Program.Expr
-
-  module TypeCtx :
-    TypeContext.S
-      with module CustomType = Program.CustomType
-       and module TypingError = TypingError
-
-  module VarCtx = VarContext.ListTypingVarContext
-
-  include
-    S
-      with module Pattern := Program.Expr.Pattern
-       and module Expr := Program.Expr
-       and module Program := Program
-       and module TypingError := TypingError
-       and module TypeCtx := TypeCtx
-       and module VarCtx := VarCtx
-end = struct
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module CustomType = CustomType.StdCustomType
-  module Program = Program.StdProgram
-  module TypingError = TypingError.StdTypingError
-
-  module TypeCtx = struct
-    module CustomType = CustomType
-    module TypingError = TypingError
-    include TypeContext.MakeSet (CustomType) (TypingError)
-  end
-
-  module VarCtx = VarContext.ListTypingVarContext
-  include MakeStd (TypeCtx) (VarCtx)
-end
+(** Type checker for standard programs, using standard type context and variable
+    context implementations *)
+module StdSimpleTypeChecker :
+  S
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module Program = Program.StdProgram
+     and module TypingError = TypingError.StdTypingError
+     and module TypeCtx = TypeContext.StdSetTypeContext
+     and module VarCtx = VarContext.ListTypingVarContext =
+  MakeStd (TypeContext.StdSetTypeContext) (VarContext.ListTypingVarContext)
 
 let type_expr ~(type_ctx : StdSimpleTypeChecker.TypeCtx.t)
     (e : ('tag_e, 'tag_p) StdSimpleTypeChecker.Expr.t) :

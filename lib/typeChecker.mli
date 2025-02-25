@@ -52,13 +52,10 @@ module TypingError : sig
   end
 
   module Make (Pattern : Pattern.S) (Expr : Expr.S) :
-    S with module Pattern := Pattern and module Expr := Expr
+    S with module Pattern = Pattern and module Expr = Expr
 
-  module StdTypingError : sig
-    module Pattern = Pattern.StdPattern
-    module Expr = Expr.StdExpr
-    include S with module Pattern := Pattern and module Expr := Expr
-  end
+  module StdTypingError :
+    S with module Pattern = Pattern.StdPattern and module Expr = Expr.StdExpr
 end
 
 (** Typing context for types (e.g. if a type of a certain name exists) *)
@@ -105,22 +102,13 @@ module TypeContext : sig
         TypingError.S
           with module Pattern = CustomType.QuotientType.Pattern
            and module Expr = CustomType.QuotientType.Expr) :
-    S with module CustomType := CustomType and module TypingError := TypingError
+    S with module CustomType = CustomType and module TypingError = TypingError
 
   (** Typing context of types using a simple set-based approach *)
-  module StdSetTypeContext : sig
-    module CustomType : CustomType.S
-
-    module TypingError :
-      TypingError.S
-        with module Pattern = CustomType.QuotientType.Pattern
-         and module Expr = CustomType.QuotientType.Expr
-
-    include
-      S
-        with module CustomType := CustomType
-         and module TypingError := TypingError
-  end
+  module StdSetTypeContext :
+    S
+      with module CustomType = CustomType.StdCustomType
+       and module TypingError = TypingError.StdTypingError
 end
 
 (** Typing contexts of variables *)
@@ -218,41 +206,23 @@ module MakeStd
          and module TypingError = TypingError.StdTypingError)
     (VarCtx : VarContext.S) :
   S
-    with module Pattern := Pattern.StdPattern
-     and module Expr := Expr.StdExpr
-     and module Program := Program.StdProgram
-     and module TypingError := TypingError.StdTypingError
-     and module TypeCtx := TypeCtx
-     and module VarCtx := VarCtx
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module Program = Program.StdProgram
+     and module TypingError = TypingError.StdTypingError
+     and module TypeCtx = TypeCtx
+     and module VarCtx = VarCtx
 
 (** Type checker for standard programs, using standard type context and variable
     context implementations *)
-module StdSimpleTypeChecker : sig
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module Program = Program.StdProgram
-
-  module TypingError :
-    TypingError.S
-      with module Pattern = Program.Expr.Pattern
-       and module Expr = Program.Expr
-
-  module TypeCtx :
-    TypeContext.S
-      with module CustomType = Program.CustomType
-       and module TypingError = TypingError
-
-  module VarCtx = VarContext.ListTypingVarContext
-
-  include
-    S
-      with module Pattern := Program.Expr.Pattern
-       and module Expr := Program.Expr
-       and module Program := Program
-       and module TypingError := TypingError
-       and module TypeCtx := TypeCtx
-       and module VarCtx := VarCtx
-end
+module StdSimpleTypeChecker :
+  S
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module Program = Program.StdProgram
+     and module TypingError = TypingError.StdTypingError
+     and module TypeCtx = TypeContext.StdSetTypeContext
+     and module VarCtx = VarContext.ListTypingVarContext
 
 (** Type program using the default context and program implementations *)
 val type_expr :

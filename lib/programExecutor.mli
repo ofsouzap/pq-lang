@@ -142,50 +142,22 @@ module MakeStd
          and module TypeCtx.CustomType = CustomType.StdCustomType
          and module TypeCtx.TypingError = TypeChecker.TypingError.StdTypingError) :
   S
-    with module Pattern := Pattern.StdPattern
-     and module Expr := Expr.StdExpr
-     and module Program := Program.StdProgram
-     and module TypingError := TypeChecker.TypingError
-     and module TypeCtx := TypeChecker.TypeCtx
-     and module VarCtx := TypeChecker.VarCtx
-     and module TypeChecker := TypeChecker
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module Program = Program.StdProgram
+     and module TypingError = TypeChecker.TypingError
+     and module TypeCtx = TypeChecker.TypeCtx
+     and module VarCtx = TypeChecker.VarCtx
+     and module TypeChecker = TypeChecker
 
 (** An implementation of the executor using the simple type checker
     implementation *)
-module SimpleExecutor : sig
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module CustomType = CustomType.StdCustomType
-  module Program = Program.StdProgram
-
-  module TypingError :
-    TypeChecker.TypingError.S
-      with module Pattern = Program.Pattern
-       and module Expr = Program.Expr
-
-  module TypeCtx :
-    TypeChecker.TypeContext.S
-      with module CustomType = Program.CustomType
-       and module TypingError = TypingError
-
-  module VarCtx = TypeChecker.VarContext.ListTypingVarContext
-
-  module TypeChecker :
-    TypeChecker.S
-      with module Pattern = Program.Pattern
-       and module Expr = Program.Expr
-       and module Program = Program
-       and module TypingError = TypingError
-       and module TypeCtx = TypeCtx
-       and module VarCtx = VarCtx
-
-  include
-    S
-      with module Pattern := Program.Expr.Pattern
-       and module Expr := Program.Expr
-       and module Program := Program
-       and module TypingError := TypingError
-       and module TypeCtx := TypeCtx
-       and module VarCtx := VarCtx
-       and module TypeChecker := TypeChecker
-end
+module SimpleExecutor :
+  S
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module Program = Program.StdProgram
+     and module TypingError = TypeChecker.TypingError.StdTypingError
+     and module TypeCtx = TypeChecker.TypeContext.StdSetTypeContext
+     and module VarCtx = TypeChecker.VarContext.ListTypingVarContext
+     and module TypeChecker = TypeChecker.StdSimpleTypeChecker

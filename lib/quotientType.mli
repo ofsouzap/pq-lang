@@ -82,7 +82,6 @@ module Make (Expr : Expr.S) :
   S with module Pattern = Expr.Pattern and module Expr = Expr
 
 (** The quotient type implementation using the standard pattern and standard
-    expression implementations. Note that this doesn't expose the extended
-    standard expression module fully *)
+    expression implementations *)
 module StdQuotientType :
   S with module Pattern = Pattern.StdPattern and module Expr = Expr.StdExpr

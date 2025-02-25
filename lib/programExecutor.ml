@@ -139,13 +139,13 @@ module MakeStd
          and module TypeCtx.CustomType = CustomType.StdCustomType
          and module TypeCtx.TypingError = TypeChecker.TypingError.StdTypingError) :
   S
-    with module Pattern := Pattern.StdPattern
-     and module Expr := Expr.StdExpr
-     and module Program := Program.StdProgram
-     and module TypingError := TypeChecker.TypingError
-     and module TypeCtx := TypeChecker.TypeCtx
-     and module VarCtx := TypeChecker.VarCtx
-     and module TypeChecker := TypeChecker = struct
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module Program = Program.StdProgram
+     and module TypingError = TypeChecker.TypingError
+     and module TypeCtx = TypeChecker.TypeCtx
+     and module VarCtx = TypeChecker.VarCtx
+     and module TypeChecker = TypeChecker = struct
   module Pattern = TypeChecker.Pattern
   module Expr = TypeChecker.Expr
   module QuotientType = TypeChecker.Program.QuotientType
@@ -154,6 +154,7 @@ module MakeStd
   module TypingError = TypeChecker.TypingError
   module TypeCtx = TypeChecker.TypeCtx
   module VarCtx = TypeChecker.VarCtx
+  module TypeChecker = TypeChecker
 
   module Store = struct
     type closure_props = {
@@ -478,66 +479,15 @@ module MakeStd
       Expr.fmap_pattern ~f:(fun (t, _) -> (t, ())))
 end
 
-module SimpleExecutor : sig
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module CustomType = CustomType.StdCustomType
-  module Program = Program.StdProgram
-
-  module TypingError :
-    TypeChecker.TypingError.S
-      with module Pattern = Program.Pattern
-       and module Expr = Program.Expr
-
-  module TypeCtx :
-    TypeChecker.TypeContext.S
-      with module CustomType = Program.CustomType
-       and module TypingError = TypingError
-
-  module VarCtx = TypeChecker.VarContext.ListTypingVarContext
-
-  module TypeChecker :
-    TypeChecker.S
-      with module Pattern = Program.Pattern
-       and module Expr = Program.Expr
-       and module Program = Program
-       and module TypingError = TypingError
-       and module TypeCtx = TypeCtx
-       and module VarCtx = VarCtx
-
-  include
-    S
-      with module Pattern := Program.Expr.Pattern
-       and module Expr := Program.Expr
-       and module Program := Program
-       and module TypingError := TypingError
-       and module TypeCtx := TypeCtx
-       and module VarCtx := VarCtx
-       and module TypeChecker := TypeChecker
-end = struct
-  module Pattern = Pattern.StdPattern
-  module Expr = Expr.StdExpr
-  module CustomType = CustomType.StdCustomType
-  module Program = Program.StdProgram
-  module TypingError = TypeChecker.TypingError.StdTypingError
-
-  module TypeCtx = struct
-    module CustomType = CustomType
-    module TypingError = TypingError
-    include TypeChecker.TypeContext.MakeSet (CustomType) (TypingError)
-  end
-
-  module VarCtx = TypeChecker.VarContext.ListTypingVarContext
-
-  module TypeChecker = struct
-    module Pattern = Pattern
-    module Expr = Expr
-    module Program = Program
-    module TypingError = TypingError
-    module TypeCtx = TypeCtx
-    module VarCtx = VarCtx
-    include TypeChecker.MakeStd (TypeCtx) (VarCtx)
-  end
-
-  include MakeStd (TypeChecker)
-end
+(** An implementation of the executor using the simple type checker
+    implementation *)
+module SimpleExecutor :
+  S
+    with module Pattern = Pattern.StdPattern
+     and module Expr = Expr.StdExpr
+     and module Program = Program.StdProgram
+     and module TypingError = TypeChecker.TypingError.StdTypingError
+     and module TypeCtx = TypeChecker.TypeContext.StdSetTypeContext
+     and module VarCtx = TypeChecker.VarContext.ListTypingVarContext
+     and module TypeChecker = TypeChecker.StdSimpleTypeChecker =
+  MakeStd (TypeChecker.StdSimpleTypeChecker)
