@@ -2,25 +2,27 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
-open Expr
-open Typing
-open ProgramExecutor
+open Pq_lang.Expr.StdExpr
+open Pq_lang.Pattern
+module TypeChecker = Pq_lang.TypeChecker.StdSimpleTypeChecker
+module ProgramExecutor = Pq_lang.ProgramExecutor.SimpleExecutor
 open Testing_utils
 
 type basic_test_case =
-  string * (unit, unit) SimpleTypeChecker.typed_program * exec_res
+  string * (unit, unit) TypeChecker.typed_program * ProgramExecutor.exec_res
 
-let make_store (vars : (string * ProgramExecutor.value) list) :
-    ProgramExecutor.store =
+let make_store (vars : (string * ProgramExecutor.Store.value) list) :
+    ProgramExecutor.Store.store =
   List.fold_left vars
-    ~f:(fun store (name, value) -> store_set store ~key:name ~value)
-    ~init:ProgramExecutor.empty_store
+    ~f:(fun store (name, value) ->
+      ProgramExecutor.Store.store_set store ~key:name ~value)
+    ~init:ProgramExecutor.Store.empty_store
 
 let type_expr ?(custom_types : CustomType.plain_t list option)
     ?(top_level_defns : (unit, unit) Program.top_level_defn list option)
-    (e : Expr.plain_t) : (unit, unit) SimpleTypeChecker.typed_program =
+    (e : Expr.plain_t) : (unit, unit) TypeChecker.typed_program =
   match
-    type_program
+    Pq_lang.TypeChecker.type_program
       {
         custom_types = Option.value ~default:[] custom_types;
         top_level_defns = Option.value ~default:[] top_level_defns;
@@ -32,10 +34,12 @@ let type_expr ?(custom_types : CustomType.plain_t list option)
       failwith
         (sprintf "Typing error:\nExpression: %s\nError: %s"
            (Expr.to_source_code ~use_newlines:true e)
-           (print_typing_error err))
+           (TypeChecker.TypingError.print err))
 
 let test_cases_unit_value : basic_test_case list =
-  let mapf ((x : Expr.plain_t), (y : value)) =
+  let open ProgramExecutor.Store in
+  let module Store = ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : ProgramExecutor.Store.value)) =
     (Expr.to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
@@ -46,7 +50,8 @@ let test_cases_unit_value : basic_test_case list =
 
 let test_cases_arithmetic : basic_test_case list =
   let mapf ((x : Expr.plain_t), (y : int)) =
-    (Expr.to_source_code x, type_expr x, Ok (Int y))
+    let module Store = ProgramExecutor.Store in
+    (Expr.to_source_code x, type_expr x, Ok (Store.Int y))
   in
   List.map ~f:mapf
     [
@@ -77,8 +82,9 @@ let test_cases_arithmetic : basic_test_case list =
     ]
 
 let test_cases_booleans : basic_test_case list =
+  let module Store = ProgramExecutor.Store in
   let mapf ((x : Expr.plain_t), (y : bool)) =
-    (Expr.to_source_code x, type_expr x, Ok (Bool y))
+    (Expr.to_source_code x, type_expr x, Ok (Store.Bool y))
   in
   List.map ~f:mapf
     [
@@ -101,23 +107,25 @@ let test_cases_booleans : basic_test_case list =
     ]
 
 let test_cases_pairs : basic_test_case list =
-  let mapf ((x : Expr.plain_t), (y : value)) =
+  let module Store = ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : ProgramExecutor.Store.value)) =
     (Expr.to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
     [
       ( Expr.Pair ((), IntLit ((), 1), BoolLit ((), true)),
-        ProgramExecutor.Pair (Int 1, Bool true) );
+        Store.Pair (Int 1, Bool true) );
       ( Pair
           ( (),
             Add ((), IntLit ((), 2), IntLit ((), 4)),
             BOr ((), BoolLit ((), true), BoolLit ((), false)) ),
-        ProgramExecutor.Pair (Int 6, Bool true) );
+        Store.Pair (Int 6, Bool true) );
     ]
 
 let test_cases_integer_comparisons : basic_test_case list =
+  let module Store = ProgramExecutor.Store in
   let mapf ((x : Expr.plain_t), (y : bool)) =
-    (Expr.to_source_code x, type_expr x, Ok (Bool y))
+    (Expr.to_source_code x, type_expr x, Ok (Store.Bool y))
   in
   List.map ~f:mapf
     [
@@ -144,7 +152,8 @@ let test_cases_integer_comparisons : basic_test_case list =
     ]
 
 let test_cases_control_flow : basic_test_case list =
-  let mapf ((x : Expr.plain_t), (y : exec_res)) =
+  let open ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : ProgramExecutor.exec_res)) =
     (Expr.to_source_code x, type_expr x, y)
   in
   List.map ~f:mapf
@@ -166,7 +175,8 @@ let test_cases_control_flow : basic_test_case list =
     ]
 
 let test_cases_variables : basic_test_case list =
-  let mapf ((x : Expr.plain_t), (y : exec_res)) =
+  let open ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : ProgramExecutor.exec_res)) =
     (Expr.to_source_code x, type_expr x, y)
   in
   List.map ~f:mapf
@@ -191,10 +201,11 @@ let test_cases_variables : basic_test_case list =
     ]
 
 let test_cases_match : basic_test_case list =
+  let open ProgramExecutor.Store in
   let mapf
       ( (custom_types : CustomType.plain_t list option),
         (x : Expr.plain_t),
-        (y : exec_res) ) : basic_test_case =
+        (y : ProgramExecutor.exec_res) ) : basic_test_case =
     (Expr.to_source_code x, type_expr ?custom_types x, y)
   in
   List.map ~f:mapf
@@ -210,7 +221,7 @@ let test_cases_match : basic_test_case list =
                 VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
-                    ( Pattern.PatName ((), "y", VTypeInt),
+                    ( PatName ((), "y", VTypeInt),
                       Add ((), Var ((), "y"), IntLit ((), 1)) );
                   ] ) ),
         Ok (Int 4) );
@@ -225,9 +236,9 @@ let test_cases_match : basic_test_case list =
                 VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
-                    ( Pattern.PatName ((), "y", VTypeBool),
+                    ( PatName ((), "y", VTypeBool),
                       If ((), Var ((), "y"), IntLit ((), 4), IntLit ((), 0)) );
-                    (Pattern.PatName ((), "z", VTypeBool), IntLit ((), 9));
+                    (PatName ((), "z", VTypeBool), IntLit ((), 9));
                   ] ) ),
         Ok (Int 0) );
       ( None,
@@ -241,10 +252,10 @@ let test_cases_match : basic_test_case list =
                 VTypeInt,
                 Nonempty_list.from_list_unsafe
                   [
-                    ( Pattern.PatPair
+                    ( PatPair
                         ( (),
-                          Pattern.PatName ((), "y", VTypeBool),
-                          Pattern.PatName ((), "z", VTypeInt) ),
+                          PatName ((), "y", VTypeBool),
+                          PatName ((), "z", VTypeInt) ),
                       If ((), Var ((), "y"), Var ((), "z"), IntLit ((), 0)) );
                   ] ) ),
         Ok (Int 1) );
@@ -262,11 +273,10 @@ let test_cases_match : basic_test_case list =
                 VTypePair (VTypeBool, VTypeBool),
                 Nonempty_list.from_list_unsafe
                   [
-                    ( Pattern.PatPair
+                    ( PatPair
                         ( (),
-                          Pattern.PatName
-                            ((), "y", VTypePair (VTypeBool, VTypeBool)),
-                          Pattern.PatName ((), "z", VTypeInt) ),
+                          PatName ((), "y", VTypePair (VTypeBool, VTypeBool)),
+                          PatName ((), "z", VTypeInt) ),
                       Var ((), "y") );
                   ] ) ),
         Ok (Pair (Bool true, Bool true)) );
@@ -286,8 +296,7 @@ let test_cases_match : basic_test_case list =
             VTypeBool,
             Nonempty_list.from_list_unsafe
               [
-                ( Pattern.PatConstructor
-                    ((), "BoolBox", Pattern.PatName ((), "x", VTypeBool)),
+                ( PatConstructor ((), "BoolBox", PatName ((), "x", VTypeBool)),
                   Var ((), "x") );
               ] ),
         Ok (Bool true) );
@@ -311,25 +320,26 @@ let test_cases_match : basic_test_case list =
             VTypeInt,
             Nonempty_list.from_list_unsafe
               [
-                ( Pattern.PatConstructor
-                    ((), "Nil", Pattern.PatName ((), "x", VTypeUnit)),
+                ( PatConstructor ((), "Nil", PatName ((), "x", VTypeUnit)),
                   IntLit ((), 0) );
-                ( Pattern.PatConstructor
+                ( PatConstructor
                     ( (),
                       "Cons",
-                      Pattern.PatPair
+                      PatPair
                         ( (),
-                          Pattern.PatName ((), "x", VTypeInt),
-                          Pattern.PatName ((), "y", VTypeCustom "int_list") ) ),
+                          PatName ((), "x", VTypeInt),
+                          PatName ((), "y", VTypeCustom "int_list") ) ),
                   Var ((), "x") );
               ] ),
         Ok (Int 7) );
     ]
 
 let test_cases_constructor : basic_test_case list =
+  let open ProgramExecutor.Store in
   let mapf
-      ((variant_types : VariantType.t list), (y : Expr.plain_t), (z : exec_res))
-      =
+      ( (variant_types : VariantType.t list),
+        (y : Expr.plain_t),
+        (z : ProgramExecutor.exec_res) ) =
     ( Expr.to_source_code y,
       type_expr
         ~custom_types:
@@ -375,10 +385,10 @@ let test_cases_constructor : basic_test_case list =
 
 let create_test
     ( (name : string),
-      (inp : (unit, unit) SimpleTypeChecker.typed_program),
-      (exp : exec_res) ) =
+      (inp : (unit, unit) TypeChecker.typed_program),
+      (exp : ProgramExecutor.exec_res) ) =
   name >:: fun _ ->
-  let out = ProgramExecutor.SimpleExecutor.execute_program inp in
+  let out = ProgramExecutor.execute_program inp in
   assert_equal exp out ~cmp:override_equal_exec_res
     ~printer:ProgramExecutor.show_exec_res
 

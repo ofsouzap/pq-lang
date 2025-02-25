@@ -83,19 +83,27 @@ let override_equal_typing_error (a : TypeChecker.TypingError.t)
       Vtype.equal ta1 tb1 && Vtype.equal ta2 tb2
   | _ -> TypeChecker.TypingError.equal a b
 
+(** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
-  module CustomType = CustomType
-  module TypingError = TypeChecker.TypingError
-
   include
     Pq_lang.TypeChecker.TypeContext.S
-      with module CustomType := CustomType
-       and module TypingError := TypeChecker.TypingError
+      with module CustomType = CustomType
+       and module TypingError = TypeChecker.TypingError
 
+  (** Add a variant type to the type context *)
   val add_variant : t -> VariantType.t -> t
+
+  (** Add a quotient type to the type context *)
   val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
+
+  (** Creates a type from a list *)
   val from_list : ('tag_e, 'tag_p) CustomType.t list -> t
+
+  (** If there are any defined variant types, get a generator for a random one
+      of them *)
   val variant_gen_opt : t -> VariantType.t QCheck.Gen.t option
+
+  (** Get the type context as a sexp *)
   val sexp_of_t : t -> Sexp.t
 
   module QCheck_testing : sig
@@ -416,28 +424,12 @@ end = struct
   end
 end
 
-module TestingTypeChecker : sig
-  module Pattern = Pq_lang.Pattern.StdPattern
-  module Expr = Pq_lang.Expr.StdExpr
-  module Program = Pq_lang.Program.StdProgram
-
-  module TypingError :
-    Pq_lang.TypeChecker.TypingError.S
-      with module Pattern = Program.Expr.Pattern
-       and module Expr = Program.Expr
-
-  module TypeCtx = TestingTypeCtx
-  module VarCtx = TestingVarCtx
-
-  include
-    Pq_lang.TypeChecker.S
-      with module Pattern := Program.Expr.Pattern
-       and module Expr := Program.Expr
-       and module Program := Program
-       and module TypingError := TypingError
-       and module TypeCtx := TypeCtx
-       and module VarCtx := VarCtx
-end =
+module TestingTypeChecker :
+  Pq_lang.TypeChecker.S
+    with module Pattern = Pq_lang.Pattern.StdPattern
+     and module Expr = Pq_lang.Expr.StdExpr
+     and module Program = Pq_lang.Program.StdProgram
+     and module TypingError = Pq_lang.TypeChecker.TypingError.StdTypingError =
   Pq_lang.TypeChecker.MakeStd (TestingTypeCtx) (TestingVarCtx)
 
 module UnitTag = struct

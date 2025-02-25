@@ -1,7 +1,7 @@
 open Core
 open OUnit2
 open Pq_lang
-open Expr
+open Pq_lang.Expr.StdExpr
 open Testing_utils
 
 let test_cases_equality : test list =

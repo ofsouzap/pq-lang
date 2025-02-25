@@ -113,28 +113,12 @@ module TestingVarCtx : sig
   end
 end
 
-module TestingTypeChecker : sig
-  module Pattern = Pq_lang.Pattern.StdPattern
-  module Expr = Pq_lang.Expr.StdExpr
-  module Program = Pq_lang.Program.StdProgram
-
-  module TypingError :
-    Pq_lang.TypeChecker.TypingError.S
-      with module Pattern = Program.Expr.Pattern
-       and module Expr = Program.Expr
-
-  module TypeCtx = TestingTypeCtx
-  module VarCtx = TestingVarCtx
-
-  include
-    Pq_lang.TypeChecker.S
-      with module Pattern := Program.Expr.Pattern
-       and module Expr := Program.Expr
-       and module Program := Program
-       and module TypingError := TypingError
-       and module TypeCtx := TypeCtx
-       and module VarCtx := VarCtx
-end
+module TestingTypeChecker :
+  Pq_lang.TypeChecker.S
+    with module Pattern = Pq_lang.Pattern.StdPattern
+     and module Expr = Pq_lang.Expr.StdExpr
+     and module Program = Pq_lang.Program.StdProgram
+     and module TypingError = Pq_lang.TypeChecker.TypingError.StdTypingError
 
 module UnitTag : sig
   type t = unit [@@deriving sexp, equal]

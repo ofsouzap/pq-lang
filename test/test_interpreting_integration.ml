@@ -57,8 +57,7 @@ let create_test ((name : string), (inp : string), (exp : exec_res)) : test =
             ~printer:ProgramExecutor.show_exec_res exp result
       | Error err ->
           failwith
-            (sprintf "Error in typing: %s" (TypeChecker.print_typing_error err))
-      )
+            (sprintf "Error in typing: %s" (TypeChecker.TypingError.print err)))
   | Error err ->
       failwith
         (sprintf "Error in frontend: %s"

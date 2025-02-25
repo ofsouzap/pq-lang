@@ -1,7 +1,7 @@
 open Core
 open OUnit2
 open Pq_lang
-open QuotientTypeChecker
+module QuotientTypeChecker = Pq_lang.QuotientTypeChecker.Make
 open Testing_utils
 
 let manual_tests : test list =
@@ -17,7 +17,7 @@ let manual_tests : test list =
       >>= fun inp_prog ->
       TestingTypeChecker.type_program inp_prog
       |> Result.map_error ~f:(fun err ->
-             sprintf "Typing error: %s\n" (TypeChecker.print_typing_error err))
+             sprintf "Typing error: %s\n" (TypeChecker.TypingError.print err))
       >>= fun inp_typed_program ->
       inp_typed_program |> TestingTypeChecker.typed_program_get_program
       |> Program.fmap_expr ~f:(fun (t, ()) ->
@@ -37,7 +37,8 @@ let manual_tests : test list =
       | Error err, _ ->
           Error
             (sprintf "Unexpected quotient type checking failure: %s"
-               (err |> sexp_of_quotient_typing_error |> Sexp.to_string_hum))
+               (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
+              |> Sexp.to_string_hum))
     in
     match res with Ok () -> () | Error err_msg -> assert_failure err_msg
   in
