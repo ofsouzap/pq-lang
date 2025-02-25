@@ -1,6 +1,8 @@
 %{
 open Utils
 
+(* For Pattern.std_pattern constructors *)
+open Pattern
 module Pattern = Pattern.StdPattern
 module Expr = Expr.StdExpr
 module Unifier = Unifier.StdUnifier
@@ -95,8 +97,8 @@ vtype:
 
 pattern:
   | p = contained_pattern { p }
-  | n = LNAME COLON t = vtype { Pattern.PatName ((), n, t) }
-  | cname = UNAME p = contained_pattern { Pattern.PatConstructor ((), cname, p) }
+  | n = LNAME COLON t = vtype { PatName ((), n, t) }
+  | cname = UNAME p = contained_pattern { PatConstructor ((), cname, p) }
 ;
 
 contained_pattern:
@@ -128,8 +130,8 @@ typed_name:
 
 match_case_pattern:
   | LPAREN p = pattern RPAREN { p }
-  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { Pattern.PatPair ((), p1, p2) }
-  | cname = UNAME p = contained_pattern { Pattern.PatConstructor ((), cname, p) }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair ((), p1, p2) }
+  | cname = UNAME p = contained_pattern { PatConstructor ((), cname, p) }
 ;
 
 match_case:
