@@ -10,6 +10,7 @@ module type S = sig
   module QuotientType = QuotientType.StdQuotientType
   module CustomType = CustomType.StdCustomType
   module Program = Program.StdProgram
+  open FlatPattern
 
   module type LispBuilderSig = sig
     (** The type of a node in the builder *)
@@ -33,6 +34,10 @@ module type S = sig
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type tag_pattern = pattern_tag Pattern.t [@@deriving sexp, equal]
   type tag_expr = (expr_tag, pattern_tag) Expr.t [@@deriving sexp, equal]
+  type tag_flat_pattern = pattern_tag FlatPattern.M.t [@@deriving sexp, equal]
+
+  type tag_flat_expr = (expr_tag, pattern_tag) FlatExpr.t
+  [@@deriving sexp, equal]
 
   val pattern_tag_to_expr_tag : pattern_tag -> expr_tag
 
@@ -52,89 +57,10 @@ module type S = sig
   type quotient_typing_error =
     | QuotientConstraintCheckFailed
     | SmtUnknownResult
-    | UnexpectedTrivialMatchCasePatternError
+    | PatternFlatteningError of FlatPattern.flattening_error
     | PairTypeNotDefinedInState of Vtype.t * Vtype.t
     | UndefinedCustomTypeName of string
   [@@deriving sexp, equal]
-
-  module FlatPattern : sig
-    type t =
-      | FlatPatPair of
-          pattern_tag
-          * (pattern_tag * string * Vtype.t)
-          * (pattern_tag * string * Vtype.t)
-      | FlatPatConstructor of
-          pattern_tag * string * (pattern_tag * string * Vtype.t)
-    [@@deriving sexp, equal]
-
-    type flat_pattern = t [@@deriving sexp, equal]
-
-    type flat_expr =
-      | UnitLit of expr_tag
-      | IntLit of expr_tag * int
-      | Add of expr_tag * flat_expr * flat_expr
-      | Neg of expr_tag * flat_expr
-      | Subtr of expr_tag * flat_expr * flat_expr
-      | Mult of expr_tag * flat_expr * flat_expr
-      | BoolLit of expr_tag * bool
-      | BNot of expr_tag * flat_expr
-      | BOr of expr_tag * flat_expr * flat_expr
-      | BAnd of expr_tag * flat_expr * flat_expr
-      | Pair of expr_tag * flat_expr * flat_expr
-      | Eq of expr_tag * flat_expr * flat_expr
-      | Gt of expr_tag * flat_expr * flat_expr
-      | GtEq of expr_tag * flat_expr * flat_expr
-      | Lt of expr_tag * flat_expr * flat_expr
-      | LtEq of expr_tag * flat_expr * flat_expr
-      | If of expr_tag * flat_expr * flat_expr * flat_expr
-      | Var of expr_tag * string
-      | Let of expr_tag * string * flat_expr * flat_expr
-      | App of expr_tag * flat_expr * flat_expr
-      | Match of
-          expr_tag
-          * flat_expr
-          * Vtype.t
-          * (flat_pattern * flat_expr) Utils.Nonempty_list.t
-      | Constructor of expr_tag * string * flat_expr
-    [@@deriving sexp, equal]
-
-    type flat_top_level_defn = {
-      recursive : bool;
-      name : string;
-      param : string * Vtype.t;
-      return_t : Vtype.t;
-      body : flat_expr;
-    }
-    [@@deriving sexp, equal]
-
-    type flat_program = {
-      custom_types : tag_custom_type list;
-      top_level_defns : flat_top_level_defn list;
-      e : flat_expr;
-    }
-    [@@deriving sexp, equal]
-
-    val flat_pattern_node_val : flat_pattern -> pattern_tag
-    val flat_node_val : flat_expr -> expr_tag
-    val defined_vars : t -> (string * Vtype.t) list
-
-    val expr_rename_var :
-      old_name:string -> new_name:string -> flat_expr -> flat_expr
-
-    val to_non_flat_pattern : t -> tag_pattern
-
-    val of_expr :
-      existing_names:Utils.StringSet.t ->
-      tag_expr ->
-      (Utils.StringSet.t * flat_expr, quotient_typing_error) result
-
-    val to_non_flat_expr : flat_expr -> tag_expr
-
-    val of_program :
-      existing_names:Utils.StringSet.t ->
-      tag_program ->
-      (Utils.StringSet.t * flat_program, quotient_typing_error) result
-  end
 
   module Smt : sig
     module State : sig
@@ -144,7 +70,7 @@ module type S = sig
           [ `NonRec of (Varname.t * Vtype.t) option
           | `Rec of Varname.t * Vtype.t ];
         return_t : Vtype.t;
-        body : FlatPattern.flat_expr;
+        body : tag_flat_expr;
       }
       [@@deriving sexp, equal]
 
@@ -194,10 +120,7 @@ module type S = sig
     end
 
     module Assertion : sig
-      type t =
-        | Not of t
-        | Eq of Vtype.t option * FlatPattern.flat_expr * FlatPattern.flat_expr
-
+      type t = Not of t | Eq of Vtype.t option * tag_flat_expr * tag_flat_expr
       type assertion = t
 
       module Builder : sig end
@@ -210,7 +133,7 @@ module type S = sig
       val build_expr :
         directly_callable_fun_names:Utils.StringSet.t ->
         State.t ->
-        FlatPattern.flat_expr ->
+        tag_flat_expr ->
         (LispBuilder.node, quotient_typing_error) result
 
       val build_top_level_elem :
@@ -248,15 +171,13 @@ end
 module Make : S = struct
   (* Required for exposing Expr.std_expr_of_std_pattern *)
   open Expr
-
-  (* Required for exposing Pattern.std_pattern constructors *)
-  open Pattern
   module Pattern = Pattern.StdPattern
   module Expr = Expr.StdExpr
   module Unifier = Unifier.StdUnifier
   module QuotientType = QuotientType.StdQuotientType
   module CustomType = CustomType.StdCustomType
   module Program = Program.StdProgram
+  open FlatPattern
 
   module type LispBuilderSig = sig
     (** The type of a node in the builder *)
@@ -311,6 +232,10 @@ module Make : S = struct
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type tag_pattern = pattern_tag Pattern.t [@@deriving sexp, equal]
   type tag_expr = (expr_tag, pattern_tag) Expr.t [@@deriving sexp, equal]
+  type tag_flat_pattern = pattern_tag FlatPattern.M.t [@@deriving sexp, equal]
+
+  type tag_flat_expr = (expr_tag, pattern_tag) FlatExpr.t
+  [@@deriving sexp, equal]
 
   let pattern_tag_to_expr_tag (v : pattern_tag) : expr_tag =
     ({ t = v.t } : expr_tag)
@@ -330,17 +255,10 @@ module Make : S = struct
 
   type quotient_typing_error =
     | QuotientConstraintCheckFailed
-        (** A quotient equality constructor is violated within the code *)
     | SmtUnknownResult
-        (** The SMT solver was unable to determine the validity of some of the
-            input conditions *)
-    | UnexpectedTrivialMatchCasePatternError
-        (** The pattern for a case of a match construct was the trivial case
-            (matching all variables, equivalent to just renaming a variable)
-            unexpectedly and cannot be handled *)
+    | PatternFlatteningError of FlatPattern.flattening_error
     | PairTypeNotDefinedInState of Vtype.t * Vtype.t
     | UndefinedCustomTypeName of string
-        (** A custom type of the given name was referenced but isn't defined *)
   [@@deriving sexp, equal]
 
   (** Generate a fresh variable name, given a set of the currently-defined names
@@ -354,510 +272,6 @@ module Make : S = struct
     in
     let new_name = loop 0 in
     (new_name, Set.add existing_names new_name)
-
-  (** Provides functionality for flattened patterns in Expr expressions *)
-  module FlatPattern = struct
-    type t =
-      | FlatPatPair of
-          pattern_tag
-          * (pattern_tag * Varname.t * Vtype.t)
-          * (pattern_tag * Varname.t * Vtype.t)
-      | FlatPatConstructor of
-          pattern_tag * string * (pattern_tag * Varname.t * Vtype.t)
-    [@@deriving sexp, equal]
-
-    type flat_pattern = t [@@deriving sexp, equal]
-
-    type flat_expr =
-      | UnitLit of expr_tag
-      | IntLit of expr_tag * int
-      | Add of expr_tag * flat_expr * flat_expr
-      | Neg of expr_tag * flat_expr
-      | Subtr of expr_tag * flat_expr * flat_expr
-      | Mult of expr_tag * flat_expr * flat_expr
-      | BoolLit of expr_tag * bool
-      | BNot of expr_tag * flat_expr
-      | BOr of expr_tag * flat_expr * flat_expr
-      | BAnd of expr_tag * flat_expr * flat_expr
-      | Pair of expr_tag * flat_expr * flat_expr
-      | Eq of expr_tag * flat_expr * flat_expr
-      | Gt of expr_tag * flat_expr * flat_expr
-      | GtEq of expr_tag * flat_expr * flat_expr
-      | Lt of expr_tag * flat_expr * flat_expr
-      | LtEq of expr_tag * flat_expr * flat_expr
-      | If of expr_tag * flat_expr * flat_expr * flat_expr
-      | Var of expr_tag * string
-      | Let of expr_tag * Varname.t * flat_expr * flat_expr
-      | App of expr_tag * flat_expr * flat_expr
-      | Match of
-          expr_tag
-          * flat_expr
-          * Vtype.t
-          * (flat_pattern * flat_expr) Nonempty_list.t
-      | Constructor of expr_tag * string * flat_expr
-    [@@deriving sexp, equal]
-
-    type flat_top_level_defn = {
-      recursive : bool;
-      name : string;
-      param : Varname.t * Vtype.t;
-      return_t : Vtype.t;
-      body : flat_expr;
-    }
-    [@@deriving sexp, equal]
-
-    type flat_program = {
-      custom_types : tag_custom_type list;
-      top_level_defns : flat_top_level_defn list;
-      e : flat_expr;
-    }
-    [@@deriving sexp, equal]
-
-    let flat_pattern_node_val : flat_pattern -> pattern_tag = function
-      | FlatPatPair (v, _, _) -> v
-      | FlatPatConstructor (v, _, _) -> v
-
-    let flat_node_val : flat_expr -> expr_tag = function
-      | UnitLit v -> v
-      | IntLit (v, _) -> v
-      | Add (v, _, _) -> v
-      | Neg (v, _) -> v
-      | Subtr (v, _, _) -> v
-      | Mult (v, _, _) -> v
-      | BoolLit (v, _) -> v
-      | BNot (v, _) -> v
-      | BOr (v, _, _) -> v
-      | BAnd (v, _, _) -> v
-      | Pair (v, _, _) -> v
-      | Eq (v, _, _) -> v
-      | Gt (v, _, _) -> v
-      | GtEq (v, _, _) -> v
-      | Lt (v, _, _) -> v
-      | LtEq (v, _, _) -> v
-      | If (v, _, _, _) -> v
-      | Var (v, _) -> v
-      | Let (v, _, _, _) -> v
-      | App (v, _, _) -> v
-      | Match (v, _, _, _) -> v
-      | Constructor (v, _, _) -> v
-
-    (** Get the list of variables and their types that this pattern introduces
-        to its case expression's variable context *)
-    let defined_vars : t -> (Varname.t * Vtype.t) list = function
-      | FlatPatPair (_, (_, x1name, x1type), (_, x2name, x2type)) ->
-          [ (x1name, x1type); (x2name, x2type) ]
-      | FlatPatConstructor (_, _, (_, xname, xtype)) -> [ (xname, xtype) ]
-
-    let rec expr_rename_var ~(old_name : Varname.t) ~(new_name : Varname.t) =
-      function
-      | UnitLit _ as e -> e
-      | IntLit _ as e -> e
-      | BoolLit _ as e -> e
-      | Add (v, e1, e2) ->
-          Add
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | Neg (v, e) -> Neg (v, expr_rename_var ~old_name ~new_name e)
-      | Subtr (v, e1, e2) ->
-          Subtr
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | Mult (v, e1, e2) ->
-          Mult
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | BNot (v, e) -> BNot (v, expr_rename_var ~old_name ~new_name e)
-      | BOr (v, e1, e2) ->
-          BOr
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | BAnd (v, e1, e2) ->
-          BAnd
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | Pair (v, e1, e2) ->
-          Pair
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | Eq (v, e1, e2) ->
-          Eq
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | Gt (v, e1, e2) ->
-          Gt
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | GtEq (v, e1, e2) ->
-          GtEq
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | Lt (v, e1, e2) ->
-          Lt
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | LtEq (v, e1, e2) ->
-          LtEq
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | If (v, e1, e2, e3) ->
-          If
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2,
-              expr_rename_var ~old_name ~new_name e3 )
-      | Var (v, xname) ->
-          if equal_string old_name xname then Var (v, new_name)
-          else Var (v, xname)
-      | Let (v, xname, e1, e2) ->
-          Let
-            ( v,
-              xname,
-              expr_rename_var ~old_name ~new_name e1,
-              if equal_string xname old_name then e2
-              else expr_rename_var ~old_name ~new_name e2 )
-      | App (v, e1, e2) ->
-          App
-            ( v,
-              expr_rename_var ~old_name ~new_name e1,
-              expr_rename_var ~old_name ~new_name e2 )
-      | Match (v, e, t2, cases) ->
-          Match
-            ( v,
-              expr_rename_var ~old_name ~new_name e,
-              t2,
-              Nonempty_list.map cases ~f:(fun (case_p, case_e) ->
-                  ( case_p,
-                    if
-                      List.exists ~f:(equal_string old_name)
-                        (defined_vars case_p |> List.map ~f:fst)
-                    then case_e
-                    else expr_rename_var ~old_name ~new_name case_e )) )
-      | Constructor (v, name, e) ->
-          Constructor (v, name, expr_rename_var ~old_name ~new_name e)
-
-    (** Convert a flat pattern to a regular pattern *)
-    let to_non_flat_pattern : t -> tag_pattern = function
-      | FlatPatPair (v, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)) ->
-          PatPair
-            (v, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
-      | FlatPatConstructor (v, c_name, (x1_v, x1_name, x1_t)) ->
-          PatConstructor (v, c_name, PatName (x1_v, x1_name, x1_t))
-
-    (** Flatten a single case of a Match node so that the pattern is a flat
-        pattern, and modify the case expression to perform any subsequent
-        matching as needed *)
-    let flatten_case_pattern ~(existing_names : StringSet.t)
-        ((p : tag_pattern), (e : flat_expr)) :
-        (StringSet.t * flat_pattern * flat_expr, quotient_typing_error) Result.t
-        =
-      let open Result in
-      match p with
-      | PatName _ -> Error UnexpectedTrivialMatchCasePatternError
-      | PatPair
-          (v_pair, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
-        ->
-          (* A flat pair pattern *)
-          ( existing_names,
-            FlatPatPair (v_pair, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)),
-            e )
-          |> Ok
-      | PatConstructor (v_constructor, c_name, PatName (x_v, x_name, x_t)) ->
-          (* A flat constructor pattern *)
-          ( existing_names,
-            FlatPatConstructor (v_constructor, c_name, (x_v, x_name, x_t)),
-            e )
-          |> Ok
-      | _ ->
-          failwith
-            "TODO - the compound cases for flattening patterns haven't yet \
-             been implemented"
-    (*
-    let outer_expr_type : Vtype.t = (flat_node_val e).t in
-    match p with
-    | PatName _ -> Error UnexpectedTrivialMatchCasePatternError
-    | PatPair
-        (v_pair, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
-      ->
-        (* A flat pair pattern *)
-        ( existing_names,
-          FlatPatPair (v_pair, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)),
-          e )
-        |> Ok
-    | PatPair (v, p1, p2) ->
-        (* A compound pair pattern.
-
-            ```
-            match orig_e with
-            | ({p1}, {p2}) -> e
-
-            becomes
-
-            match orig_e with
-              | (x1, x2) ->
-                ( match x1 with
-                  | {flattened p1} ->
-                    ( match x2 with
-                      | {flattened p2} -> e
-                    )
-                )
-            ``` *)
-        let new_binding_name_1, existing_names =
-          generate_fresh_varname ~seed_name:"fst" existing_names
-        in
-        let new_binding_name_2, existing_names =
-          generate_fresh_varname ~seed_name:"snd" existing_names
-        in
-        let p1_t = (Pattern.node_val p1).t in
-        let p2_t = (Pattern.node_val p2).t in
-        flatten_case_pattern ~existing_names (p2, e)
-        >>= fun (existing_names, flattened_p2_case_p, flattened_p2_case_e) ->
-        flatten_case_pattern ~existing_names
-          ( p1,
-            Match
-              ( { t = outer_expr_type },
-                Var ({ t = p2_t }, new_binding_name_2),
-                Nonempty_list.singleton
-                  (flattened_p2_case_p, flattened_p2_case_e) ) )
-        >>| fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
-        ( existing_names,
-          FlatPatPair
-            ( v,
-              ({ t = p1_t }, new_binding_name_1, p1_t),
-              ({ t = p2_t }, new_binding_name_2, p2_t) ),
-          Match
-            ( { t = outer_expr_type },
-              Var ({ t = p1_t }, new_binding_name_1),
-              Nonempty_list.singleton (flattened_p1_case_p, flattened_p1_case_e)
-            ) )
-    | PatConstructor (v_constructor, c_name, PatName (x_v, x_name, x_t)) ->
-        (* A flat constructor pattern *)
-        ( existing_names,
-          FlatPatConstructor (v_constructor, c_name, (x_v, x_name, x_t)),
-          e )
-        |> Ok
-    | PatConstructor (v, c_name, p1) ->
-        (* A compound constructor pattern
-
-            ```
-            match orig_e with
-            | C ({p1}) -> e
-
-            becomes
-
-            match orig_e with
-              | C x ->
-                ( match x with
-                  | {flattened p1} -> e
-                )
-            ``` *)
-        let new_binding_name, existing_names =
-          generate_fresh_varname ~seed_name:"val" existing_names
-        in
-        let p1_t = (Pattern.node_val p1).t in
-        flatten_case_pattern ~existing_names (p1, e)
-        >>| fun (existing_names, flattened_p1_case_p, flattened_p1_case_e) ->
-        ( existing_names,
-          FlatPatConstructor (v, c_name, ({ t = p1_t }, new_binding_name, p1_t)),
-          Match
-            ( { t = outer_expr_type },
-              Var ({ t = p1_t }, new_binding_name),
-              Nonempty_list.singleton (flattened_p1_case_p, flattened_p1_case_e)
-            ) ) *)
-
-    (** Convert an Expr expression to a flat expression *)
-    let rec of_expr ~(existing_names : StringSet.t) :
-        tag_expr -> (StringSet.t * flat_expr, quotient_typing_error) Result.t =
-      let open Result in
-      let unop (recomb : StringSet.t -> flat_expr -> StringSet.t * flat_expr)
-          ~(existing_names : StringSet.t) (e1 : tag_expr) :
-          (StringSet.t * flat_expr, quotient_typing_error) Result.t =
-        of_expr ~existing_names e1 >>= fun (existing_names, e1') ->
-        Ok (recomb existing_names e1')
-      in
-      let binop
-          (recomb :
-            StringSet.t -> flat_expr -> flat_expr -> StringSet.t * flat_expr)
-          ~(existing_names : StringSet.t) (e1 : tag_expr) (e2 : tag_expr) :
-          (StringSet.t * flat_expr, quotient_typing_error) Result.t =
-        of_expr ~existing_names e1 >>= fun (existing_names, e1') ->
-        of_expr ~existing_names e2 >>= fun (existing_names, e2') ->
-        Ok (recomb existing_names e1' e2')
-      in
-      function
-      | UnitLit v -> Ok (existing_names, UnitLit v)
-      | IntLit (v, x) -> Ok (existing_names, IntLit (v, x))
-      | Add (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, Add (v, e1', e2')))
-            ~existing_names e1 e2
-      | Neg (v, e) ->
-          unop
-            (fun existing_names e' -> (existing_names, Neg (v, e')))
-            ~existing_names e
-      | Subtr (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' ->
-              (existing_names, Subtr (v, e1', e2')))
-            ~existing_names e1 e2
-      | Mult (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, Mult (v, e1', e2')))
-            ~existing_names e1 e2
-      | BoolLit (v, b) -> Ok (existing_names, BoolLit (v, b))
-      | BNot (v, e) ->
-          unop
-            (fun existing_names e' -> (existing_names, BNot (v, e')))
-            ~existing_names e
-      | BOr (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, BOr (v, e1', e2')))
-            ~existing_names e1 e2
-      | BAnd (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, BAnd (v, e1', e2')))
-            ~existing_names e1 e2
-      | Pair (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, Pair (v, e1', e2')))
-            ~existing_names e1 e2
-      | Eq (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, Eq (v, e1', e2')))
-            ~existing_names e1 e2
-      | Gt (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, Gt (v, e1', e2')))
-            ~existing_names e1 e2
-      | GtEq (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, GtEq (v, e1', e2')))
-            ~existing_names e1 e2
-      | Lt (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, Lt (v, e1', e2')))
-            ~existing_names e1 e2
-      | LtEq (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, LtEq (v, e1', e2')))
-            ~existing_names e1 e2
-      | If (v, e1, e2, e3) ->
-          of_expr ~existing_names e1 >>= fun (existing_names, e1') ->
-          of_expr ~existing_names e2 >>= fun (existing_names, e2') ->
-          of_expr ~existing_names e3 >>| fun (existing_names, e3') ->
-          (existing_names, If (v, e1', e2', e3'))
-      | Var (v, name) -> Ok (existing_names, Var (v, name))
-      | Let (v, xname, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' ->
-              (existing_names, Let (v, xname, e1', e2')))
-            ~existing_names e1 e2
-      | App (v, e1, e2) ->
-          binop
-            (fun existing_names e1' e2' -> (existing_names, App (v, e1', e2')))
-            ~existing_names e1 e2
-      | Match (v, e, t2, cs) ->
-          of_expr ~existing_names e >>= fun (existing_names, e') ->
-          Nonempty_list.fold_result_consume_init ~init:existing_names
-            ~f:(fun acc (p, e) ->
-              let existing_names =
-                match acc with
-                | First existing_names -> existing_names
-                | Second (existing_names, _) -> existing_names
-              in
-              of_expr ~existing_names e >>= fun (existing_names, e') ->
-              flatten_case_pattern ~existing_names (p, e')
-              >>= fun (existing_names, flat_p, flat_e) ->
-              match acc with
-              | First _ ->
-                  (existing_names, Nonempty_list.singleton (flat_p, flat_e))
-                  |> Ok
-              | Second (_, acc) ->
-                  (existing_names, Nonempty_list.cons (flat_p, flat_e) acc)
-                  |> Ok)
-            cs
-          >>= fun (existing_names, flat_cases_rev) ->
-          (existing_names, Match (v, e', t2, Nonempty_list.rev flat_cases_rev))
-          |> Ok
-      | Constructor (v, name, e) ->
-          unop
-            (fun existing_names e' ->
-              (existing_names, Constructor (v, name, e')))
-            ~existing_names e
-
-    (** Convert a flat Expr expression to a non-flat Expr expression *)
-    let rec to_non_flat_expr : flat_expr -> tag_expr = function
-      | UnitLit v -> UnitLit v
-      | IntLit (v, n) -> IntLit (v, n)
-      | Add (v, e1, e2) -> Add (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | Neg (v, e) -> Neg (v, to_non_flat_expr e)
-      | Subtr (v, e1, e2) -> Subtr (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | Mult (v, e1, e2) -> Mult (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | BoolLit (v, b) -> BoolLit (v, b)
-      | BNot (v, e) -> BNot (v, to_non_flat_expr e)
-      | BOr (v, e1, e2) -> BOr (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | BAnd (v, e1, e2) -> BAnd (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | Pair (v, e1, e2) -> Pair (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | Eq (v, e1, e2) -> Eq (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | Gt (v, e1, e2) -> Gt (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | GtEq (v, e1, e2) -> GtEq (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | Lt (v, e1, e2) -> Lt (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | LtEq (v, e1, e2) -> LtEq (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | If (v, e1, e2, e3) ->
-          If (v, to_non_flat_expr e1, to_non_flat_expr e2, to_non_flat_expr e3)
-      | Var (v, name) -> Var (v, name)
-      | Let (v, xname, e1, e2) ->
-          Let (v, xname, to_non_flat_expr e1, to_non_flat_expr e2)
-      | App (v, e1, e2) -> App (v, to_non_flat_expr e1, to_non_flat_expr e2)
-      | Match (v, e, t2, cases) ->
-          Match
-            ( v,
-              to_non_flat_expr e,
-              t2,
-              Nonempty_list.map
-                ~f:(fun (p, e) -> (to_non_flat_pattern p, to_non_flat_expr e))
-                cases )
-      | Constructor (v, name, e) -> Constructor (v, name, to_non_flat_expr e)
-
-    (** Convert a program to a flat program *)
-    let of_program ~(existing_names : StringSet.t) (prog : tag_program) :
-        (StringSet.t * flat_program, quotient_typing_error) Result.t =
-      let open Result in
-      List.fold_result ~init:(existing_names, [])
-        ~f:(fun
-            (existing_names, acc_defns_rev)
-            (defn : (expr_tag, pattern_tag) Program.top_level_defn)
-          ->
-          of_expr ~existing_names defn.body >>| fun (existing_names, body') ->
-          ( existing_names,
-            {
-              recursive = defn.recursive;
-              name = defn.name;
-              param = defn.param;
-              return_t = defn.return_t;
-              body = body';
-            }
-            :: acc_defns_rev ))
-        prog.top_level_defns
-      >>= fun (existing_names, flat_defns_rev) ->
-      of_expr ~existing_names prog.e >>| fun (existing_names, e') ->
-      ( existing_names,
-        {
-          custom_types = prog.custom_types;
-          top_level_defns = List.rev flat_defns_rev;
-          e = e';
-        } )
-  end
 
   (** Provides integration with the SMT solver *)
   module Smt = struct
@@ -896,7 +310,7 @@ module Make : S = struct
           [ `NonRec of (Varname.t * Vtype.t) option
           | `Rec of Varname.t * Vtype.t ];
         return_t : Vtype.t;
-        body : FlatPattern.flat_expr;
+        body : tag_flat_expr;
       }
       [@@deriving sexp, equal]
 
@@ -1120,8 +534,7 @@ module Make : S = struct
               add_pair_types_used state t2
         in
         let rec search_add_pair_types_used (state : state) :
-            FlatPattern.flat_expr -> (state, quotient_typing_error) Result.t =
-          function
+            tag_flat_expr -> (state, quotient_typing_error) Result.t = function
           | UnitLit v -> add_pair_types_used state v.t
           | IntLit (v, _) -> add_pair_types_used state v.t
           | Add (v, e1, e2) ->
@@ -1195,7 +608,7 @@ module Make : S = struct
               search_add_pair_types_used state e1 >>= fun state ->
               Nonempty_list.fold_result
                 ~f:(fun state (pat, e) ->
-                  let pat_t = FlatPattern.flat_pattern_node_val pat in
+                  let pat_t = FlatPattern.M.node_val pat in
                   add_pair_types_used state pat_t.t >>= fun state ->
                   search_add_pair_types_used state e)
                 ~init:state cases
@@ -1211,7 +624,7 @@ module Make : S = struct
     module Assertion = struct
       type t =
         | Not of t
-        | Eq of Vtype.t option * FlatPattern.flat_expr * FlatPattern.flat_expr
+        | Eq of Vtype.t option * tag_flat_expr * tag_flat_expr
             (** Equality node. Optionally the types of the two expressions can
                 be specified. This allows for equality lifting for quotient
                 types *)
@@ -1248,8 +661,7 @@ module Make : S = struct
 
       let rec build_expr ~(directly_callable_fun_names : StringSet.t)
           (state : State.t) :
-          FlatPattern.flat_expr ->
-          (LispBuilder.node, quotient_typing_error) Result.t =
+          tag_flat_expr -> (LispBuilder.node, quotient_typing_error) Result.t =
         let open Result in
         let open LispBuilder in
         function
@@ -1313,8 +725,8 @@ module Make : S = struct
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
             Ok (Op ("let", [ List [ List [ Atom xname; node1 ] ]; node2 ]))
         | Pair (_, e1, e2) ->
-            let e1_t = (FlatPattern.flat_node_val e1).t in
-            let e2_t = (FlatPattern.flat_node_val e2).t in
+            let e1_t = (FlatPattern.FlatExpr.node_val e1).t in
+            let e2_t = (FlatPattern.FlatExpr.node_val e2).t in
             state_get_pair_type_info (e1_t, e2_t) state
             >>= fun pair_type_info ->
             build_expr ~directly_callable_fun_names state e1 >>= fun e1' ->
@@ -1335,9 +747,7 @@ module Make : S = struct
             Ok (Op (name, [ node ]))
         | Match (_, e, _, cases) ->
             build_expr ~directly_callable_fun_names state e >>= fun e_node ->
-            let build_case
-                ( (pat : FlatPattern.flat_pattern),
-                  (body : FlatPattern.flat_expr) ) :
+            let build_case ((pat : tag_flat_pattern), (body : tag_flat_expr)) :
                 (node, quotient_typing_error) Result.t =
               build_expr ~directly_callable_fun_names state body
               >>= fun body_node ->
@@ -1483,7 +893,7 @@ module Make : S = struct
                 |> fun decl_node ->
                 (* Assertion nodes *)
                 let create_assert_node (bindings : (Varname.t * Vtype.t) list)
-                    (l : FlatPattern.flat_expr) (r : FlatPattern.flat_expr) :
+                    (l : tag_flat_expr) (r : tag_flat_expr) :
                     (node, quotient_typing_error) Result.t =
                   List.fold_result bindings ~init:([], [])
                     ~f:(fun (qt_names, acc_rev) (xname, xtype) ->
@@ -1520,12 +930,12 @@ module Make : S = struct
                   let l, r =
                     List.fold qt_binding_names ~init:(l, r)
                       ~f:(fun (l, r) (xname, _) ->
-                        ( FlatPattern.expr_rename_var ~old_name:xname
+                        ( FlatPattern.FlatExpr.rename_var ~old_name:xname
                             ~new_name:
                               (custom_special_name
                                  (`QuotientEqBinding (xname, `Pattern)))
                             l,
-                          FlatPattern.expr_rename_var ~old_name:xname
+                          FlatPattern.FlatExpr.rename_var ~old_name:xname
                             ~new_name:
                               (custom_special_name
                                  (`QuotientEqBinding (xname, `Expr)))
@@ -1585,8 +995,13 @@ module Make : S = struct
                     |> std_expr_of_std_pattern
                          ~convert_tag:pattern_tag_to_expr_tag
                     |> FlatPattern.of_expr ~existing_names
+                    |> Result.map_error ~f:(fun err ->
+                           PatternFlatteningError err)
                     >>= fun (existing_names, flat_l) ->
-                    snd eqcons.body |> FlatPattern.of_expr ~existing_names
+                    snd eqcons.body
+                    |> FlatPattern.of_expr ~existing_names
+                    |> Result.map_error ~f:(fun err ->
+                           PatternFlatteningError err)
                     >>= fun (existing_names, flat_r) ->
                     create_assert_node eqcons.bindings flat_l flat_r
                     >>| fun node -> (existing_names, node :: acc_rev))
@@ -1749,8 +1164,10 @@ module Make : S = struct
             in
             let r = reform_match_with_arg (snd eqcons.body) in
             FlatPattern.of_expr ~existing_names l
+            |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
             >>= fun (existing_names, l_flat) ->
             FlatPattern.of_expr ~existing_names r
+            |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
             >>= fun (existing_names, r_flat) ->
             (* Form the main assertion of the SMT check *)
             let assertion : Smt.Assertion.t =
@@ -1768,8 +1185,7 @@ module Make : S = struct
 
   let rec check_expr ~(existing_names : StringSet.t)
       ~(quotient_types : tag_quotient_type list) (state : Smt.State.t)
-      (orig_e : FlatPattern.flat_expr) :
-      (StringSet.t, quotient_typing_error) Result.t =
+      (orig_e : tag_flat_expr) : (StringSet.t, quotient_typing_error) Result.t =
     let open Result in
     let open Smt.State in
     match orig_e with
@@ -1799,7 +1215,7 @@ module Make : S = struct
     | Let (_, xname, e1, e2) ->
         check_expr ~existing_names ~quotient_types state e1
         >>= fun existing_names ->
-        let e1_type = (FlatPattern.flat_node_val e1).t in
+        let e1_type = (FlatPattern.FlatExpr.node_val e1).t in
 
         state_add_var_defn
           { name = xname; kind = `NonRec None; return_t = e1_type; body = e1 }
@@ -1812,7 +1228,7 @@ module Make : S = struct
     | Match (v, e1, t_out, cases) ->
         check_expr ~existing_names ~quotient_types state e1
         >>= fun existing_names ->
-        let e1_t = (FlatPattern.flat_node_val e1).t in
+        let e1_t = (FlatPattern.FlatExpr.node_val e1).t in
         (match e1_t with
         | VTypeCustom ct_name -> (
             match
@@ -1823,8 +1239,7 @@ module Make : S = struct
                 let non_flat_cases =
                   Nonempty_list.map
                     ~f:(fun (flat_p, flat_e) ->
-                      FlatPattern.
-                        (to_non_flat_pattern flat_p, to_non_flat_expr flat_e))
+                      FlatPattern.(to_std_pattern flat_p, to_std_expr flat_e))
                     cases
                 in
                 perform_quotient_match_check ~existing_names ~quotient_type:qt
@@ -1840,7 +1255,7 @@ module Make : S = struct
               List.fold ~init:state
                 ~f:(fun acc (xname, xtype) ->
                   state_add_var_decl (xname, xtype) acc)
-                (FlatPattern.defined_vars p)
+                (FlatPattern.M.defined_vars p)
             in
             (* Check the case expression, with the updated state *)
             check_expr ~existing_names ~quotient_types state' e)
@@ -1855,6 +1270,7 @@ module Make : S = struct
     let open Smt.State in
     let existing_names = Program.existing_names prog in
     FlatPattern.of_program ~existing_names prog
+    |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
     >>= fun (existing_names, flat_prog) ->
     let quotient_types : tag_quotient_type list =
       List.filter_map

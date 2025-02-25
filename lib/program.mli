@@ -3,10 +3,7 @@ open Utils
 module type S = sig
   module Pattern : Pattern.S
   module Expr : Expr.S with module Pattern = Pattern
-
-  module QuotientType :
-    QuotientType.S with module Pattern = Pattern and module Expr = Expr
-
+  module QuotientType : QuotientType.S
   module CustomType : CustomType.S with module QuotientType = QuotientType
 
   (** A top-level function definition *)
@@ -101,10 +98,10 @@ module type S = sig
   end
 end
 
-module Make (CustomType : CustomType.S) :
+module Make (Expr : Expr.S) (CustomType : CustomType.S) :
   S
-    with module Pattern = CustomType.QuotientType.Pattern
-     and module Expr = CustomType.QuotientType.Expr
+    with module Pattern = Expr.Pattern
+     and module Expr = Expr
      and module QuotientType = CustomType.QuotientType
      and module CustomType = CustomType
 
