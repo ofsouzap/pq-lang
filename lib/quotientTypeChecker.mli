@@ -9,24 +9,6 @@ module type S = sig
   module Program = Program.StdProgram
   open FlatPattern
 
-  module type LispBuilderSig = sig
-    (** The type of a node in the builder *)
-    type node =
-      | Unit  (** The unit value *)
-      | Atom of string  (** An atomic value *)
-      | Op of string * node list  (** An operation with argument nodes *)
-      | List of node list  (** A list of nodes *)
-    [@@deriving sexp, equal]
-
-    (** Build the source to a string *)
-    val build : use_newlines:bool -> node list -> string
-
-    (** Build the source to a human-readable string *)
-    val build_hum : node list -> string
-  end
-
-  module LispBuilder : LispBuilderSig
-
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type tag_pattern = pattern_tag Pattern.t [@@deriving sexp, equal]
@@ -125,30 +107,26 @@ module type S = sig
 
     module Builder : sig
       val build_vtype :
-        State.t -> Vtype.t -> (LispBuilder.node, quotient_typing_error) result
+        State.t -> Vtype.t -> (Sexp.t, quotient_typing_error) result
 
       val build_expr :
         directly_callable_fun_names:Utils.StringSet.t ->
         State.t ->
         tag_flat_expr ->
-        (LispBuilder.node, quotient_typing_error) result
+        (Sexp.t, quotient_typing_error) result
 
       val build_top_level_elem :
         State.t ->
         State.top_level_elem ->
-        (LispBuilder.node, quotient_typing_error) result
+        (Sexp.t, quotient_typing_error) result
 
       val build_state :
         existing_names:Utils.StringSet.t ->
         State.t ->
-        ( Utils.StringSet.t * LispBuilder.node list,
-          quotient_typing_error )
-        result
+        (Utils.StringSet.t * Sexp.t list, quotient_typing_error) result
 
       val build_assertion :
-        state:State.t ->
-        Assertion.t ->
-        (LispBuilder.node, quotient_typing_error) result
+        state:State.t -> Assertion.t -> (Sexp.t, quotient_typing_error) result
     end
 
     type formula

@@ -1,7 +1,8 @@
 open Core
 open Utils
 
-(* TODO - stop using LispBuilder, just use Core.Sexp instead *)
+let sexp_op ((op : string), (args : Sexp.t list)) : Sexp.t =
+  Sexp.List (Sexp.Atom op :: args)
 
 module type S = sig
   module Pattern = Pattern.StdPattern
@@ -11,24 +12,6 @@ module type S = sig
   module CustomType = CustomType.StdCustomType
   module Program = Program.StdProgram
   open FlatPattern
-
-  module type LispBuilderSig = sig
-    (** The type of a node in the builder *)
-    type node =
-      | Unit  (** The unit value *)
-      | Atom of string  (** An atomic value *)
-      | Op of string * node list  (** An operation with argument nodes *)
-      | List of node list  (** A list of nodes *)
-    [@@deriving sexp, equal]
-
-    (** Build the source to a string *)
-    val build : use_newlines:bool -> node list -> string
-
-    (** Build the source to a human-readable string *)
-    val build_hum : node list -> string
-  end
-
-  module LispBuilder : LispBuilderSig
 
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
@@ -128,30 +111,26 @@ module type S = sig
 
     module Builder : sig
       val build_vtype :
-        State.t -> Vtype.t -> (LispBuilder.node, quotient_typing_error) result
+        State.t -> Vtype.t -> (Sexp.t, quotient_typing_error) result
 
       val build_expr :
         directly_callable_fun_names:Utils.StringSet.t ->
         State.t ->
         tag_flat_expr ->
-        (LispBuilder.node, quotient_typing_error) result
+        (Sexp.t, quotient_typing_error) result
 
       val build_top_level_elem :
         State.t ->
         State.top_level_elem ->
-        (LispBuilder.node, quotient_typing_error) result
+        (Sexp.t, quotient_typing_error) result
 
       val build_state :
         existing_names:Utils.StringSet.t ->
         State.t ->
-        ( Utils.StringSet.t * LispBuilder.node list,
-          quotient_typing_error )
-        result
+        (Utils.StringSet.t * Sexp.t list, quotient_typing_error) result
 
       val build_assertion :
-        state:State.t ->
-        Assertion.t ->
-        (LispBuilder.node, quotient_typing_error) result
+        state:State.t -> Assertion.t -> (Sexp.t, quotient_typing_error) result
     end
 
     type formula
@@ -178,55 +157,6 @@ module Make : S = struct
   module CustomType = CustomType.StdCustomType
   module Program = Program.StdProgram
   open FlatPattern
-
-  module type LispBuilderSig = sig
-    (** The type of a node in the builder *)
-    type node =
-      | Unit  (** The unit value *)
-      | Atom of string  (** An atomic value *)
-      | Op of string * node list  (** An operation with argument nodes *)
-      | List of node list  (** A list of nodes *)
-    [@@deriving sexp, equal]
-
-    (** Build the source to a string *)
-    val build : use_newlines:bool -> node list -> string
-
-    (** Build the source to a human-readable string *)
-    val build_hum : node list -> string
-  end
-
-  module LispBuilder : LispBuilderSig = struct
-    type node =
-      | Unit
-      | Atom of string
-      | Op of string * node list
-      | List of node list
-    [@@deriving sexp, equal]
-
-    let rec build_node = function
-      | Unit -> "()"
-      | Atom s -> s
-      | Op (op, []) -> sprintf "(%s)" op
-      | Op (op, (_ :: _ as xs)) ->
-          sprintf "(%s %s)" op
-            (String.concat ~sep:" " (List.map ~f:build_node xs))
-      | List xs ->
-          sprintf "(%s)" (String.concat ~sep:" " (List.map ~f:build_node xs))
-
-    let build ~(use_newlines : bool) (nodes : node list) : string =
-      let sep = if use_newlines then "\n" else " " in
-      String.concat ~sep (List.map ~f:build_node nodes)
-
-    let rec node_to_sexp : node -> Sexp.t = function
-      | Unit -> List []
-      | Atom s -> Atom s
-      | Op (op, nodes) -> List (Atom op :: List.map ~f:node_to_sexp nodes)
-      | List nodes -> List (List.map ~f:node_to_sexp nodes)
-
-    let build_hum (nodes : node list) =
-      String.concat ~sep:"\n"
-        (List.map ~f:(fun n -> node_to_sexp n |> Sexp.to_string_hum) nodes)
-  end
 
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
@@ -363,7 +293,7 @@ module Make : S = struct
                 about them. This used to decide which possible instantiations of
                 the pair type to create in the initial datatype declarations.
                 Added automatically by module *)
-        special_variant_types : LispBuilder.node list;
+        special_variant_types : Sexp.t list;
             (** These should be translated by: x -> "(declare-datatypes () x)".
                 Created automatically in state initialization *)
         variant_types : variant_type_info list;
@@ -392,11 +322,11 @@ module Make : S = struct
           pair_types_defined =
             (VtypePairMap.empty : pair_type_info VtypePairMap.t);
           special_variant_types =
-            LispBuilder.
-              [
+            [
+              sexp_op
                 (* Unit type *)
-                Op (vt_unit_name, [ Atom vt_unit_constructor_name ]);
-              ];
+                (vt_unit_name, [ Atom vt_unit_constructor_name ]);
+            ];
           variant_types = [];
           declared_consts = [ (vt_unit_val, VTypeUnit) ];
           top_level_rev = [];
@@ -641,9 +571,9 @@ module Make : S = struct
       open Assertion
 
       let rec build_vtype (state : State.t) (t : Vtype.t) :
-          (LispBuilder.node, quotient_typing_error) Result.t =
+          (Sexp.t, quotient_typing_error) Result.t =
         let open Result in
-        let open LispBuilder in
+        let open Sexp in
         (* Make sure to map the type to its root base type, in case it is a quotient type *)
         State.find_root_base_type state t >>= fun t ->
         match t with
@@ -656,14 +586,14 @@ module Make : S = struct
         | VTypeFun (t1, t2) ->
             build_vtype state t1 >>= fun t1_node ->
             build_vtype state t2 >>= fun t2_node ->
-            Ok (Op ("Array", [ t1_node; t2_node ]))
+            Ok (sexp_op ("Array", [ t1_node; t2_node ]))
         | VTypeCustom ct_name -> Ok (Atom ct_name)
 
       let rec build_expr ~(directly_callable_fun_names : StringSet.t)
           (state : State.t) :
-          tag_flat_expr -> (LispBuilder.node, quotient_typing_error) Result.t =
+          tag_flat_expr -> (Sexp.t, quotient_typing_error) Result.t =
         let open Result in
-        let open LispBuilder in
+        let open Sexp in
         function
         | UnitLit _ -> Ok (Atom vt_unit_val)
         | IntLit (_, n) -> Ok (Atom (Int.to_string n))
@@ -672,58 +602,58 @@ module Make : S = struct
         | Add (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("+", [ node1; node2 ]))
+            Ok (sexp_op ("+", [ node1; node2 ]))
         | Neg (_, e) ->
             build_expr ~directly_callable_fun_names state e >>= fun node ->
-            Ok (Op ("-", [ node ]))
+            Ok (sexp_op ("-", [ node ]))
         | Subtr (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("-", [ node1; node2 ]))
+            Ok (sexp_op ("-", [ node1; node2 ]))
         | Mult (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("*", [ node1; node2 ]))
+            Ok (sexp_op ("*", [ node1; node2 ]))
         | BNot (_, e) ->
             build_expr ~directly_callable_fun_names state e >>= fun node ->
-            Ok (Op ("not", [ node ]))
+            Ok (sexp_op ("not", [ node ]))
         | BOr (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("or", [ node1; node2 ]))
+            Ok (sexp_op ("or", [ node1; node2 ]))
         | BAnd (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("and", [ node1; node2 ]))
+            Ok (sexp_op ("and", [ node1; node2 ]))
         | Eq (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("=", [ node1; node2 ]))
+            Ok (sexp_op ("=", [ node1; node2 ]))
         | Gt (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op (">", [ node1; node2 ]))
+            Ok (sexp_op (">", [ node1; node2 ]))
         | GtEq (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op (">=", [ node1; node2 ]))
+            Ok (sexp_op (">=", [ node1; node2 ]))
         | Lt (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("<", [ node1; node2 ]))
+            Ok (sexp_op ("<", [ node1; node2 ]))
         | LtEq (_, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("<=", [ node1; node2 ]))
+            Ok (sexp_op ("<=", [ node1; node2 ]))
         | If (_, e1, e2, e3) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
             build_expr ~directly_callable_fun_names state e3 >>= fun node3 ->
-            Ok (Op ("ite", [ node1; node2; node3 ]))
+            Ok (sexp_op ("ite", [ node1; node2; node3 ]))
         | Let (_, xname, e1, e2) ->
             build_expr ~directly_callable_fun_names state e1 >>= fun node1 ->
             build_expr ~directly_callable_fun_names state e2 >>= fun node2 ->
-            Ok (Op ("let", [ List [ List [ Atom xname; node1 ] ]; node2 ]))
+            Ok (sexp_op ("let", [ List [ List [ Atom xname; node1 ] ]; node2 ]))
         | Pair (_, e1, e2) ->
             let e1_t = (FlatPattern.FlatExpr.node_val e1).t in
             let e2_t = (FlatPattern.FlatExpr.node_val e2).t in
@@ -731,24 +661,26 @@ module Make : S = struct
             >>= fun pair_type_info ->
             build_expr ~directly_callable_fun_names state e1 >>= fun e1' ->
             build_expr ~directly_callable_fun_names state e2 >>| fun e2' ->
-            Op (pair_type_info.constructor_name, [ e1'; e2' ])
+            sexp_op (pair_type_info.constructor_name, [ e1'; e2' ])
         | App (_, e1, e2) -> (
             build_expr ~directly_callable_fun_names state e1 >>= fun e1_node ->
             build_expr ~directly_callable_fun_names state e2 >>| fun e2_node ->
-            let get_default_repr () = Op ("select", [ e1_node; e2_node ]) in
+            let get_default_repr () =
+              sexp_op ("select", [ e1_node; e2_node ])
+            in
             match e1 with
             | Var (_, fname) ->
-                if Set.mem directly_callable_fun_names fname then
-                  Op (fname, [ e2_node ])
+                if Core.Set.mem directly_callable_fun_names fname then
+                  sexp_op (fname, [ e2_node ])
                 else get_default_repr ()
             | _ -> get_default_repr ())
         | Constructor (_, name, e) ->
             build_expr ~directly_callable_fun_names state e >>= fun node ->
-            Ok (Op (name, [ node ]))
+            Ok (sexp_op (name, [ node ]))
         | Match (_, e, _, cases) ->
             build_expr ~directly_callable_fun_names state e >>= fun e_node ->
             let build_case ((pat : tag_flat_pattern), (body : tag_flat_expr)) :
-                (node, quotient_typing_error) Result.t =
+                (Sexp.t, quotient_typing_error) Result.t =
               build_expr ~directly_callable_fun_names state body
               >>= fun body_node ->
               match pat with
@@ -758,7 +690,7 @@ module Make : S = struct
                   >>| fun pair_type_info ->
                   List
                     [
-                      Op
+                      sexp_op
                         ( pair_type_info.constructor_name,
                           [ Atom x1name; Atom x2name ] );
                       body_node;
@@ -771,21 +703,22 @@ module Make : S = struct
                 build_case case >>| fun case_node -> case_node :: acc)
               cases
             >>| List.rev
-            >>| fun case_nodes -> Op ("match", e_node :: [ List case_nodes ])
+            >>| fun case_nodes ->
+            sexp_op ("match", e_node :: [ List case_nodes ])
 
       let build_top_level_elem (state : State.t) :
-          top_level_elem -> (LispBuilder.node, quotient_typing_error) Result.t =
+          top_level_elem -> (Sexp.t, quotient_typing_error) Result.t =
         let open Result in
-        let open LispBuilder in
+        let open Sexp in
         function
         | VarDecl (xname, xtype) ->
             build_vtype state xtype >>= fun type_node ->
-            Ok (Op ("declare-const", [ Atom xname; type_node ]))
+            Ok (sexp_op ("declare-const", [ Atom xname; type_node ]))
         | VarDefn { name; kind; return_t; body } -> (
             match kind with
             | `NonRec None ->
                 build_vtype state return_t >>= fun type_node ->
-                Ok (Op ("declare-const", [ Atom name; type_node ]))
+                Ok (sexp_op ("declare-const", [ Atom name; type_node ]))
             | `NonRec (Some (param_name, param_t)) ->
                 build_vtype state param_t >>= fun param_type_node ->
                 build_vtype state return_t >>= fun return_type_node ->
@@ -793,7 +726,7 @@ module Make : S = struct
                   body
                 >>= fun body_node ->
                 Ok
-                  (Op
+                  (sexp_op
                      ( "define-fun",
                        [
                          Atom name;
@@ -809,7 +742,7 @@ module Make : S = struct
                   body
                 >>= fun body_node ->
                 Ok
-                  (Op
+                  (sexp_op
                      ( "define-fun-rec",
                        [
                          Atom name;
@@ -819,63 +752,62 @@ module Make : S = struct
                        ] )))
 
       let build_state ~(existing_names : StringSet.t) (state : State.t) :
-          (StringSet.t * LispBuilder.node list, quotient_typing_error) Result.t
-          =
+          (StringSet.t * Sexp.t list, quotient_typing_error) Result.t =
         let open Result in
-        let open LispBuilder in
-        let build_datatype_decl () : (node, quotient_typing_error) Result.t =
+        let build_datatype_decl () : (Sexp.t, quotient_typing_error) Result.t =
           (* Pair type declarations *)
           List.map (Map.to_alist state.pair_types_defined)
             ~f:(fun ((t1, t2), pair_type_info) ->
               build_vtype state t1 >>= fun t1_node ->
               build_vtype state t2 >>| fun t2_node ->
-              Op
+              sexp_op
                 ( pair_type_info.name,
                   [
-                    Op
+                    sexp_op
                       ( pair_type_info.constructor_name,
                         [
-                          Op (pair_type_info.fst_accessor_name, [ t1_node ]);
-                          Op (pair_type_info.snd_accessor_name, [ t2_node ]);
+                          sexp_op (pair_type_info.fst_accessor_name, [ t1_node ]);
+                          sexp_op (pair_type_info.snd_accessor_name, [ t2_node ]);
                         ] );
                   ] ))
           |> Result.all
-          >>= fun (pair_type_decls : node list) ->
+          >>= fun (pair_type_decls : Sexp.t list) ->
           (* Special variant type declarations *)
           List.map state.special_variant_types ~f:(fun special_variant_type ->
               Ok special_variant_type)
           |> Result.all
-          >>= fun (special_variant_type_decls : node list) ->
+          >>= fun (special_variant_type_decls : Sexp.t list) ->
           List.map state.variant_types ~f:(fun vt_info ->
               (* Create the nodes for the constructors *)
               List.map vt_info.constructors ~f:(fun c_info ->
                   build_vtype state c_info.t >>| fun t_node ->
-                  Op (c_info.name, [ Op (c_info.accessor_name, [ t_node ]) ]))
+                  sexp_op
+                    (c_info.name, [ sexp_op (c_info.accessor_name, [ t_node ]) ]))
               |> Result.all
               >>| fun constructor_nodes ->
               (* Create the main variant type definition node *)
-              Op (vt_info.name, constructor_nodes))
+              sexp_op (vt_info.name, constructor_nodes))
           |> Result.all
-          >>| fun (variant_type_decls : node list) ->
+          >>| fun (variant_type_decls : Sexp.t list) ->
           (* Combine all the datatype declarations into the single declare-datatypes node *)
           let datatype_decls =
             pair_type_decls @ special_variant_type_decls @ variant_type_decls
           in
-          Op ("declare-datatypes", [ Unit; List datatype_decls ])
+          sexp_op ("declare-datatypes", [ List []; List datatype_decls ])
         in
-        let build_consts_nodes () : (node list, quotient_typing_error) Result.t
-            =
+        let build_consts_nodes () :
+            (Sexp.t list, quotient_typing_error) Result.t =
           List.fold_result ~init:[]
             ~f:(fun acc (xname, xtype) ->
               build_vtype state xtype >>| fun xtype_node ->
-              Op ("declare-const", [ Atom xname; xtype_node ]) :: acc)
+              sexp_op ("declare-const", [ Atom xname; xtype_node ]) :: acc)
             state.declared_consts
           >>| List.rev
         in
         let build_lifted_eq_fun_nodes ~(existing_names : StringSet.t) () :
-            (StringSet.t * node list, quotient_typing_error) Result.t =
+            (StringSet.t * Sexp.t list, quotient_typing_error) Result.t =
           List.fold_result state.custom_types ~init:(existing_names, [])
-            ~f:(fun (existing_names, (acc_rev : node list list)) -> function
+            ~f:(fun (existing_names, (acc_rev : Sexp.t list list)) -> function
             | VariantType _ -> Ok (existing_names, acc_rev)
             | CustomType.QuotientType qt ->
                 let t = Vtype.VTypeCustom qt.name in
@@ -887,14 +819,14 @@ module Make : S = struct
                 build_vtype state t >>= fun t_node ->
                 build_vtype state VTypeBool >>= fun bool_node ->
                 (* Equality function definition node *)
-                Op
+                sexp_op
                   ( "declare-fun",
                     [ Atom eq_fun_name; List [ t_node; t_node ]; bool_node ] )
                 |> fun decl_node ->
                 (* Assertion nodes *)
                 let create_assert_node (bindings : (Varname.t * Vtype.t) list)
                     (l : tag_flat_expr) (r : tag_flat_expr) :
-                    (node, quotient_typing_error) Result.t =
+                    (Sexp.t, quotient_typing_error) Result.t =
                   List.fold_result bindings ~init:([], [])
                     ~f:(fun (qt_names, acc_rev) (xname, xtype) ->
                       (match xtype with
@@ -918,10 +850,11 @@ module Make : S = struct
                               (`QuotientEqBinding (xname, `Expr))
                           in
                           ( (xname, x_qt) :: qt_names,
-                            Op (xname_l, [ xtype_node ])
-                            :: Op (xname_r, [ xtype_node ])
+                            sexp_op (xname_l, [ xtype_node ])
+                            :: sexp_op (xname_r, [ xtype_node ])
                             :: acc_rev )
-                      | None -> (qt_names, Op (xname, [ xtype_node ]) :: acc_rev))
+                      | None ->
+                          (qt_names, sexp_op (xname, [ xtype_node ]) :: acc_rev))
                   >>=
                   fun ( (qt_binding_names : (string * tag_quotient_type) list),
                         bindings_nodes_rev )
@@ -947,7 +880,7 @@ module Make : S = struct
                   build_expr ~directly_callable_fun_names:StringSet.empty state
                     r
                   >>= fun r_node ->
-                  (let eq_node = Op (eq_fun_name, [ l_node; r_node ]) in
+                  (let eq_node = sexp_op (eq_fun_name, [ l_node; r_node ]) in
                    List.fold qt_binding_names ~init:eq_node
                      ~f:(fun acc_node (xname, x_qt) ->
                        let xname_l =
@@ -957,10 +890,10 @@ module Make : S = struct
                        let xname_r =
                          custom_special_name (`QuotientEqBinding (xname, `Expr))
                        in
-                       Op
+                       sexp_op
                          ( "=>",
                            [
-                             Op
+                             sexp_op
                                ( State.state_get_vtype_special_eq_fun_name state
                                    (VTypeCustom x_qt.name)
                                  |> Option.value_exn
@@ -972,20 +905,22 @@ module Make : S = struct
                            ] )))
                   |> fun body_node ->
                   Ok
-                    (Op
+                    (sexp_op
                        ( "assert",
-                         [ Op ("forall", [ List bindings_nodes; body_node ]) ]
-                       ))
+                         [
+                           sexp_op ("forall", [ List bindings_nodes; body_node ]);
+                         ] ))
                 in
                 (let arg_name = custom_special_name (`Var "x") in
-                 Op
+                 sexp_op
                    ( "assert",
                      [
-                       Op
+                       sexp_op
                          ( "forall",
                            [
                              List [ List [ Atom arg_name; t_node ] ];
-                             Op (eq_fun_name, [ Atom arg_name; Atom arg_name ]);
+                             sexp_op
+                               (eq_fun_name, [ Atom arg_name; Atom arg_name ]);
                            ] );
                      ] ))
                 |> fun assert_node_base ->
@@ -1014,7 +949,7 @@ module Make : S = struct
           (existing_names, nodes_deep_rev |> List.rev |> List.concat)
         in
         let build_top_level_nodes () :
-            (node list, quotient_typing_error) Result.t =
+            (Sexp.t list, quotient_typing_error) Result.t =
           (* Note that top_level_rev is reversed, but the folding here un-reverses it *)
           List.fold_result ~init:[]
             ~f:(fun acc elem ->
@@ -1022,23 +957,21 @@ module Make : S = struct
               elem_node :: acc)
             state.top_level_rev
         in
-        build_datatype_decl () >>= fun (datatype_decl : node) ->
+        build_datatype_decl () >>= fun (datatype_decl : Sexp.t) ->
         build_lifted_eq_fun_nodes ~existing_names ()
-        >>= fun (existing_names, (lifted_eq_fun_nodes : node list)) ->
-        build_consts_nodes () >>= fun (declared_consts_nodes : node list) ->
-        build_top_level_nodes () >>| fun (top_level_nodes : node list) ->
+        >>= fun (existing_names, (lifted_eq_fun_nodes : Sexp.t list)) ->
+        build_consts_nodes () >>= fun (declared_consts_nodes : Sexp.t list) ->
+        build_top_level_nodes () >>| fun (top_level_nodes : Sexp.t list) ->
         ( existing_names,
           (datatype_decl :: declared_consts_nodes)
           @ lifted_eq_fun_nodes @ top_level_nodes )
 
       let build_assertion ~(state : State.t) :
-          assertion -> (LispBuilder.node, quotient_typing_error) Result.t =
+          assertion -> (Sexp.t, quotient_typing_error) Result.t =
         let open Result in
-        let open LispBuilder in
-        let rec aux :
-            assertion -> (LispBuilder.node, quotient_typing_error) Result.t =
+        let rec aux : assertion -> (Sexp.t, quotient_typing_error) Result.t =
           function
-          | Not x -> aux x >>| fun x_node -> Op ("not", [ x_node ])
+          | Not x -> aux x >>| fun x_node -> sexp_op ("not", [ x_node ])
           | Eq (t_opt, e1, e2) ->
               build_expr ~directly_callable_fun_names:StringSet.empty state e1
               >>= fun e1_node ->
@@ -1053,14 +986,14 @@ module Make : S = struct
                     | None -> default
                     | Some eq_fun_name -> eq_fun_name)
               in
-              fun e2_node -> Op (eq_fun_name, [ e1_node; e2_node ])
+              fun e2_node -> sexp_op (eq_fun_name, [ e1_node; e2_node ])
         in
         fun assertion ->
           aux assertion >>| fun assertion_node ->
-          Op ("assert", [ assertion_node ])
+          sexp_op ("assert", [ assertion_node ])
     end
 
-    type formula = LispBuilder.node list
+    type formula = Sexp.t list
 
     let create_formula ~(existing_names : StringSet.t) (state : State.t)
         (assertions : Assertion.t list) :
@@ -1075,7 +1008,12 @@ module Make : S = struct
     (** Check the satisifability of a given formula *)
     let check_satisfiability (formula : formula) : [ `Sat | `Unsat | `Unknown ]
         =
-      let smtlib_string = LispBuilder.build ~use_newlines:true formula in
+      let smtlib_string =
+        List.map ~f:Sexp.to_string_hum
+          (* I'm using human-readable string generation for debugging/readability *)
+          formula
+        |> String.concat ~sep:"\n"
+      in
       let ctx = Z3.mk_context [ ("model", "false") ] in
       let ast_vec = Z3.SMT.parse_smtlib2_string ctx smtlib_string [] [] [] [] in
       let solver = Z3.Solver.mk_solver ctx None in
