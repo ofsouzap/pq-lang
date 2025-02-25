@@ -1,33 +1,33 @@
 open Core
 open OUnit2
 open Pq_lang
-open Ast
+open Pq_lang.Expr.StdExpr
 open Testing_utils
 
 let test_cases_equality : test list =
-  let create_positive_test ((x : plain_expr), (y : plain_expr)) =
+  let create_positive_test ((x : Expr.plain_t), (y : Expr.plain_t)) =
     let name =
       sprintf "%s =? %s"
-        (Unit_ast_qcheck_testing.print
+        (Unit_expr_qcheck_testing.print
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            x)
-        (Unit_ast_qcheck_testing.print
+        (Unit_expr_qcheck_testing.print
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            y)
     in
-    name >:: fun _ -> assert_bool "not equal" (equal_plain_expr x y)
+    name >:: fun _ -> assert_bool "not equal" (Expr.equal_plain_t x y)
   in
-  let create_negative_test ((x : plain_expr), (y : plain_expr)) =
+  let create_negative_test ((x : Expr.plain_t), (y : Expr.plain_t)) =
     let name =
       sprintf "%s =? %s"
-        (Unit_ast_qcheck_testing.print
+        (Unit_expr_qcheck_testing.print
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            x)
-        (Unit_ast_qcheck_testing.print
+        (Unit_expr_qcheck_testing.print
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            y)
     in
-    name >:: fun _ -> assert_bool "equal" (not (equal_plain_expr x y))
+    name >:: fun _ -> assert_bool "equal" (not (Expr.equal_plain_t x y))
   in
   List.map ~f:create_positive_test
     [
@@ -74,19 +74,19 @@ let test_cases_equality : test list =
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:1000 ~name:"AST to source code"
+  Test.make ~count:1000 ~name:"Expr to source code"
     unit_program_arbitrary_with_default_options (fun prog ->
       let e = prog.e in
-      match run_frontend_string (ast_to_source_code e) with
+      match run_frontend_string (Expr.to_source_code e) with
       | Ok prog ->
-          if equal_plain_expr e prog.e then true
+          if Expr.equal_plain_t e prog.e then true
           else
             Test.fail_reportf
-              "Got different AST. Expected:\n\n%s\n\nActual:\n\n%s"
-              (Unit_ast_qcheck_testing.print
+              "Got different Expr. Expected:\n\n%s\n\nActual:\n\n%s"
+              (Unit_expr_qcheck_testing.print
                  (PrintSexp (sexp_of_unit, sexp_of_unit))
                  e)
-              (Unit_ast_qcheck_testing.print
+              (Unit_expr_qcheck_testing.print
                  (PrintSexp (sexp_of_unit, sexp_of_unit))
                  prog.e)
       | Error err ->
@@ -101,7 +101,7 @@ let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
     (fun (x, prog) ->
       let e_raw = prog.e in
       let e = fmap ~f:(const x) e_raw in
-      type_eq (expr_node_val e) x)
+      type_eq (Expr.node_val e) x)
 
 module SingleTagged_tests =
 functor
@@ -131,7 +131,7 @@ functor
                       default_max_variant_type_constructor_count;
                     max_top_level_defns = default_max_top_level_defns_count;
                     allow_fun_types = false;
-                    ast_type = None;
+                    body_type = None;
                     expr_v_gen = QCheck.get_gen Tag.arb;
                     pat_v_gen = QCheck.Gen.unit;
                   };
@@ -141,8 +141,8 @@ functor
         (fun (f_, prog) ->
           let e = prog.e in
           let f = QCheck.Fn.apply f_ in
-          let e' = expr_node_map_val ~f e in
-          Tag.eq (expr_node_val e') (e |> expr_node_val |> f))
+          let e' = Expr.node_map_val ~f e in
+          Tag.eq (Expr.node_val e') (e |> Expr.node_val |> f))
   end
 
 module DoubleTagged_tests =
@@ -178,7 +178,7 @@ functor
                       default_max_variant_type_constructor_count;
                     max_top_level_defns = default_max_top_level_defns_count;
                     allow_fun_types = false;
-                    ast_type = None;
+                    body_type = None;
                     expr_v_gen = QCheck.get_gen Tag1.arb;
                     pat_v_gen = QCheck.Gen.unit;
                   };
@@ -189,7 +189,7 @@ functor
           let e = prog.e in
           let f = QCheck.Fn.apply f_ in
           let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
-          Tag2.eq (expr_node_val e') (f x))
+          Tag2.eq (Expr.node_val e') (f x))
   end
 
 module Unit_singletagged_tests = SingleTagged_tests (struct
@@ -284,11 +284,11 @@ module StringInt_doubletagged_tests =
     end)
 
 let suite =
-  "AST Tests"
+  "Expr Tests"
   >::: [
          "Equality Tests" >::: test_cases_equality;
          QCheck_runner.to_ounit2_test test_cases_to_source_code_inv;
-         "AST node value"
+         "Expr node value"
          >::: List.map
                 ~f:(fun (name, test) ->
                   name >::: [ QCheck_runner.to_ounit2_test test ])
@@ -310,7 +310,7 @@ let suite =
                       QCheck.(list int)
                       (equal_list equal_int) );
                 ];
-         "AST expr node map val"
+         "Expr expr node map val"
          >::: List.map
                 ~f:(fun (name, test) ->
                   name >::: [ QCheck_runner.to_ounit2_test test ])
@@ -325,7 +325,7 @@ let suite =
                     String_singletagged_tests
                     .create_test_cases_expr_node_map_val );
                 ];
-         "AST fmap root"
+         "Expr fmap root"
          >::: List.map
                 ~f:(fun (name, test) ->
                   name >::: [ QCheck_runner.to_ounit2_test test ])

@@ -1,8 +1,7 @@
 open Core
 open OUnit2
 open Pq_lang
-open Program
-open Quotient_type_checking
+module QuotientTypeChecker = Pq_lang.QuotientTypeChecker.MakeZ3
 open Testing_utils
 
 let manual_tests : test list =
@@ -18,27 +17,28 @@ let manual_tests : test list =
       >>= fun inp_prog ->
       TestingTypeChecker.type_program inp_prog
       |> Result.map_error ~f:(fun err ->
-             sprintf "Typing error: %s\n" (Typing.print_typing_error err))
+             sprintf "Typing error: %s\n" (TypeChecker.TypingError.print err))
       >>= fun inp_typed_program ->
       inp_typed_program |> TestingTypeChecker.typed_program_get_program
-      |> fmap_expr ~f:(fun (t, ()) -> ({ t } : Quotient_type_checking.ast_tag))
-      |> fmap_pattern ~f:(fun (t, ()) ->
-             ({ t } : Quotient_type_checking.pattern_tag))
+      |> Program.fmap_expr ~f:(fun (t, ()) ->
+             ({ t } : QuotientTypeChecker.Smt.expr_tag))
+      |> Program.fmap_pattern ~f:(fun (t, ()) ->
+             ({ t } : QuotientTypeChecker.Smt.pattern_tag))
       |> fun inp_for_quotient_type_checking ->
       match
-        ( Quotient_type_checking.check_program inp_for_quotient_type_checking,
-          exp )
+        (QuotientTypeChecker.check_program inp_for_quotient_type_checking, exp)
       with
-      | Ok (), `Valid -> Ok ()
-      | Ok (), `Invalid ->
+      | Ok (Ok ()), `Valid -> Ok ()
+      | Ok (Ok ()), `Invalid ->
           Error "Expected failure but passed quotient type checking"
-      | Error QuotientConstraintCheckFailed, `Invalid -> Ok ()
-      | Error QuotientConstraintCheckFailed, `Valid ->
+      | Ok (Error ()), `Invalid -> Ok ()
+      | Ok (Error ()), `Valid ->
           Error "Expected valid input but got failed quotient type check"
       | Error err, _ ->
           Error
             (sprintf "Unexpected quotient type checking failure: %s"
-               (err |> sexp_of_quotient_typing_error |> Sexp.to_string_hum))
+               (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
+              |> Sexp.to_string_hum))
     in
     match res with Ok () -> () | Error err_msg -> assert_failure err_msg
   in

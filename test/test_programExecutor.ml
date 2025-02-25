@@ -2,29 +2,27 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
-open Vtype
-open Variant_types
-open Pattern
-open Custom_types
-open Program
-open Typing
-open Ast_executor
+open Pq_lang.Expr.StdExpr
+open Pq_lang.Pattern
+module TypeChecker = Pq_lang.TypeChecker.StdSimpleTypeChecker
+module ProgramExecutor = Pq_lang.ProgramExecutor.SimpleExecutor
 open Testing_utils
 
 type basic_test_case =
-  string * (unit, unit) SimpleTypeChecker.typed_program * exec_res
+  string * (unit, unit) TypeChecker.typed_program * ProgramExecutor.exec_res
 
-let make_store (vars : (string * Ast_executor.value) list) : Ast_executor.store
-    =
+let make_store (vars : (string * ProgramExecutor.Store.value) list) :
+    ProgramExecutor.Store.store =
   List.fold_left vars
-    ~f:(fun store (name, value) -> store_set store ~key:name ~value)
-    ~init:Ast_executor.empty_store
+    ~f:(fun store (name, value) ->
+      ProgramExecutor.Store.store_set store ~key:name ~value)
+    ~init:ProgramExecutor.Store.empty_store
 
-let type_expr ?(custom_types : plain_custom_type list option)
-    ?(top_level_defns : (unit, unit) top_level_defn list option)
-    (e : Ast.plain_expr) : (unit, unit) SimpleTypeChecker.typed_program =
+let type_expr ?(custom_types : CustomType.plain_t list option)
+    ?(top_level_defns : (unit, unit) Program.top_level_defn list option)
+    (e : Expr.plain_t) : (unit, unit) TypeChecker.typed_program =
   match
-    type_program
+    Pq_lang.TypeChecker.type_program
       {
         custom_types = Option.value ~default:[] custom_types;
         top_level_defns = Option.value ~default:[] top_level_defns;
@@ -35,13 +33,14 @@ let type_expr ?(custom_types : plain_custom_type list option)
   | Error err ->
       failwith
         (sprintf "Typing error:\nExpression: %s\nError: %s"
-           (Ast.ast_to_source_code ~use_newlines:true e)
-           (print_typing_error err))
+           (Expr.to_source_code ~use_newlines:true e)
+           (TypeChecker.TypingError.print err))
 
 let test_cases_unit_value : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : value)) =
-    (ast_to_source_code x, type_expr x, Ok y)
+  let open ProgramExecutor.Store in
+  let module Store = ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : ProgramExecutor.Store.value)) =
+    (Expr.to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
     [
@@ -50,9 +49,9 @@ let test_cases_unit_value : basic_test_case list =
     ]
 
 let test_cases_arithmetic : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : int)) =
-    (ast_to_source_code x, type_expr x, Ok (Int y))
+  let mapf ((x : Expr.plain_t), (y : int)) =
+    let module Store = ProgramExecutor.Store in
+    (Expr.to_source_code x, type_expr x, Ok (Store.Int y))
   in
   List.map ~f:mapf
     [
@@ -83,9 +82,9 @@ let test_cases_arithmetic : basic_test_case list =
     ]
 
 let test_cases_booleans : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : bool)) =
-    (ast_to_source_code x, type_expr x, Ok (Bool y))
+  let module Store = ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : bool)) =
+    (Expr.to_source_code x, type_expr x, Ok (Store.Bool y))
   in
   List.map ~f:mapf
     [
@@ -108,25 +107,25 @@ let test_cases_booleans : basic_test_case list =
     ]
 
 let test_cases_pairs : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : value)) =
-    (ast_to_source_code x, type_expr x, Ok y)
+  let module Store = ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : ProgramExecutor.Store.value)) =
+    (Expr.to_source_code x, type_expr x, Ok y)
   in
   List.map ~f:mapf
     [
-      ( Pair ((), IntLit ((), 1), BoolLit ((), true)),
-        Ast_executor.Pair (Int 1, Bool true) );
+      ( Expr.Pair ((), IntLit ((), 1), BoolLit ((), true)),
+        Store.Pair (Int 1, Bool true) );
       ( Pair
           ( (),
             Add ((), IntLit ((), 2), IntLit ((), 4)),
             BOr ((), BoolLit ((), true), BoolLit ((), false)) ),
-        Ast_executor.Pair (Int 6, Bool true) );
+        Store.Pair (Int 6, Bool true) );
     ]
 
 let test_cases_integer_comparisons : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : bool)) =
-    (ast_to_source_code x, type_expr x, Ok (Bool y))
+  let module Store = ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : bool)) =
+    (Expr.to_source_code x, type_expr x, Ok (Store.Bool y))
   in
   List.map ~f:mapf
     [
@@ -153,9 +152,9 @@ let test_cases_integer_comparisons : basic_test_case list =
     ]
 
 let test_cases_control_flow : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) =
-    (ast_to_source_code x, type_expr x, y)
+  let open ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : ProgramExecutor.exec_res)) =
+    (Expr.to_source_code x, type_expr x, y)
   in
   List.map ~f:mapf
     [
@@ -176,9 +175,9 @@ let test_cases_control_flow : basic_test_case list =
     ]
 
 let test_cases_variables : basic_test_case list =
-  let open Ast in
-  let mapf ((x : plain_expr), (y : exec_res)) =
-    (ast_to_source_code x, type_expr x, y)
+  let open ProgramExecutor.Store in
+  let mapf ((x : Expr.plain_t), (y : ProgramExecutor.exec_res)) =
+    (Expr.to_source_code x, type_expr x, y)
   in
   List.map ~f:mapf
     [
@@ -202,12 +201,12 @@ let test_cases_variables : basic_test_case list =
     ]
 
 let test_cases_match : basic_test_case list =
-  let open Ast in
+  let open ProgramExecutor.Store in
   let mapf
-      ( (custom_types : plain_custom_type list option),
-        (x : plain_expr),
-        (y : exec_res) ) : basic_test_case =
-    (ast_to_source_code x, type_expr ?custom_types x, y)
+      ( (custom_types : CustomType.plain_t list option),
+        (x : Expr.plain_t),
+        (y : ProgramExecutor.exec_res) ) : basic_test_case =
+    (Expr.to_source_code x, type_expr ?custom_types x, y)
   in
   List.map ~f:mapf
     [
@@ -283,8 +282,8 @@ let test_cases_match : basic_test_case list =
         Ok (Pair (Bool true, Bool true)) );
       ( Some
           [
-            VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-            VariantType
+            CustomType.VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+            CustomType.VariantType
               ( "int_list",
                 [
                   ("Nil", VTypeUnit);
@@ -303,8 +302,8 @@ let test_cases_match : basic_test_case list =
         Ok (Bool true) );
       ( Some
           [
-            VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-            VariantType
+            CustomType.VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+            CustomType.VariantType
               ( "int_list",
                 [
                   ("Nil", VTypeUnit);
@@ -336,21 +335,24 @@ let test_cases_match : basic_test_case list =
     ]
 
 let test_cases_constructor : basic_test_case list =
-  let open Ast in
+  let open ProgramExecutor.Store in
   let mapf
-      ((variant_types : variant_type list), (y : plain_expr), (z : exec_res)) =
-    ( ast_to_source_code y,
+      ( (variant_types : VariantType.t list),
+        (y : Expr.plain_t),
+        (z : ProgramExecutor.exec_res) ) =
+    ( Expr.to_source_code y,
       type_expr
-        ~custom_types:(List.map ~f:(fun vt -> VariantType vt) variant_types)
+        ~custom_types:
+          (List.map ~f:(fun vt -> CustomType.VariantType vt) variant_types)
         y,
       z )
   in
-  let vt_list : variant_type =
+  let vt_list : VariantType.t =
     ( "list",
       [ ("Nil", VTypeUnit); ("Cons", VTypePair (VTypeInt, VTypeCustom "list")) ]
     )
   in
-  let vt_int_box : variant_type = ("int_box", [ ("IntBox", VTypeInt) ]) in
+  let vt_int_box : VariantType.t = ("int_box", [ ("IntBox", VTypeInt) ]) in
   List.map ~f:mapf
     [
       ( [ vt_list ],
@@ -383,15 +385,15 @@ let test_cases_constructor : basic_test_case list =
 
 let create_test
     ( (name : string),
-      (inp : (unit, unit) SimpleTypeChecker.typed_program),
-      (exp : exec_res) ) =
+      (inp : (unit, unit) TypeChecker.typed_program),
+      (exp : ProgramExecutor.exec_res) ) =
   name >:: fun _ ->
-  let out = Ast_executor.SimpleExecutor.execute_program inp in
+  let out = ProgramExecutor.execute_program inp in
   assert_equal exp out ~cmp:override_equal_exec_res
-    ~printer:Ast_executor.show_exec_res
+    ~printer:ProgramExecutor.show_exec_res
 
 let suite =
-  "AST Executor"
+  "Expr Executor"
   >::: [
          "Unit Value" >::: List.map ~f:create_test test_cases_unit_value;
          "Arithmetic" >::: List.map ~f:create_test test_cases_arithmetic;

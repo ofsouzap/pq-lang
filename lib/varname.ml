@@ -2,14 +2,16 @@ open Core
 open Utils
 open Utils.QCheck_utils
 
-type varname = string [@@deriving sexp, equal]
+type t = string [@@deriving sexp, equal]
 
-module Varname = String
-module VarnameMap = Map.Make_using_comparator (Varname)
+module VarnameComparator = String
+module Map = Map.Make_using_comparator (VarnameComparator)
+
+type varname = t
 
 module QCheck_testing :
   QCheck_testing_sig
-    with type t = varname
+    with type t = t
      and type gen_options = unit
      and type print_options = unit
      and type shrink_options = unit

@@ -6,21 +6,23 @@
   debug_tools
   utils
   vtype
-  variant_types
+  variantType
   varname
   pattern
-  ast
-  unification
-  quotient_types
-  custom_types
+  expr
+  unifier
+  quotientType
+  customType
   program
-  typing
-  quotient_type_checking
+  flatPattern
+  smtIntf
+  typeChecker
+  quotientTypeChecker
   parsing_errors
   parser
   lexer
   frontend
-  ast_executor)
+  programExecutor)
  (private_modules debug_tools)
  (preprocess
   (pps ppx_jane)))

@@ -1,5 +1,4 @@
 open Core
-open Program
 
 type frontend_error =
   | LexingError of char
@@ -8,7 +7,7 @@ type frontend_error =
 [@@deriving sexp, equal]
 
 (** A result from trying to run the lexer and parser on an input *)
-type run_frontend_res = (plain_program, frontend_error) Result.t
+type run_frontend_res = (Program.StdProgram.plain_t, frontend_error) Result.t
 [@@deriving sexp, equal]
 
 (** Run the lexer and parser on an input channel *)

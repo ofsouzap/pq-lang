@@ -6,14 +6,14 @@ let () =
     >::: [
            Test_testing_utils.suite;
            Test_utils.suite;
-           Test_ast.suite;
+           Test_expr.suite;
            Test_program.suite;
            Test_lexer_parser.suite;
-           Test_ast_executor.suite;
-           Test_ast_executor_store.suite;
+           Test_programExecutor.suite;
+           Test_programExecutor_store.suite;
            Test_interpreting_integration.suite;
-           Test_typing.suite;
-           Test_quotient_type_checking.suite;
+           Test_typeChecker.suite;
+           Test_quotientTypeChecker.suite;
          ]
   in
   run_test_tt_main suite

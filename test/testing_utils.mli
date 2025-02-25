@@ -1,11 +1,13 @@
 open Core
 open Pq_lang
 open Utils
-open Vtype
-open Variant_types
-open Quotient_types
-open Custom_types
-open Typing
+module ProgramExecutor = ProgramExecutor.SimpleExecutor
+module Program = ProgramExecutor.Program
+module TypeChecker = ProgramExecutor.TypeChecker
+module CustomType = Program.CustomType
+module QuotientType = Program.CustomType.QuotientType
+module Expr = Program.Expr
+module Pattern = Program.Pattern
 
 (** A default maximum number of defined variant types *)
 val default_max_variant_type_count : int
@@ -28,34 +30,37 @@ val token_printer : Parser.token list -> string
 (** A variation of the default `exec_err` equality function, that considers all
     typing errors equal *)
 val override_equal_exec_err :
-  Ast_executor.exec_err -> Ast_executor.exec_err -> bool
+  ProgramExecutor.exec_err -> ProgramExecutor.exec_err -> bool
 
 (** A variation of the default `exec_res` equality function, that considers all
     typing errors equal *)
 val override_equal_exec_res :
-  Ast_executor.exec_res -> Ast_executor.exec_res -> bool
+  ProgramExecutor.exec_res -> ProgramExecutor.exec_res -> bool
 
 (** A variation of the default typing error equality function, that ignores
     error messages *)
 val override_equal_typing_error :
-  Typing.typing_error -> Typing.typing_error -> bool
+  TypeChecker.TypingError.t -> TypeChecker.TypingError.t -> bool
 
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
-  include Typing.TypingTypeContext
+  include
+    Pq_lang.TypeChecker.TypeContext.S
+      with module CustomType = CustomType
+       and module TypingError = TypeChecker.TypingError
 
   (** Add a variant type to the type context *)
-  val add_variant : t -> variant_type -> t
+  val add_variant : t -> VariantType.t -> t
 
   (** Add a quotient type to the type context *)
-  val add_quotient : t -> ('tag_e, 'tag_p) quotient_type -> t
+  val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
 
   (** Creates a type from a list *)
-  val from_list : ('tag_e, 'tag_p) custom_type list -> t
+  val from_list : ('tag_e, 'tag_p) CustomType.t list -> t
 
   (** If there are any defined variant types, get a generator for a random one
       of them *)
-  val variant_gen_opt : t -> variant_type QCheck.Gen.t option
+  val variant_gen_opt : t -> VariantType.t QCheck.Gen.t option
 
   (** Get the type context as a sexp *)
   val sexp_of_t : t -> Sexp.t
@@ -86,16 +91,16 @@ val default_testing_type_ctx_arb : TestingTypeCtx.t QCheck.arbitrary
 
 (** Implementation of a variable context useful for tests *)
 module TestingVarCtx : sig
-  include Typing.TypingVarContext
+  include Pq_lang.TypeChecker.VarContext.S
 
   (** Get a list of all the variables who have the given type *)
-  val varnames_of_type : vtype -> t -> string list
+  val varnames_of_type : Vtype.t -> t -> string list
 
   (** Get the variable context as a list *)
-  val to_list : t -> (string * vtype) list
+  val to_list : t -> (string * Vtype.t) list
 
   (** Creates a context from a list *)
-  val from_list : (string * vtype) list -> t
+  val from_list : (string * Vtype.t) list -> t
 
   module QCheck_testing : sig
     include
@@ -108,9 +113,12 @@ module TestingVarCtx : sig
   end
 end
 
-module TestingTypeChecker : sig
-  include module type of TypeChecker (TestingTypeCtx) (TestingVarCtx)
-end
+module TestingTypeChecker :
+  Pq_lang.TypeChecker.S
+    with module Pattern = Pq_lang.Pattern.StdPattern
+     and module Expr = Pq_lang.Expr.StdExpr
+     and module Program = Pq_lang.Program.StdProgram
+     and module TypingError = Pq_lang.TypeChecker.TypingError.StdTypingError
 
 module UnitTag : sig
   type t = unit [@@deriving sexp, equal]
@@ -120,8 +128,8 @@ module UnitTag : sig
   val equal : t -> t -> bool
 end
 
-module Unit_ast_qcheck_testing : sig
-  include module type of Ast.QCheck_testing (UnitTag) (UnitTag)
+module Unit_expr_qcheck_testing : sig
+  include module type of Expr.QCheck_testing (UnitTag) (UnitTag)
 end
 
 module Unit_program_qcheck_testing : sig

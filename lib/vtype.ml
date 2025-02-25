@@ -1,26 +1,26 @@
 open Core
 open Utils
 
-type vtype =
+type t =
   | VTypeUnit
   | VTypeInt
   | VTypeBool
-  | VTypePair of vtype * vtype
-  | VTypeFun of vtype * vtype
+  | VTypePair of t * t
+  | VTypeFun of t * t
   | VTypeCustom of string
 [@@deriving sexp, equal, compare]
 
-let rec vtype_to_source_code = function
+let rec to_source_code = function
   | VTypeUnit -> "unit"
   | VTypeInt -> "int"
   | VTypeBool -> "bool"
   | VTypePair (t1, t2) ->
-      Printf.sprintf "(%s) * (%s)" (vtype_to_source_code t1)
-        (vtype_to_source_code t2)
+      Printf.sprintf "(%s) * (%s)" (to_source_code t1) (to_source_code t2)
   | VTypeFun (t1, t2) ->
-      Printf.sprintf "(%s) -> (%s)" (vtype_to_source_code t1)
-        (vtype_to_source_code t2)
+      Printf.sprintf "(%s) -> (%s)" (to_source_code t1) (to_source_code t2)
   | VTypeCustom tname -> tname
+
+type vtype = t
 
 module QCheck_testing : sig
   type gen_options = {
@@ -74,7 +74,7 @@ end = struct
         if opts.mrd > 0 then oneof (base_cases @ rec_cases)
         else oneof base_cases)
 
-  let print () = vtype_to_source_code
+  let print () = to_source_code
 
   let rec shrink () =
     let open QCheck.Iter in

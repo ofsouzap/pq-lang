@@ -1,15 +1,14 @@
 open Core
 open Pq_lang
 open Utils
-open Vtype
-open Variant_types
-open Pattern
-open Ast
-open Quotient_types
-open Custom_types
-open Typing
 open Parser
-open Ast_executor
+module ProgramExecutor = ProgramExecutor.SimpleExecutor
+module Program = ProgramExecutor.Program
+module TypeChecker = ProgramExecutor.TypeChecker
+module CustomType = Program.CustomType
+module QuotientType = CustomType.QuotientType
+module Expr = Program.Expr
+module Pattern = Program.Pattern
 
 let default_max_gen_rec_depth : int = 10
 let default_max_variant_type_count : int = 5
@@ -65,30 +64,46 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string_hum sexp_of_token) tokens)
 
-let override_equal_exec_err (a : exec_err) (b : exec_err) : bool =
+let override_equal_exec_err (a : ProgramExecutor.exec_err)
+    (b : ProgramExecutor.exec_err) : bool =
   match (a, b) with
   | TypingError _, TypingError _ -> true
-  | _ -> equal_exec_err a b
+  | _ -> ProgramExecutor.equal_exec_err a b
 
-let override_equal_exec_res (a : exec_res) (b : exec_res) : bool =
+let override_equal_exec_res (a : ProgramExecutor.exec_res)
+    (b : ProgramExecutor.exec_res) : bool =
   match (a, b) with
   | Error e1, Error e2 -> override_equal_exec_err e1 e2
-  | _ -> equal_exec_res a b
+  | _ -> ProgramExecutor.equal_exec_res a b
 
-let override_equal_typing_error (a : Typing.typing_error)
-    (b : Typing.typing_error) : bool =
+let override_equal_typing_error (a : TypeChecker.TypingError.t)
+    (b : TypeChecker.TypingError.t) : bool =
   match (a, b) with
   | TypeMismatch (ta1, ta2, _), TypeMismatch (tb1, tb2, _) ->
-      equal_vtype ta1 tb1 && equal_vtype ta2 tb2
-  | _ -> Typing.equal_typing_error a b
+      Vtype.equal ta1 tb1 && Vtype.equal ta2 tb2
+  | _ -> TypeChecker.TypingError.equal a b
 
+(** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
-  include Typing.TypingTypeContext
+  include
+    Pq_lang.TypeChecker.TypeContext.S
+      with module CustomType = CustomType
+       and module TypingError = TypeChecker.TypingError
 
-  val add_variant : t -> variant_type -> t
-  val add_quotient : t -> ('tag_e, 'tag_p) quotient_type -> t
-  val from_list : ('tag_e, 'tag_p) custom_type list -> t
-  val variant_gen_opt : t -> variant_type QCheck.Gen.t option
+  (** Add a variant type to the type context *)
+  val add_variant : t -> VariantType.t -> t
+
+  (** Add a quotient type to the type context *)
+  val add_quotient : t -> ('tag_e, 'tag_p) QuotientType.t -> t
+
+  (** Creates a type from a list *)
+  val from_list : ('tag_e, 'tag_p) CustomType.t list -> t
+
+  (** If there are any defined variant types, get a generator for a random one
+      of them *)
+  val variant_gen_opt : t -> VariantType.t QCheck.Gen.t option
+
+  (** Get the type context as a sexp *)
   val sexp_of_t : t -> Sexp.t
 
   module QCheck_testing : sig
@@ -108,35 +123,36 @@ module TestingTypeCtx : sig
          and type arb_options := gen_options
   end
 end = struct
-  open Typing
+  module CustomType = CustomType
+  module TypingError = TypeChecker.TypingError
 
-  type t = plain_custom_type list
+  type t = CustomType.plain_t list
   type this_t = t
 
   let empty = []
 
-  let create ~(custom_types : ('tag_e, 'tag_p) custom_type list) :
-      (t, typing_error) Result.t =
-    Ok (List.map ~f:to_plain_custom_type custom_types)
+  let create ~(custom_types : ('tag_e, 'tag_p) CustomType.t list) :
+      (t, TypeChecker.TypingError.t) Result.t =
+    Ok (List.map ~f:CustomType.to_plain_custom_type custom_types)
 
   let find_type_defn_by_name ctx td_name =
-    List.find ctx ~f:(fun x_td -> equal_string (custom_type_name x_td) td_name)
+    List.find ctx ~f:(fun x_td -> equal_string (CustomType.name x_td) td_name)
 
   let type_defn_exists ctx vt_name =
     Option.is_some (find_type_defn_by_name ctx vt_name)
 
   let find_variant_type_with_constructor (ctx : t) (c_name : string) :
-      (variant_type * variant_type_constructor) option =
+      (VariantType.t * VariantType.constructor) option =
     let open Option in
     List.find_map ctx ~f:(function
       | VariantType ((_, cs) as vt) ->
           List.find_map cs ~f:(fun ((x_c_name, _) as c) ->
               if equal_string c_name x_c_name then Some c else None)
           >>| fun c -> (vt, c)
-      | QuotientType _ -> None)
+      | CustomType.QuotientType _ -> None)
 
-  let rec subtype (ctx : t) (t1 : vtype) (t2 : vtype) :
-      (bool, typing_error) Result.t =
+  let rec subtype (ctx : t) (t1 : Vtype.t) (t2 : Vtype.t) :
+      (bool, TypeChecker.TypingError.t) Result.t =
     let open Result in
     match (t1, t2) with
     | VTypeInt, VTypeInt | VTypeBool, VTypeBool | VTypeUnit, VTypeUnit ->
@@ -154,43 +170,46 @@ end = struct
     | VTypeFun _, _ -> Ok false
     | VTypeCustom c1_name, VTypeCustom c2_name -> (
         find_type_defn_by_name ctx c1_name
-        |> Result.of_option ~error:(UndefinedTypeName c1_name)
+        |> Result.of_option
+             ~error:(TypeChecker.TypingError.UndefinedTypeName c1_name)
         >>= fun ct1 ->
         find_type_defn_by_name ctx c2_name
-        |> Result.of_option ~error:(UndefinedTypeName c2_name)
+        |> Result.of_option
+             ~error:(TypeChecker.TypingError.UndefinedTypeName c2_name)
         >>= fun ct2 ->
         match (ct1, ct2) with
         | VariantType (vt1_name, _), VariantType (vt2_name, _) ->
             Ok (equal_string vt1_name vt2_name)
         | VariantType _, QuotientType qt2 ->
             subtype ctx t1 (VTypeCustom qt2.base_type_name)
-        | QuotientType qt1, QuotientType qt2 ->
+        | CustomType.QuotientType qt1, QuotientType qt2 ->
             if equal_string qt1.name qt2.name then Ok true
             else subtype ctx t1 (VTypeCustom qt2.base_type_name)
-        | QuotientType _, VariantType _ -> Ok false)
+        | CustomType.QuotientType _, VariantType _ -> Ok false)
     | VTypeCustom _, _ -> Ok false
 
-  let add_variant (ctx : t) (vt : variant_type) : t = VariantType vt :: ctx
+  let add_variant (ctx : t) (vt : VariantType.t) : t = VariantType vt :: ctx
 
-  let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) quotient_type) : t =
-    QuotientType (to_plain_quotient_type qt) :: ctx
+  let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) QuotientType.t) : t =
+    QuotientType (QuotientType.to_plain_quotient_type qt) :: ctx
 
   let type_defns_to_ordered_list = Fn.id
-  let from_list = List.map ~f:to_plain_custom_type
+  let from_list = List.map ~f:CustomType.to_plain_custom_type
 
-  let variant_gen_opt (ctx : t) : variant_type QCheck.Gen.t option =
+  let variant_gen_opt (ctx : t) : VariantType.t QCheck.Gen.t option =
     let open QCheck.Gen in
     let choices =
       List.filter_map
         ~f:(function
-          | VariantType vt -> Some (return vt) | QuotientType _ -> None)
+          | VariantType vt -> Some (return vt)
+          | CustomType.QuotientType _ -> None)
         ctx
     in
     match choices with [] -> None | _ :: _ -> Some (oneof choices)
 
   let sexp_of_t : t -> Sexp.t =
     Fn.compose
-      (sexp_of_list sexp_of_plain_custom_type)
+      (sexp_of_list CustomType.sexp_of_plain_t)
       type_defns_to_ordered_list
 
   module QCheck_testing = struct
@@ -214,22 +233,22 @@ end = struct
       fix
         (fun self
              ( (rem_variant_types, rem_quotient_types),
-               (type_ctx : plain_custom_type list) ) ->
-          let variant_type_gen : variant_type QCheck.Gen.t =
-            Variant_types.QCheck_testing.gen
+               (type_ctx : CustomType.plain_t list) ) ->
+          let variant_type_gen : VariantType.t QCheck.Gen.t =
+            VariantType.QCheck_testing.gen
               {
                 mrd = opts.mrd;
                 used_variant_type_names =
                   type_ctx |> type_defns_to_ordered_list
                   |> List.filter_map ~f:(function
-                       | VariantType (vt_name, _) -> Some vt_name
-                       | QuotientType _ -> None)
+                       | CustomType.VariantType (vt_name, _) -> Some vt_name
+                       | CustomType.QuotientType _ -> None)
                   |> StringSet.of_list;
                 used_variant_type_constructor_names =
                   type_ctx |> type_defns_to_ordered_list
                   |> List.filter_map ~f:(function
-                       | VariantType (_, cs) -> Some cs
-                       | QuotientType _ -> None)
+                       | CustomType.VariantType (_, cs) -> Some cs
+                       | CustomType.QuotientType _ -> None)
                   |> List.concat_map ~f:(fun cs ->
                          List.map ~f:(fun (c_name, _) -> c_name) cs)
                   |> StringSet.of_list;
@@ -258,31 +277,32 @@ end = struct
 
     let print () : t QCheck.Print.t =
       let print_variant_type_constructor :
-          variant_type_constructor QCheck.Print.t =
-        QCheck.Print.(pair string vtype_to_source_code)
+          VariantType.constructor QCheck.Print.t =
+        QCheck.Print.(pair string Vtype.to_source_code)
       in
-      let print_variant_type : variant_type QCheck.Print.t =
+      let print_variant_type : VariantType.t QCheck.Print.t =
         QCheck.Print.(pair Fn.id (list print_variant_type_constructor))
       in
-      let print_quotient_type_eqcons : plain_quotient_type_eqcons QCheck.Print.t
+      let print_quotient_type_eqcons : QuotientType.plain_eqcons QCheck.Print.t
           =
         let open QCheck.Print in
         fun eqcons ->
           sprintf "{bindings=%s; body=%s}"
-            (list (pair string vtype_to_source_code) eqcons.bindings)
-            (pair pattern_to_source_code
-               (ast_to_source_code ~use_newlines:false)
+            (list (pair string Vtype.to_source_code) eqcons.bindings)
+            (pair Pattern.to_source_code
+               (Expr.to_source_code ~use_newlines:false)
                eqcons.body)
       in
-      let print_quotient_type : plain_quotient_type QCheck.Print.t =
+      let print_quotient_type : QuotientType.plain_t QCheck.Print.t =
        fun qt ->
         sprintf "{name=%s; base_type_name=%s; eqconss=%s}" qt.name
           qt.base_type_name
           ((QCheck.Print.list print_quotient_type_eqcons) qt.eqconss)
       in
-      let print_type_defn : plain_custom_type QCheck.Print.t = function
+      let print_type_defn : CustomType.plain_t QCheck.Print.t = function
         | VariantType vt -> sprintf "VariantType(%s)" (print_variant_type vt)
-        | QuotientType qt -> sprintf "QuotientType(%s)" (print_quotient_type qt)
+        | CustomType.QuotientType qt ->
+            sprintf "QuotientType(%s)" (print_quotient_type qt)
       in
       QCheck.Print.(
         Fn.compose (list print_type_defn) type_defns_to_ordered_list)
@@ -291,10 +311,11 @@ end = struct
       let open QCheck.Iter in
       QCheck.Shrink.(
         list ~shrink:(function
-          | VariantType vt ->
-              Variant_types.QCheck_testing.shrink () vt >|= fun vt ->
-              VariantType vt
-          | QuotientType qt -> nil qt >|= fun qt -> QuotientType qt))
+          | CustomType.VariantType vt ->
+              VariantType.QCheck_testing.shrink () vt >|= fun vt ->
+              CustomType.VariantType vt
+          | CustomType.QuotientType qt ->
+              nil qt >|= fun qt -> CustomType.QuotientType qt))
 
     let arbitrary (opts : arb_options) : t QCheck.arbitrary =
       QCheck.make ~print:(print ()) ~shrink:(shrink ()) (gen opts)
@@ -320,11 +341,11 @@ let default_testing_type_ctx_arb =
     }
 
 module TestingVarCtx : sig
-  include Typing.TypingVarContext
+  include Pq_lang.TypeChecker.VarContext.S
 
-  val varnames_of_type : vtype -> t -> string list
-  val to_list : t -> (string * vtype) list
-  val from_list : (string * vtype) list -> t
+  val varnames_of_type : Vtype.t -> t -> string list
+  val to_list : t -> (string * Vtype.t) list
+  val from_list : (string * Vtype.t) list -> t
 
   module QCheck_testing : sig
     include
@@ -336,7 +357,7 @@ module TestingVarCtx : sig
          and type arb_options = TestingTypeCtx.t
   end
 end = struct
-  type t = (Varname.varname * vtype) list
+  type t = (Varname.t * Vtype.t) list
   type this_t = t
 
   let empty = []
@@ -349,10 +370,10 @@ end = struct
 
   let exists ctx x = match find ctx x with None -> false | Some _ -> true
 
-  let varnames_of_type (t : vtype) (ctx : t) : string list =
+  let varnames_of_type (t : Vtype.t) (ctx : t) : string list =
     List.filter_map
       ~f:(fun (vname, vtype) ->
-        if equal_vtype vtype t then Some vname else None)
+        if Vtype.equal vtype t then Some vname else None)
       ctx
 
   let to_list = Fn.id
@@ -376,8 +397,8 @@ end = struct
                 variant_types =
                   TestingTypeCtx.type_defns_to_ordered_list type_ctx
                   |> List.filter_map ~f:(function
-                       | VariantType (vt_name, _) -> Some vt_name
-                       | QuotientType _ -> None)
+                       | CustomType.VariantType (vt_name, _) -> Some vt_name
+                       | CustomType.QuotientType _ -> None)
                   |> StringSet.of_list;
                 allow_fun_types =
                   (* TODO - until funtion-typed expression generation works better *)
@@ -387,7 +408,7 @@ end = struct
 
     let print () : t QCheck.Print.t =
       Core.Fn.compose
-        QCheck.Print.(list (pair string vtype_to_source_code))
+        QCheck.Print.(list (pair string Vtype.to_source_code))
         to_list
 
     let shrink () : t QCheck.Shrink.t =
@@ -403,7 +424,13 @@ end = struct
   end
 end
 
-module TestingTypeChecker = TypeChecker (TestingTypeCtx) (TestingVarCtx)
+module TestingTypeChecker :
+  Pq_lang.TypeChecker.S
+    with module Pattern = Pq_lang.Pattern.StdPattern
+     and module Expr = Pq_lang.Expr.StdExpr
+     and module Program = Pq_lang.Program.StdProgram
+     and module TypingError = Pq_lang.TypeChecker.TypingError.StdTypingError =
+  Pq_lang.TypeChecker.MakeStd (TestingTypeCtx) (TestingVarCtx)
 
 module UnitTag = struct
   type t = unit [@@deriving sexp, equal]
@@ -413,7 +440,7 @@ module UnitTag = struct
   let equal = equal_unit
 end
 
-module Unit_ast_qcheck_testing = Ast.QCheck_testing (UnitTag) (UnitTag)
+module Unit_expr_qcheck_testing = Expr.QCheck_testing (UnitTag) (UnitTag)
 module Unit_program_qcheck_testing = Program.QCheck_testing (UnitTag) (UnitTag)
 
 let unit_program_arbitrary_with_default_options =
@@ -428,10 +455,10 @@ let unit_program_arbitrary_with_default_options =
           max_top_level_defns = default_max_top_level_defns_count;
           allow_fun_types =
             (* TODO - until function-typed expression works better *) false;
-          ast_type = None;
+          body_type = None;
           expr_v_gen = QCheck.Gen.unit;
           pat_v_gen = QCheck.Gen.unit;
         };
-      print = Unit_ast_qcheck_testing.PrintExprSource;
+      print = Unit_expr_qcheck_testing.PrintExprSource;
       shrink = { preserve_type = false };
     }

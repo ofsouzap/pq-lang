@@ -2,21 +2,20 @@ open Core
 open OUnit2
 open Pq_lang
 open Utils
-open Pattern
-open Ast
-open Quotient_types
-open Program
+open Pq_lang.Pattern
+open Pq_lang.Expr.StdExpr
+module Program = Pq_lang.Program.StdProgram
 open Parser
 open Frontend
 open Testing_utils
 
 type test_case_no_variant_types =
-  string * string * token list * (plain_expr, frontend_error) Result.t
+  string * string * token list * (Expr.plain_t, frontend_error) Result.t
 
 type test_case_full_prog =
-  string * string * token list * (plain_program, frontend_error) Result.t
+  string * string * token list * (Program.plain_t, frontend_error) Result.t
 
-type test_case_precedence = string * string * Ast.plain_expr
+type test_case_precedence = string * string * Expr.plain_t
 
 let test_cases_unit_value : test_case_no_variant_types list =
   List.map
@@ -574,7 +573,9 @@ let test_cases_variant_type_defn : test_case_full_prog list =
 1
 |},
         [ INTLIT 1 ],
-        Ok { custom_types = []; top_level_defns = []; e = IntLit ((), 1) } );
+        Ok
+          Program.
+            { custom_types = []; top_level_defns = []; e = IntLit ((), 1) } );
       ( (* Simple type definition *)
         {|
         type int_or_bool = Int of int | Bool of bool
@@ -1091,11 +1092,11 @@ let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
   let out = run_frontend_string inp in
   assert_equal
     ~cmp:
-      (Result.equal (equal_program equal_unit equal_unit) equal_frontend_error)
+      (Result.equal (Program.equal equal_unit equal_unit) equal_frontend_error)
     exp out
     ~printer:(fun x ->
       match x with
-      | Ok prog -> program_to_source_code prog
+      | Ok prog -> Program.to_source_code prog
       | Error (LexingError c) -> sprintf "LexingError %c" c
       | Error ParsingError -> "ParsingError")
 
@@ -1104,7 +1105,7 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) =
   let out = run_frontend_string inp in
   match out with
   | Ok prog ->
-      assert_equal exp prog.e ~printer:(ast_to_source_code ~use_newlines:true)
+      assert_equal exp prog.e ~printer:(Expr.to_source_code ~use_newlines:true)
   | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
   | Error ParsingError -> assert_failure "ParsingError"
 
@@ -1116,7 +1117,8 @@ let tests_no_variant_types (test_create_func : test_case_full_prog -> test) :
           inp,
           tokens,
           Result.(
-            ast >>| fun e -> { custom_types = []; top_level_defns = []; e }) ))
+            ast >>| fun e ->
+            Program.{ custom_types = []; top_level_defns = []; e }) ))
   in
   [
     "Unit Value" >::: List.map ~f test_cases_unit_value;
