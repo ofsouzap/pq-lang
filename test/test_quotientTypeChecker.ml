@@ -28,11 +28,11 @@ let manual_tests : test list =
       match
         (QuotientTypeChecker.check_program inp_for_quotient_type_checking, exp)
       with
-      | Ok (), `Valid -> Ok ()
-      | Ok (), `Invalid ->
+      | Ok (Ok ()), `Valid -> Ok ()
+      | Ok (Ok ()), `Invalid ->
           Error "Expected failure but passed quotient type checking"
-      | Error QuotientConstraintCheckFailed, `Invalid -> Ok ()
-      | Error QuotientConstraintCheckFailed, `Valid ->
+      | Ok (Error ()), `Invalid -> Ok ()
+      | Ok (Error ()), `Valid ->
           Error "Expected valid input but got failed quotient type check"
       | Error err, _ ->
           Error

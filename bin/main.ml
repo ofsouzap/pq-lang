@@ -1,7 +1,7 @@
 open Core
 open Pq_lang
 module Program = Program.StdProgram
-module QuotientTypeChecker = QuotientTypeChecker.Make
+module QuotientTypeChecker = QuotientTypeChecker.MakeZ3
 module ProgramExecutor = ProgramExecutor.SimpleExecutor
 module TypeChecker = ProgramExecutor.TypeChecker
 
@@ -23,18 +23,21 @@ let () =
     QuotientTypeChecker.check_program
       (TypeChecker.typed_program_get_program tp
       |> Program.fmap_pattern ~f:(fun (t, ()) ->
-             ({ t } : QuotientTypeChecker.pattern_tag))
+             ({ t } : QuotientTypeChecker.Smt.pattern_tag))
       |> Program.fmap_expr ~f:(fun (t, ()) ->
-             ({ t } : QuotientTypeChecker.expr_tag)))
+             ({ t } : QuotientTypeChecker.Smt.expr_tag)))
     |> Result.map_error ~f:(fun err ->
            sprintf "Quotient type checking error: %s"
              (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
             |> Sexp.to_string_hum))
-    >>= fun () ->
-    ProgramExecutor.execute_program tp
-    |> Result.map_error ~f:(fun err ->
-           sprintf "Execution error: %s" (ProgramExecutor.print_exec_err err))
-    >>| fun v -> ProgramExecutor.Store.sexp_of_value v |> Sexp.to_string_hum
+    >>= function
+    | Error () -> Error "Quotient type check failed"
+    | Ok () ->
+        ProgramExecutor.execute_program tp
+        |> Result.map_error ~f:(fun err ->
+               sprintf "Execution error: %s"
+                 (ProgramExecutor.print_exec_err err))
+        >>| fun v -> ProgramExecutor.Store.sexp_of_value v |> Sexp.to_string_hum
   in
   match res with
   | Ok ok_msg -> printf "%s\n" ok_msg

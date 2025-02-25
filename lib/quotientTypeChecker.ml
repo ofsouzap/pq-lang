@@ -5,13 +5,16 @@ module type S = sig
   module Smt : SmtIntf.S
 
   type quotient_typing_error =
-    | QuotientConstraintCheckFailed
     | SmtUnknownResult
     | PatternFlatteningError of FlatPattern.flattening_error
     | SmtIntfError of Smt.smt_intf_error
   [@@deriving sexp, equal]
 
-  val check_program : Smt.tag_program -> (unit, quotient_typing_error) result
+  (** Check if a program's quotient type usage is valid. Returns a result with
+      the Ok constructor containing another result describing the actual result
+      of the checking *)
+  val check_program :
+    Smt.tag_program -> ((unit, unit) Result.t, quotient_typing_error) Result.t
 end
 
 module MakeZ3 : S = struct
@@ -27,7 +30,6 @@ module MakeZ3 : S = struct
   module Program = Program.StdProgram
 
   type quotient_typing_error =
-    | QuotientConstraintCheckFailed
     | SmtUnknownResult
     | PatternFlatteningError of FlatPattern.flattening_error
     | SmtIntfError of Smt.smt_intf_error
@@ -74,7 +76,10 @@ module MakeZ3 : S = struct
       ~(quotient_type : Smt.tag_quotient_type) ~(match_node_v : Smt.expr_tag)
       ~(match_t_out : Vtype.t)
       ~(cases : (Smt.tag_pattern * Smt.tag_expr) Nonempty_list.t)
-      (state : Smt.State.t) : (StringSet.t, quotient_typing_error) Result.t =
+      (state : Smt.State.t) :
+      ( StringSet.t,
+        [ `Err of quotient_typing_error | `Failure of unit ] )
+      Result.t =
     let open Result in
     let reform_match_with_arg (e1 : Smt.tag_expr) : Smt.tag_expr =
       Match (match_node_v, e1, match_t_out, cases)
@@ -122,10 +127,12 @@ module MakeZ3 : S = struct
             in
             let r = reform_match_with_arg (snd eqcons.body) in
             FlatPattern.of_expr ~existing_names l
-            |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
+            |> Result.map_error ~f:(fun err ->
+                   `Err (PatternFlatteningError err))
             >>= fun (existing_names, l_flat) ->
             FlatPattern.of_expr ~existing_names r
-            |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
+            |> Result.map_error ~f:(fun err ->
+                   `Err (PatternFlatteningError err))
             >>= fun (existing_names, r_flat) ->
             (* Form the main assertion of the SMT check *)
             let assertion : Smt.Assertion.t =
@@ -135,17 +142,19 @@ module MakeZ3 : S = struct
               Not (Eq (Some match_t_out, l_flat, r_flat))
             in
             Smt.create_formula ~existing_names state [ assertion ]
-            |> Result.map_error ~f:(fun err -> SmtIntfError err)
+            |> Result.map_error ~f:(fun err -> `Err (SmtIntfError err))
             >>= fun (existing_names, formula) ->
             match Smt.check_satisfiability formula with
             | `Unsat -> Ok existing_names
-            | `Sat -> Error QuotientConstraintCheckFailed
-            | `Unknown -> Error SmtUnknownResult))
+            | `Sat -> Error (`Failure ())
+            | `Unknown -> Error (`Err SmtUnknownResult)))
 
   let rec check_expr ~(existing_names : StringSet.t)
       ~(quotient_types : Smt.tag_quotient_type list) (state : Smt.State.t)
       (orig_e : Smt.tag_flat_expr) :
-      (StringSet.t, quotient_typing_error) Result.t =
+      ( StringSet.t,
+        [ `Err of quotient_typing_error | `Failure of unit ] )
+      Result.t =
     let open Result in
     let open Smt.State in
     match orig_e with
@@ -180,7 +189,7 @@ module MakeZ3 : S = struct
         state_add_var_defn
           { name = xname; kind = `NonRec None; return_t = e1_type; body = e1 }
           state
-        |> Result.map_error ~f:(fun err -> SmtIntfError err)
+        |> Result.map_error ~f:(fun err -> `Err (SmtIntfError err))
         >>= fun state -> check_expr ~existing_names ~quotient_types state e2
     | App (_, e1, e2) ->
         check_expr ~existing_names ~quotient_types state e1
@@ -225,7 +234,7 @@ module MakeZ3 : S = struct
         check_expr ~existing_names ~quotient_types state e
 
   let check_program (prog : Smt.tag_program) :
-      (unit, quotient_typing_error) Result.t =
+      ((unit, unit) Result.t, quotient_typing_error) Result.t =
     (* TODO - make this take a checked program (from the Typing module's TypeChecker functor) as parameter instead of just a program *)
     let open Result in
     let open Smt.State in
@@ -248,40 +257,45 @@ module MakeZ3 : S = struct
         flat_prog.custom_types
     in
     (* Check the top-level definitions and add them to the state *)
-    List.fold_result ~init:(existing_names, state)
-      ~f:(fun (existing_names, state) defn ->
-        (* Create the state used when checking the body of the function *)
-        let defn_checking_state = state_add_var_decl defn.param state in
-        (if defn.recursive then
-           state_add_var_defn
-             {
-               name = defn.name;
-               kind = `Rec defn.param;
-               return_t = defn.return_t;
-               body = defn.body;
-             }
-             defn_checking_state
-         else Ok state)
-        |> Result.map_error ~f:(fun err -> SmtIntfError err)
-        >>= fun defn_checking_state ->
-        (* Check the body of the TLD *)
-        check_expr ~existing_names ~quotient_types defn_checking_state defn.body
-        >>= fun existing_names ->
-        (* Return the resulting state after defining the TLD *)
-        state_add_var_defn
-          {
-            name = defn.name;
-            kind =
-              (if defn.recursive then `Rec defn.param
-               else `NonRec (Some defn.param));
-            return_t = defn.return_t;
-            body = defn.body;
-          }
-          state
-        |> Result.map_error ~f:(fun err -> SmtIntfError err)
-        >>| fun state -> (existing_names, state))
-      flat_prog.top_level_defns
+    ( List.fold_result ~init:(existing_names, state)
+        ~f:(fun (existing_names, state) defn ->
+          (* Create the state used when checking the body of the function *)
+          let defn_checking_state = state_add_var_decl defn.param state in
+          (if defn.recursive then
+             state_add_var_defn
+               {
+                 name = defn.name;
+                 kind = `Rec defn.param;
+                 return_t = defn.return_t;
+                 body = defn.body;
+               }
+               defn_checking_state
+           else Ok state)
+          |> Result.map_error ~f:(fun err -> `Err (SmtIntfError err))
+          >>= fun defn_checking_state ->
+          (* Check the body of the TLD *)
+          check_expr ~existing_names ~quotient_types defn_checking_state
+            defn.body
+          >>= fun existing_names ->
+          (* Return the resulting state after defining the TLD *)
+          state_add_var_defn
+            {
+              name = defn.name;
+              kind =
+                (if defn.recursive then `Rec defn.param
+                 else `NonRec (Some defn.param));
+              return_t = defn.return_t;
+              body = defn.body;
+            }
+            state
+          |> Result.map_error ~f:(fun err -> `Err (SmtIntfError err))
+          >>| fun state -> (existing_names, state))
+        flat_prog.top_level_defns
     >>= fun (existing_names, state) ->
-    (* Check the main body of the program with the accumulated state *)
-    check_expr ~existing_names ~quotient_types state flat_prog.e >>| fun _ -> ()
+      (* Check the main body of the program with the accumulated state *)
+      check_expr ~existing_names ~quotient_types state flat_prog.e )
+    |> function
+    | Ok _ -> Ok (Ok ())
+    | Error (`Failure failure) -> Ok (Error failure)
+    | Error (`Err err) -> Error err
 end
