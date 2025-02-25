@@ -15,6 +15,7 @@
   customType
   program
   flatPattern
+  smtIntf
   typeChecker
   quotientTypeChecker
   parsing_errors
