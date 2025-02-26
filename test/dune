@@ -1,6 +1,6 @@
 (test
  (name test_pq_lang)
- (libraries pq_lang.lib ounit2 qcheck)
+ (libraries pq_lang.lib alcotest qcheck qcheck-alcotest)
  (modules
   testing_utils
   test_pq_lang

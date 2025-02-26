@@ -1,5 +1,4 @@
 open Core
-open OUnit2
 open Pq_lang
 open Utils
 open Testing_utils
@@ -29,10 +28,11 @@ let vtype_arb_no_fun_type (type_ctx : TestingTypeCtx.t) =
       allow_fun_types = false;
       mrd = default_max_gen_rec_depth;
     }
+
 (* TODO - uncomment and fix
-let create_test_expr_shrink_can_preserve_type (name : string) : test =
+let create_test_expr_shrink_can_preserve_type (name : string) : unit Alcotest.test_case =
   let open QCheck in
-  QCheck_runner.to_ounit2_test
+  QCheck_alcotest.to_alcotest
     (Test.make ~name ~count:100
        (let open QCheck.Gen in
         let gen :
@@ -108,11 +108,12 @@ let create_test_expr_shrink_can_preserve_type (name : string) : test =
                  | Error err ->
                      Test.fail_reportf "Typing error for original e: %s"
                        (err |> sexp_of_typing_error |> Sexp.to_string_hum))))) *)
+
 (* TODO - uncomment and fix
 let create_typed_expr_gen_test (name : string)
-    (types_gen : (TestingTypeCtx.t * Vtype.t) Gen.t) : test =
+    (types_gen : (TestingTypeCtx.t * Vtype.t) Gen.t) : unit Alcotest.test_case =
   let open QCheck in
-  QCheck_runner.to_ounit2_test
+  QCheck_alcotest.to_alcotest
     (Test.make ~name ~count:1000
        (let open QCheck.Gen in
         let gen :
@@ -166,9 +167,10 @@ let create_typed_expr_gen_test_for_fixed_type (name : string) (t : Vtype.t) =
 (* TODO - typed program generation tests.
    Just reuse the code for expression generation tests but type context comes from program *)
 
-let create_test_vtype_gen_constructors_exist (name : string) : test =
+let create_test_vtype_gen_constructors_exist (name : string) :
+    unit Alcotest.test_case =
   let open QCheck in
-  QCheck_runner.to_ounit2_test
+  QCheck_alcotest.to_alcotest
     (Test.make ~name ~count:1000
        (QCheck.make
           ~print:
@@ -182,10 +184,11 @@ let create_test_vtype_gen_constructors_exist (name : string) : test =
          | VTypeCustom vt_name ->
              TestingTypeCtx.type_defn_exists type_ctx vt_name
          | _ -> true))
+
 (* TODO - uncomment and fix
-let create_test_type_ctx_gen_valid (name : string) : test =
+let create_test_type_ctx_gen_valid (name : string) : unit Alcotest.test_case =
   let open QCheck in
-  QCheck_runner.to_ounit2_test
+  QCheck_alcotest.to_alcotest
     (Test.make ~name ~count:1000
        (TestingTypeCtx.QCheck_testing.arbitrary
           {
@@ -207,7 +210,8 @@ let create_test_type_ctx_gen_valid (name : string) : test =
 let create_test_var_ctx (xs : (string * Vtype.t) list) : TestingVarCtx.t =
   List.fold xs ~init:TestingVarCtx.empty ~f:(fun ctx (x, t) ->
       TestingVarCtx.add ctx x t)
-(* TODO - uncommet and fix
+
+(* TODO - uncomment and fix
 let create_list_impl_var_ctx (xs : (string * Vtype.t) list) :
     ListTypingVarContext.t =
   List.fold xs ~init:ListTypingVarContext.empty ~f:(fun ctx (x, t) ->
@@ -219,17 +223,16 @@ let var_ctx_list_arb ~(type_ctx : TestingTypeCtx.t) =
 
 (* TODO - test that TestingTypeChecker types things the same as the SimpleTypeChecker *)
 
-let suite =
-  "Testing Utilities Tests"
-  >::: [
-         "Value type generator"
-         >::: [ create_test_vtype_gen_constructors_exist "Variant types exist" ];
-         (* TODO - uncomment and fix
-          "Type context generator"
-         >::: [ create_test_type_ctx_gen_valid "Type context is valid" ]; *)
-         (* TODO - uncomment and fix
-          "Typed expression generator"
-         >::: [
+let suite : unit Alcotest.test_case list =
+  label_tests "Testing Utilities Tests"
+    (label_tests "Value type generator"
+       [ create_test_vtype_gen_constructors_exist "Variant types exist" ]
+       (* TODO - uncomment and fix
+          label_tests "Type context generator"
+         [ create_test_type_ctx_gen_valid "Type context is valid" ]; *)
+       (* TODO - uncomment and fix
+          label_tests "Typed expression generator"
+         [
                 create_typed_expr_gen_test_for_fixed_type "unit" VTypeUnit;
                 create_typed_expr_gen_test_for_fixed_type "int" VTypeInt;
                 create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
@@ -238,5 +241,4 @@ let suite =
                     default_testing_type_ctx_gen >>= fun type_ctx ->
                     pair (vtype_gen_no_fun type_ctx) (vtype_gen_no_fun type_ctx)
                     >|= fun (t1, t2) -> (type_ctx, Vtype.VTypePair (t1, t2)));
-              ]; *)
-       ]
+              ]; *))

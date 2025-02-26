@@ -1,5 +1,4 @@
 open Core
-open OUnit2
 open Pq_lang
 open Utils
 open Pq_lang.Pattern
@@ -1077,40 +1076,51 @@ let test_cases_precedence : test_case_precedence list =
 (* TODO - test cases with top-level definitions *)
 
 let create_lexer_test ((name, inp, exp, _) : test_case_full_prog) =
-  name >:: fun _ ->
-  let lexbuf = Lexing.from_string inp in
-  let rec collect_tokens acc =
-    match Lexer.token lexbuf with
-    | Parser.EOF -> List.rev acc
-    | token -> collect_tokens (token :: acc)
-  in
-  let out = collect_tokens [] in
-  assert_equal ~cmp:(equal_list Stdlib.( = )) exp out ~printer:token_printer
+  ( name,
+    `Quick,
+    fun () ->
+      let lexbuf = Lexing.from_string inp in
+      let rec collect_tokens acc =
+        match Lexer.token lexbuf with
+        | Parser.EOF -> List.rev acc
+        | token -> collect_tokens (token :: acc)
+      in
+      let out = collect_tokens [] in
+      Alcotest.(check (testable (Fmt.of_to_string token_printer) Stdlib.( = )))
+        "Token streams don't match" exp out )
 
 let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
-  name >:: fun _ ->
-  let out = run_frontend_string inp in
-  assert_equal
-    ~cmp:
-      (Result.equal (Program.equal equal_unit equal_unit) equal_frontend_error)
-    exp out
-    ~printer:(fun x ->
-      match x with
-      | Ok prog -> Program.to_source_code prog
-      | Error (LexingError c) -> sprintf "LexingError %c" c
-      | Error ParsingError -> "ParsingError")
+  ( name,
+    `Quick,
+    fun () ->
+      let out = run_frontend_string inp in
+      Alcotest.(
+        check
+          (result
+             (std_program_testable equal_unit equal_unit)
+             (testable
+                (Fmt.of_to_string (fun err ->
+                     err |> Frontend.sexp_of_frontend_error
+                     |> Sexp.to_string_hum))
+                equal_frontend_error))
+          "Programs aren't equal" exp out) )
 
-let create_precedence_test ((name, inp, exp) : test_case_precedence) =
-  name >:: fun _ ->
-  let out = run_frontend_string inp in
-  match out with
-  | Ok prog ->
-      assert_equal exp prog.e ~printer:(Expr.to_source_code ~use_newlines:true)
-  | Error (LexingError c) -> assert_failure (sprintf "LexingError %c" c)
-  | Error ParsingError -> assert_failure "ParsingError"
+let create_precedence_test ((name, inp, exp) : test_case_precedence) :
+    unit Alcotest.test_case =
+  ( name,
+    `Quick,
+    fun () ->
+      let out = run_frontend_string inp in
+      match out with
+      | Ok prog ->
+          Alcotest.(check (plain_std_expr_testable `PrintSource))
+            "Expressions aren't equal" exp prog.e
+      | Error (LexingError c) -> Alcotest.failf "LexingError %c" c
+      | Error ParsingError -> Alcotest.fail "ParsingError" )
 
-let tests_no_variant_types (test_create_func : test_case_full_prog -> test) :
-    test list =
+let tests_no_variant_types
+    (test_create_func : test_case_full_prog -> unit Alcotest.test_case) :
+    unit Alcotest.test_case list =
   let f =
     Fn.compose test_create_func (fun (name, inp, tokens, ast) ->
         ( name,
@@ -1120,38 +1130,33 @@ let tests_no_variant_types (test_create_func : test_case_full_prog -> test) :
             ast >>| fun e ->
             Program.{ custom_types = []; top_level_defns = []; e }) ))
   in
-  [
-    "Unit Value" >::: List.map ~f test_cases_unit_value;
-    "Arithmetic" >::: List.map ~f test_cases_arithmetic;
-    "Booleans" >::: List.map ~f test_cases_booleans;
-    "Pairs" >::: List.map ~f test_cases_pairs;
-    "Integer Comparisons" >::: List.map ~f test_cases_integer_comparisons;
-    "If-Then-Else" >::: List.map ~f test_cases_if_then_else;
-    "Variables" >::: List.map ~f test_cases_variables;
-    "Match" >::: List.map ~f test_cases_match;
-    "Variant type construction"
-    >::: List.map ~f test_cases_variant_type_construction;
-  ]
+  label_tests "Unit Value" (List.map ~f test_cases_unit_value)
+  @ label_tests "Arithmetic" (List.map ~f test_cases_arithmetic)
+  @ label_tests "Booleans" (List.map ~f test_cases_booleans)
+  @ label_tests "Pairs" (List.map ~f test_cases_pairs)
+  @ label_tests "Integer Comparisons"
+      (List.map ~f test_cases_integer_comparisons)
+  @ label_tests "If-Then-Else" (List.map ~f test_cases_if_then_else)
+  @ label_tests "Variables" (List.map ~f test_cases_variables)
+  @ label_tests "Match" (List.map ~f test_cases_match)
+  @ label_tests "Variant type construction"
+      (List.map ~f test_cases_variant_type_construction)
 
-let tests_full_prog (test_create_func : test_case_full_prog -> test) : test list
-    =
+let tests_full_prog
+    (test_create_func : test_case_full_prog -> unit Alcotest.test_case) :
+    unit Alcotest.test_case list =
   let f = test_create_func in
-  [
-    "Variant type definition" >::: List.map ~f test_cases_variant_type_defn;
-    "Quotient type definition" >::: List.map ~f test_cases_quotient_type_defn;
-  ]
+  label_tests "Variant type definition"
+    (List.map ~f test_cases_variant_type_defn)
+  @ label_tests "Quotient type definition"
+      (List.map ~f test_cases_quotient_type_defn)
 
-let suite =
-  "Frontend Tests"
-  >::: [
-         "Lexer"
-         >::: tests_no_variant_types create_lexer_test
-              @ tests_full_prog create_lexer_test;
-         "Frontend"
-         >::: tests_no_variant_types create_frontend_test
-              @ tests_full_prog create_frontend_test
-              @ [
-                  "Precedence"
-                  >::: List.map ~f:create_precedence_test test_cases_precedence;
-                ];
-       ]
+let suite : unit Alcotest.test_case list =
+  label_tests "Lexer"
+    (tests_no_variant_types create_lexer_test
+    @ tests_full_prog create_lexer_test)
+  @ label_tests "Frontend"
+      (tests_no_variant_types create_frontend_test
+      @ tests_full_prog create_frontend_test
+      @ label_tests "Precedence"
+          (List.map ~f:create_precedence_test test_cases_precedence))

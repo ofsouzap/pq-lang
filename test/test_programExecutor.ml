@@ -1,5 +1,4 @@
 open Core
-open OUnit2
 open Pq_lang
 open Utils
 open Pq_lang.Expr.StdExpr
@@ -387,22 +386,26 @@ let create_test
     ( (name : string),
       (inp : (unit, unit) TypeChecker.typed_program),
       (exp : ProgramExecutor.exec_res) ) =
-  name >:: fun _ ->
-  let out = ProgramExecutor.execute_program inp in
-  assert_equal exp out ~cmp:override_equal_exec_res
-    ~printer:ProgramExecutor.show_exec_res
+  ( name,
+    `Quick,
+    fun () ->
+      let out = ProgramExecutor.execute_program inp in
+      Alcotest.(
+        check
+          (result std_executor_store_value_testable std_executor_error_testable))
+        "Execution result wrong" exp out
+    (* ~cmp:override_equal_exec_res
+        ~printer:ProgramExecutor.show_exec_res *)
+  )
 
-let suite =
-  "Expr Executor"
-  >::: [
-         "Unit Value" >::: List.map ~f:create_test test_cases_unit_value;
-         "Arithmetic" >::: List.map ~f:create_test test_cases_arithmetic;
-         "Booleans" >::: List.map ~f:create_test test_cases_booleans;
-         "Pairs" >::: List.map ~f:create_test test_cases_pairs;
-         "Integer Comparisons"
-         >::: List.map ~f:create_test test_cases_integer_comparisons;
-         "Control Flow" >::: List.map ~f:create_test test_cases_control_flow;
-         "Variables" >::: List.map ~f:create_test test_cases_variables;
-         "Match" >::: List.map ~f:create_test test_cases_match;
-         "Constructor" >::: List.map ~f:create_test test_cases_constructor;
-       ]
+let suite : unit Alcotest.test_case list =
+  label_tests "Unit Value" (List.map ~f:create_test test_cases_unit_value)
+  @ label_tests "Arithmetic" (List.map ~f:create_test test_cases_arithmetic)
+  @ label_tests "Booleans" (List.map ~f:create_test test_cases_booleans)
+  @ label_tests "Pairs" (List.map ~f:create_test test_cases_pairs)
+  @ label_tests "Integer Comparisons"
+      (List.map ~f:create_test test_cases_integer_comparisons)
+  @ label_tests "Control Flow" (List.map ~f:create_test test_cases_control_flow)
+  @ label_tests "Variables" (List.map ~f:create_test test_cases_variables)
+  @ label_tests "Match" (List.map ~f:create_test test_cases_match)
+  @ label_tests "Constructor" (List.map ~f:create_test test_cases_constructor)

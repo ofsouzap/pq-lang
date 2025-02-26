@@ -1,10 +1,9 @@
 open Core
-open OUnit2
 open Pq_lang
 open Pq_lang.Expr.StdExpr
 open Testing_utils
 
-let test_cases_equality : test list =
+let test_cases_equality : unit Alcotest.test_case list =
   let create_positive_test ((x : Expr.plain_t), (y : Expr.plain_t)) =
     let name =
       sprintf "%s =? %s"
@@ -15,7 +14,10 @@ let test_cases_equality : test list =
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            y)
     in
-    name >:: fun _ -> assert_bool "not equal" (Expr.equal_plain_t x y)
+    ( name,
+      `Quick,
+      fun _ -> Alcotest.(check bool) "not equal" true (Expr.equal_plain_t x y)
+    )
   in
   let create_negative_test ((x : Expr.plain_t), (y : Expr.plain_t)) =
     let name =
@@ -27,7 +29,9 @@ let test_cases_equality : test list =
            (PrintSexp (sexp_of_unit, sexp_of_unit))
            y)
     in
-    name >:: fun _ -> assert_bool "equal" (not (Expr.equal_plain_t x y))
+    ( name,
+      `Quick,
+      fun _ -> Alcotest.(check bool) "equal" false (Expr.equal_plain_t x y) )
   in
   List.map ~f:create_positive_test
     [
@@ -93,15 +97,17 @@ let test_cases_to_source_code_inv =
           Test.fail_reportf "Got frontend error: %s"
             (err |> sexp_of_frontend_error |> Sexp.to_string_hum))
 
-let create_test_cases_expr_node_val (type_arb : 'a QCheck.arbitrary)
-    (type_eq : 'a -> 'a -> bool) =
+let create_test_cases_expr_node_val (name : string)
+    (type_arb : 'a QCheck.arbitrary) (type_eq : 'a -> 'a -> bool) :
+    unit Alcotest.test_case =
   let open QCheck in
-  Test.make ~count:100
-    (pair type_arb unit_program_arbitrary_with_default_options)
-    (fun (x, prog) ->
-      let e_raw = prog.e in
-      let e = fmap ~f:(const x) e_raw in
-      type_eq (Expr.node_val e) x)
+  QCheck_alcotest.to_alcotest
+    (Test.make ~count:100 ~name
+       (pair type_arb unit_program_arbitrary_with_default_options)
+       (fun (x, prog) ->
+         let e_raw = prog.e in
+         let e = fmap ~f:(const x) e_raw in
+         type_eq (Expr.node_val e) x))
 
 module SingleTagged_tests =
 functor
@@ -117,32 +123,34 @@ functor
   struct
     module Program_qcheck_testing = Program.QCheck_testing (Tag) (UnitTag)
 
-    let create_test_cases_expr_node_map_val =
+    let create_test_cases_expr_node_map_val (name : string) :
+        unit Alcotest.test_case =
       let open QCheck in
-      Test.make ~count:100
-        (pair (fun1 Tag.obs Tag.arb)
-           (Program_qcheck_testing.arbitrary
-              {
-                gen =
-                  {
-                    mrd = default_max_gen_rec_depth;
-                    max_variant_types = default_max_variant_type_count;
-                    max_variant_type_constructors =
-                      default_max_variant_type_constructor_count;
-                    max_top_level_defns = default_max_top_level_defns_count;
-                    allow_fun_types = false;
-                    body_type = None;
-                    expr_v_gen = QCheck.get_gen Tag.arb;
-                    pat_v_gen = QCheck.Gen.unit;
-                  };
-                print = PrintSexp (Tag.sexp, sexp_of_unit);
-                shrink = { preserve_type = false };
-              }))
-        (fun (f_, prog) ->
-          let e = prog.e in
-          let f = QCheck.Fn.apply f_ in
-          let e' = Expr.node_map_val ~f e in
-          Tag.eq (Expr.node_val e') (e |> Expr.node_val |> f))
+      QCheck_alcotest.to_alcotest
+        (Test.make ~count:100 ~name
+           (pair (fun1 Tag.obs Tag.arb)
+              (Program_qcheck_testing.arbitrary
+                 {
+                   gen =
+                     {
+                       mrd = default_max_gen_rec_depth;
+                       max_variant_types = default_max_variant_type_count;
+                       max_variant_type_constructors =
+                         default_max_variant_type_constructor_count;
+                       max_top_level_defns = default_max_top_level_defns_count;
+                       allow_fun_types = false;
+                       body_type = None;
+                       expr_v_gen = QCheck.get_gen Tag.arb;
+                       pat_v_gen = QCheck.Gen.unit;
+                     };
+                   print = PrintSexp (Tag.sexp, sexp_of_unit);
+                   shrink = { preserve_type = false };
+                 }))
+           (fun (f_, prog) ->
+             let e = prog.e in
+             let f = QCheck.Fn.apply f_ in
+             let e' = Expr.node_map_val ~f e in
+             Tag.eq (Expr.node_val e') (e |> Expr.node_val |> f)))
   end
 
 module DoubleTagged_tests =
@@ -164,32 +172,34 @@ functor
   struct
     module Tag1_program_qcheck_testing = Program.QCheck_testing (Tag1) (UnitTag)
 
-    let create_test_cases_expr_fmap_root =
+    let create_test_cases_expr_fmap_root (name : string) :
+        unit Alcotest.test_case =
       let open QCheck in
-      Test.make ~count:100
-        (triple Tag1.arb (fun1 Tag1.obs Tag2.arb)
-           (Tag1_program_qcheck_testing.arbitrary
-              {
-                gen =
-                  {
-                    mrd = default_max_gen_rec_depth;
-                    max_variant_types = default_max_variant_type_count;
-                    max_variant_type_constructors =
-                      default_max_variant_type_constructor_count;
-                    max_top_level_defns = default_max_top_level_defns_count;
-                    allow_fun_types = false;
-                    body_type = None;
-                    expr_v_gen = QCheck.get_gen Tag1.arb;
-                    pat_v_gen = QCheck.Gen.unit;
-                  };
-                print = PrintSexp (Tag1.sexp, sexp_of_unit);
-                shrink = { preserve_type = false };
-              }))
-        (fun (x, f_, prog) ->
-          let e = prog.e in
-          let f = QCheck.Fn.apply f_ in
-          let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
-          Tag2.eq (Expr.node_val e') (f x))
+      QCheck_alcotest.to_alcotest
+        (Test.make ~count:100 ~name
+           (triple Tag1.arb (fun1 Tag1.obs Tag2.arb)
+              (Tag1_program_qcheck_testing.arbitrary
+                 {
+                   gen =
+                     {
+                       mrd = default_max_gen_rec_depth;
+                       max_variant_types = default_max_variant_type_count;
+                       max_variant_type_constructors =
+                         default_max_variant_type_constructor_count;
+                       max_top_level_defns = default_max_top_level_defns_count;
+                       allow_fun_types = false;
+                       body_type = None;
+                       expr_v_gen = QCheck.get_gen Tag1.arb;
+                       pat_v_gen = QCheck.Gen.unit;
+                     };
+                   print = PrintSexp (Tag1.sexp, sexp_of_unit);
+                   shrink = { preserve_type = false };
+                 }))
+           (fun (x, f_, prog) ->
+             let e = prog.e in
+             let f = QCheck.Fn.apply f_ in
+             let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
+             Tag2.eq (Expr.node_val e') (f x)))
   end
 
 module Unit_singletagged_tests = SingleTagged_tests (struct
@@ -283,64 +293,36 @@ module StringInt_doubletagged_tests =
       let eq = equal_int
     end)
 
-let suite =
-  "Expr Tests"
-  >::: [
-         "Equality Tests" >::: test_cases_equality;
-         QCheck_runner.to_ounit2_test test_cases_to_source_code_inv;
-         "Expr node value"
-         >::: List.map
-                ~f:(fun (name, test) ->
-                  name >::: [ QCheck_runner.to_ounit2_test test ])
-                [
-                  ( "unit",
-                    create_test_cases_expr_node_val QCheck.unit equal_unit );
-                  ("int", create_test_cases_expr_node_val QCheck.int equal_int);
-                  ( "bool",
-                    create_test_cases_expr_node_val QCheck.bool equal_bool );
-                  ( "string",
-                    create_test_cases_expr_node_val QCheck.string equal_string
-                  );
-                  ( "string option",
-                    create_test_cases_expr_node_val
-                      QCheck.(option string)
-                      (equal_option equal_string) );
-                  ( "int list",
-                    create_test_cases_expr_node_val
-                      QCheck.(list int)
-                      (equal_list equal_int) );
-                ];
-         "Expr expr node map val"
-         >::: List.map
-                ~f:(fun (name, test) ->
-                  name >::: [ QCheck_runner.to_ounit2_test test ])
-                [
-                  ( "unit",
-                    Unit_singletagged_tests.create_test_cases_expr_node_map_val
-                  );
-                  ( "int",
-                    Int_singletagged_tests.create_test_cases_expr_node_map_val
-                  );
-                  ( "string",
-                    String_singletagged_tests
-                    .create_test_cases_expr_node_map_val );
-                ];
-         "Expr fmap root"
-         >::: List.map
-                ~f:(fun (name, test) ->
-                  name >::: [ QCheck_runner.to_ounit2_test test ])
-                [
-                  ( "unit -> int",
-                    UnitInt_doubletagged_tests.create_test_cases_expr_fmap_root
-                  );
-                  ( "int -> string",
-                    IntString_doubletagged_tests
-                    .create_test_cases_expr_fmap_root );
-                  ( "bool -> int",
-                    BoolInt_doubletagged_tests.create_test_cases_expr_fmap_root
-                  );
-                  ( "string -> int",
-                    StringInt_doubletagged_tests
-                    .create_test_cases_expr_fmap_root );
-                ];
-       ]
+let suite : unit Alcotest.test_case list =
+  label_tests "Equality Tests" test_cases_equality
+  @ [ QCheck_alcotest.to_alcotest test_cases_to_source_code_inv ]
+  @ label_tests "Expr node value"
+      [
+        create_test_cases_expr_node_val "unit" QCheck.unit equal_unit;
+        create_test_cases_expr_node_val "int" QCheck.int equal_int;
+        create_test_cases_expr_node_val "bool" QCheck.bool equal_bool;
+        create_test_cases_expr_node_val "string" QCheck.string equal_string;
+        create_test_cases_expr_node_val "string option"
+          QCheck.(option string)
+          (equal_option equal_string);
+        create_test_cases_expr_node_val "int list"
+          QCheck.(list int)
+          (equal_list equal_int);
+      ]
+  @ label_tests "Expr node map val"
+      [
+        Unit_singletagged_tests.create_test_cases_expr_node_map_val "unit";
+        Int_singletagged_tests.create_test_cases_expr_node_map_val "int";
+        String_singletagged_tests.create_test_cases_expr_node_map_val "string";
+      ]
+  @ label_tests "Expr fmap root"
+      [
+        UnitInt_doubletagged_tests.create_test_cases_expr_fmap_root
+          "unit -> int";
+        IntString_doubletagged_tests.create_test_cases_expr_fmap_root
+          "int -> string";
+        BoolInt_doubletagged_tests.create_test_cases_expr_fmap_root
+          "bool -> int";
+        StringInt_doubletagged_tests.create_test_cases_expr_fmap_root
+          "string -> int";
+      ]
