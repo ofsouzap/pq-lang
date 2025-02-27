@@ -27,6 +27,13 @@ val default_max_gen_rec_depth : int
 (** A printing method for token lists *)
 val token_printer : Parser.token list -> string
 
+(** Create a pretty-printer from a sexp_of_t function *)
+val pp_from_sexp : ('a -> Sexp.t) -> 'a Fmt.t
+
+(** Add a prefix to the name of Alcotest tests *)
+val label_tests :
+  string -> 'a Alcotest.test_case list -> 'a Alcotest.test_case list
+
 (** A variation of the default `exec_err` equality function, that considers all
     typing errors equal *)
 val override_equal_exec_err :
@@ -41,6 +48,30 @@ val override_equal_exec_res :
     error messages *)
 val override_equal_typing_error :
   TypeChecker.TypingError.t -> TypeChecker.TypingError.t -> bool
+
+val vtype_testable : Vtype.t Alcotest.testable
+
+(** Alcotest testable for standard expressions *)
+val std_expr_testable :
+  [ `PrintSexp of ('tag_e -> Sexp.t) * ('tag_p -> Sexp.t) | `PrintSource ] ->
+  ('tag_e -> 'tag_e -> bool) ->
+  ('tag_p -> 'tag_p -> bool) ->
+  ('tag_e, 'tag_p) Expr.t Alcotest.testable
+
+val plain_std_expr_testable :
+  [ `PrintSexp | `PrintSource ] -> (unit, unit) Expr.t Alcotest.testable
+
+val std_program_testable :
+  ('tag_e -> 'tag_e -> bool) ->
+  ('tag_p -> 'tag_p -> bool) ->
+  ('tag_e, 'tag_p) Program.t Alcotest.testable
+
+val std_executor_store_value_testable :
+  ProgramExecutor.Store.value Alcotest.testable
+
+val std_executor_error_testable : ProgramExecutor.exec_err Alcotest.testable
+val std_executor_res_testable : ProgramExecutor.exec_res Alcotest.testable
+val std_typing_error_testable : TypeChecker.TypingError.t Alcotest.testable
 
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig

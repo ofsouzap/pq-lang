@@ -12,8 +12,9 @@ depends: [
   "core" {>= "v0.16.2"}
   "menhir" {>= "20240715"}
   "z3" {= "4.13.0-3"}
-  "ounit2" {>= "2.2.7"}
+  "alcotest" {>= "1.8.0"}
   "qcheck" {>= "0.23"}
+  "qcheck-alcotest" {>= "0.23"}
   "odoc" {with-doc}
 ]
 build: [

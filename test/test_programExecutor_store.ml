@@ -1,5 +1,4 @@
 open Core
-open OUnit2
 module ProgramExecutor = Pq_lang.ProgramExecutor.SimpleExecutor
 open ProgramExecutor.Store
 
@@ -31,51 +30,54 @@ let non_empty_store_arb =
     store_gen
 
 (** Test that getting any key from an empty store returns no value *)
-let test_store_get_from_empty =
+let test_store_get_from_empty : unit Alcotest.test_case =
   let open QCheck in
-  Test.make ~count:100 ~name:"store_get_from_empty" key_arb (fun key ->
-      let store = empty_store in
-      let res = store_get store key in
-      equal_option equal_value res None)
+  QCheck_alcotest.to_alcotest
+    (Test.make ~count:100 ~name:"store_get_from_empty" key_arb (fun key ->
+         let store = empty_store in
+         let res = store_get store key in
+         equal_option equal_value res None))
 
 (** Take an empty store, set a value in it, get it back and check that the value
     is as expected *)
-let test_store_empty_set_then_get =
+let test_store_empty_set_then_get : unit Alcotest.test_case =
   let open QCheck in
-  Test.make ~count:100 ~name:"store_empty_set_then_get" (pair key_arb value_arb)
-    (fun (key, value) ->
-      let store = empty_store in
-      let store' = store_set store ~key ~value in
-      let res = store_get store' key in
-      equal_option equal_value res (Some value))
+  QCheck_alcotest.to_alcotest
+    (Test.make ~count:100 ~name:"store_empty_set_then_get"
+       (pair key_arb value_arb) (fun (key, value) ->
+         let store = empty_store in
+         let store' = store_set store ~key ~value in
+         let res = store_get store' key in
+         equal_option equal_value res (Some value)))
 
 (** Populate a store, set a value in it, get it back and check that the value is
     as expected *)
-let test_store_populated_set_then_get =
+let test_store_populated_set_then_get : unit Alcotest.test_case =
   let open QCheck in
-  Test.make ~count:100 ~name:"store_populated_set_then_get"
-    (triple non_empty_store_arb key_arb value_arb) (fun (store, key, value) ->
-      let store' = store_set store ~key ~value in
-      let res = store_get store' key in
-      equal_option equal_value res (Some value))
+  QCheck_alcotest.to_alcotest
+    (Test.make ~count:100 ~name:"store_populated_set_then_get"
+       (triple non_empty_store_arb key_arb value_arb)
+       (fun (store, key, value) ->
+         let store' = store_set store ~key ~value in
+         let res = store_get store' key in
+         equal_option equal_value res (Some value)))
 
 (** Overwrite a value in a populated store and check that the new value is
     reflected *)
-let test_store_populated_overwrite =
+let test_store_populated_overwrite : unit Alcotest.test_case =
   let open QCheck in
-  Test.make ~count:100 ~name:"store_populated_overwrite"
-    (quad non_empty_store_arb key_arb value_arb value_arb)
-    (fun (store, key, old_value, new_value) ->
-      let store' = store_set store ~key ~value:old_value in
-      let store'' = store_set store' ~key ~value:new_value in
-      let res = store_get store'' key in
-      equal_option equal_value res (Some new_value))
+  QCheck_alcotest.to_alcotest
+    (Test.make ~count:100 ~name:"store_populated_overwrite"
+       (quad non_empty_store_arb key_arb value_arb value_arb)
+       (fun (store, key, old_value, new_value) ->
+         let store' = store_set store ~key ~value:old_value in
+         let store'' = store_set store' ~key ~value:new_value in
+         let res = store_get store'' key in
+         equal_option equal_value res (Some new_value)))
 
-let suite =
-  "Expr Executor Store"
-  >::: List.map ~f:QCheck_runner.to_ounit2_test
-         [
-           test_store_get_from_empty;
-           test_store_empty_set_then_get;
-           test_store_populated_set_then_get;
-         ]
+let suite : unit Alcotest.test_case list =
+  [
+    test_store_get_from_empty;
+    test_store_empty_set_then_get;
+    test_store_populated_set_then_get;
+  ]

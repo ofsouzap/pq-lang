@@ -1,46 +1,49 @@
 open Core
-open OUnit2
 open Pq_lang
 module QuotientTypeChecker = Pq_lang.QuotientTypeChecker.MakeZ3
 open Testing_utils
 
-let manual_tests : test list =
+let manual_tests : unit Alcotest.test_case list =
   let create_test
       ((name : string), (inp : string), (exp : [ `Valid | `Invalid ])) =
-    name >:: fun _ ->
-    let open Result in
-    let res =
-      Frontend.run_frontend_string inp
-      |> Result.map_error ~f:(fun err ->
-             sprintf "Frontend error: %s\n"
-               (Frontend.sexp_of_frontend_error err |> Sexp.to_string_hum))
-      >>= fun inp_prog ->
-      TestingTypeChecker.type_program inp_prog
-      |> Result.map_error ~f:(fun err ->
-             sprintf "Typing error: %s\n" (TypeChecker.TypingError.print err))
-      >>= fun inp_typed_program ->
-      inp_typed_program |> TestingTypeChecker.typed_program_get_program
-      |> Program.fmap_expr ~f:(fun (t, ()) ->
-             ({ t } : QuotientTypeChecker.Smt.expr_tag))
-      |> Program.fmap_pattern ~f:(fun (t, ()) ->
-             ({ t } : QuotientTypeChecker.Smt.pattern_tag))
-      |> fun inp_for_quotient_type_checking ->
-      match
-        (QuotientTypeChecker.check_program inp_for_quotient_type_checking, exp)
-      with
-      | Ok (Ok ()), `Valid -> Ok ()
-      | Ok (Ok ()), `Invalid ->
-          Error "Expected failure but passed quotient type checking"
-      | Ok (Error ()), `Invalid -> Ok ()
-      | Ok (Error ()), `Valid ->
-          Error "Expected valid input but got failed quotient type check"
-      | Error err, _ ->
-          Error
-            (sprintf "Unexpected quotient type checking failure: %s"
-               (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
-              |> Sexp.to_string_hum))
-    in
-    match res with Ok () -> () | Error err_msg -> assert_failure err_msg
+    ( name,
+      `Quick,
+      fun () ->
+        let open Result in
+        let res =
+          Frontend.run_frontend_string inp
+          |> Result.map_error ~f:(fun err ->
+                 sprintf "Frontend error: %s\n"
+                   (Frontend.sexp_of_frontend_error err |> Sexp.to_string_hum))
+          >>= fun inp_prog ->
+          TestingTypeChecker.type_program inp_prog
+          |> Result.map_error ~f:(fun err ->
+                 sprintf "Typing error: %s\n"
+                   (TypeChecker.TypingError.print err))
+          >>= fun inp_typed_program ->
+          inp_typed_program |> TestingTypeChecker.typed_program_get_program
+          |> Program.fmap_expr ~f:(fun (t, ()) ->
+                 ({ t } : QuotientTypeChecker.Smt.expr_tag))
+          |> Program.fmap_pattern ~f:(fun (t, ()) ->
+                 ({ t } : QuotientTypeChecker.Smt.pattern_tag))
+          |> fun inp_for_quotient_type_checking ->
+          match
+            ( QuotientTypeChecker.check_program inp_for_quotient_type_checking,
+              exp )
+          with
+          | Ok (Ok ()), `Valid -> Ok ()
+          | Ok (Ok ()), `Invalid ->
+              Error "Expected failure but passed quotient type checking"
+          | Ok (Error ()), `Invalid -> Ok ()
+          | Ok (Error ()), `Valid ->
+              Error "Expected valid input but got failed quotient type check"
+          | Error err, _ ->
+              Error
+                (sprintf "Unexpected quotient type checking failure: %s"
+                   (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
+                  |> Sexp.to_string_hum))
+        in
+        match res with Ok () -> () | Error err_msg -> Alcotest.fail err_msg )
   in
   List.map ~f:create_test
     [
@@ -334,4 +337,5 @@ end
         `Valid );
     ]
 
-let suite = "Quotient type checking" >::: [ "Manual tests" >::: manual_tests ]
+let suite : unit Alcotest.test_case list =
+  label_tests "Manual tests" manual_tests

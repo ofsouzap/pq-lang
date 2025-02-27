@@ -64,6 +64,13 @@ let token_printer tokens =
   String.concat ~sep:", "
     (List.map ~f:(Fn.compose Sexp.to_string_hum sexp_of_token) tokens)
 
+let pp_from_sexp sexp_of_t ppf x =
+  Fmt.string ppf (Sexp.to_string_hum (sexp_of_t x))
+
+let label_tests (label : string) =
+  List.map ~f:(fun ((name, speed, f) : 'a Alcotest.test_case) ->
+      (sprintf "%s-%s" label name, speed, f))
+
 let override_equal_exec_err (a : ProgramExecutor.exec_err)
     (b : ProgramExecutor.exec_err) : bool =
   match (a, b) with
@@ -82,6 +89,56 @@ let override_equal_typing_error (a : TypeChecker.TypingError.t)
   | TypeMismatch (ta1, ta2, _), TypeMismatch (tb1, tb2, _) ->
       Vtype.equal ta1 tb1 && Vtype.equal ta2 tb2
   | _ -> TypeChecker.TypingError.equal a b
+
+let vtype_testable : Vtype.t Alcotest.testable =
+  Alcotest.testable (Fmt.of_to_string Vtype.to_source_code) Vtype.equal
+
+let std_expr_testable
+    (print :
+      [ `PrintSexp of ('tag_e -> Sexp.t) * ('tag_p -> Sexp.t) | `PrintSource ])
+    (eq_tag_e : 'tag_e -> 'tag_e -> bool) (eq_tag_p : 'tag_p -> 'tag_p -> bool)
+    : ('tag_e, 'tag_p) Expr.t Alcotest.testable =
+  let pp =
+    match print with
+    | `PrintSexp (sexp_of_tag_e, sexp_of_tag_p) ->
+        pp_from_sexp (Expr.sexp_of_t sexp_of_tag_e sexp_of_tag_p)
+    | `PrintSource -> Fmt.of_to_string Expr.to_source_code
+  in
+  Alcotest.testable pp (Expr.equal eq_tag_e eq_tag_p)
+
+let plain_std_expr_testable (print_method : [ `PrintSexp | `PrintSource ]) =
+  std_expr_testable
+    (match print_method with
+    | `PrintSexp -> `PrintSexp (sexp_of_unit, sexp_of_unit)
+    | `PrintSource -> `PrintSource)
+    equal_unit equal_unit
+
+let std_program_testable (eq_tag_e : 'tag_e -> 'tag_e -> 'bool)
+    (eq_tag_p : 'tag_p -> 'tag_p -> bool) :
+    ('tag_e, 'tag_p) Program.t Alcotest.testable =
+  let pp = Fmt.of_to_string (Program.to_source_code ~use_newlines:true) in
+  Alcotest.testable pp (Program.equal eq_tag_e eq_tag_p)
+
+let std_executor_store_value_testable :
+    ProgramExecutor.Store.value Alcotest.testable =
+  Alcotest.testable
+    (pp_from_sexp ProgramExecutor.Store.sexp_of_value)
+    ProgramExecutor.Store.equal_value
+
+let std_executor_error_testable : ProgramExecutor.exec_err Alcotest.testable =
+  Alcotest.testable
+    (pp_from_sexp ProgramExecutor.sexp_of_exec_err)
+    override_equal_exec_err
+
+let std_executor_res_testable : ProgramExecutor.exec_res Alcotest.testable =
+  Alcotest.testable
+    (Fmt.of_to_string ProgramExecutor.show_exec_res)
+    override_equal_exec_res
+
+let std_typing_error_testable : TypeChecker.TypingError.t Alcotest.testable =
+  Alcotest.testable
+    (Fmt.of_to_string TypeChecker.TypingError.print)
+    override_equal_typing_error
 
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig

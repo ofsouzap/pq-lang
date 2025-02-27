@@ -1,5 +1,4 @@
 open Core
-open OUnit2
 open Pq_lang
 open Testing_utils
 
@@ -21,5 +20,5 @@ let test_cases_to_source_code_inv =
           Test.fail_reportf "Got frontend error: %s"
             (err |> sexp_of_frontend_error |> Sexp.to_string_hum))
 
-let suite =
-  "Program" >::: [ QCheck_runner.to_ounit2_test test_cases_to_source_code_inv ]
+let suite : unit Alcotest.test_case list =
+  [ QCheck_alcotest.to_alcotest test_cases_to_source_code_inv ]

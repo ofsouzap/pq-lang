@@ -1,4 +1,3 @@
-open OUnit2
 open Core
 open Pq_lang
 open Utils
@@ -34,31 +33,34 @@ let vtype_gen type_ctx =
       allow_fun_types = false;
     }
 
-let test_cases_expr_typing : test list =
+let test_cases_expr_typing : unit Alcotest.test_case list =
   let open Result in
   let open Pq_lang.TypeChecker.StdSimpleTypeChecker in
   let create_test
       ( (type_ctx : (TypeCtx.t, TypeChecker.TypingError.t) Result.t option),
         (e : Expr.plain_t),
-        (t : (Vtype.t, TypingError.t) Result.t) ) : test =
-    Expr.to_source_code e >:: fun _ ->
-    let type_ctx =
-      Option.value ~default:(Ok TypeCtx.empty) type_ctx |> function
-      | Ok type_ctx -> type_ctx
-      | Error err ->
-          failwith
-            (sprintf "Error creating type context: %s" (TypingError.print err))
-    in
-    let out = Pq_lang.TypeChecker.type_expr ~type_ctx e in
-    match (out, t) with
-    | Ok e_typed, Ok exp_t ->
-        let out_t = e_typed |> Expr.node_val |> fst in
-        assert_equal ~cmp:Vtype.equal ~printer:Vtype.to_source_code exp_t out_t
-    | Ok _, Error _ -> assert_failure "Expected typing error but got type"
-    | Error _, Ok _ -> assert_failure "Expected type but got typing error"
-    | Error t_err, Error exp_err ->
-        assert_equal ~cmp:override_equal_typing_error ~printer:TypingError.print
-          exp_err t_err
+        (t : (Vtype.t, TypingError.t) Result.t) ) : unit Alcotest.test_case =
+    ( Expr.to_source_code e,
+      `Quick,
+      fun () ->
+        let type_ctx =
+          Option.value ~default:(Ok TypeCtx.empty) type_ctx |> function
+          | Ok type_ctx -> type_ctx
+          | Error err ->
+              failwith
+                (sprintf "Error creating type context: %s"
+                   (TypingError.print err))
+        in
+        let out = Pq_lang.TypeChecker.type_expr ~type_ctx e in
+        match (out, t) with
+        | Ok e_typed, Ok exp_t ->
+            let out_t = e_typed |> Expr.node_val |> fst in
+            Alcotest.check vtype_testable "Resulting type incorrect" exp_t out_t
+        | Ok _, Error _ -> Alcotest.fail "Expected typing error but got type"
+        | Error _, Ok _ -> Alcotest.fail "Expected type but got typing error"
+        | Error t_err, Error exp_err ->
+            Alcotest.check std_typing_error_testable
+              "Returned errors mismatched" exp_err t_err )
   in
   List.map ~f:create_test
     [
@@ -303,31 +305,37 @@ let test_cases_expr_typing : test list =
         Ok (Vtype.VTypeCustom "list") );
     ]
 
-let test_cases_expr_typing_full_check : test list =
+let test_cases_expr_typing_full_check : unit Alcotest.test_case list =
   let create_test
       ( (name : string),
         (type_ctx : TypeCtx.t option),
         (e : Expr.plain_t),
-        (exp : (Vtype.t, Vtype.t) Expr.t) ) : test =
-    name >:: fun _ ->
-    let open Result in
-    let out =
-      Pq_lang.TypeChecker.type_expr
-        ~type_ctx:(Option.value ~default:TypeCtx.empty type_ctx)
-        e
-    in
-    match out with
-    | Ok e_typed ->
-        let typed_out =
-          e_typed |> Expr.fmap ~f:fst |> Expr.fmap_pattern ~f:fst
+        (exp : (Vtype.t, Vtype.t) Expr.t) ) : unit Alcotest.test_case =
+    ( name,
+      `Quick,
+      fun () ->
+        let open Result in
+        let out =
+          Pq_lang.TypeChecker.type_expr
+            ~type_ctx:(Option.value ~default:TypeCtx.empty type_ctx)
+            e
         in
-        assert_equal
-          ~cmp:(Expr.equal Vtype.equal Vtype.equal)
-          ~printer:
-            (Vtype_ast_qcheck_testing.print
-               (PrintSexp (Vtype.sexp_of_t, Vtype.sexp_of_t)))
-          exp typed_out
-    | Error _ -> assert_failure "Failed to type"
+        match out with
+        | Ok e_typed ->
+            let typed_out =
+              e_typed |> Expr.fmap ~f:fst |> Expr.fmap_pattern ~f:fst
+            in
+            (* assert_equal
+              ~cmp:(Expr.equal Vtype.equal Vtype.equal)
+              ~printer:
+                (Vtype_ast_qcheck_testing.print
+                   (PrintSexp (Vtype.sexp_of_t, Vtype.sexp_of_t))) *)
+            Alcotest.check
+              (std_expr_testable
+                 (`PrintSexp Vtype.(sexp_of_t, sexp_of_t))
+                 Vtype.equal Vtype.equal)
+              "Differing types in node" exp typed_out
+        | Error _ -> Alcotest.fail "Failed to type" )
   in
   List.map ~f:create_test
     [
@@ -363,12 +371,12 @@ let test_cases_expr_typing_full_check : test list =
                 IntLit (Vtype.VTypeInt, 0) ) ) );
     ]
 
-let test_cases_typing_with_var_ctx : test list =
+let test_cases_typing_with_var_ctx : unit Alcotest.test_case list =
   let open Result in
   let create_test
       ( (ctx_list : (string * Vtype.t) list),
         (e : Expr.plain_t),
-        (t : (Vtype.t, TypingError.t) Result.t) ) : test =
+        (t : (Vtype.t, TypingError.t) Result.t) ) : unit Alcotest.test_case =
     let ctx =
       List.fold ~init:VarCtx.empty
         ~f:(fun acc (xname, xtype) -> VarCtx.add acc xname xtype)
@@ -378,19 +386,21 @@ let test_cases_typing_with_var_ctx : test list =
       sprintf "[with var context] %s"
         (e |> Expr.to_source_code ~use_newlines:true)
     in
-    name >:: fun _ ->
-    let out =
-      TypeChecker.type_expr (TypeChecker.checked_empty_type_ctx, ctx) e
-    in
-    match (out, t) with
-    | Ok e_typed, Ok exp_t ->
-        let out_t = e_typed |> Expr.node_val |> fst in
-        assert_equal ~cmp:Vtype.equal ~printer:Vtype.to_source_code exp_t out_t
-    | Ok _, Error _ -> assert_failure "Expected typing error but got type"
-    | Error _, Ok _ -> assert_failure "Expected type but got typing error"
-    | Error t_err, Error exp_err ->
-        assert_equal ~cmp:override_equal_typing_error ~printer:TypingError.print
-          exp_err t_err
+    ( name,
+      `Quick,
+      fun () ->
+        let out =
+          TypeChecker.type_expr (TypeChecker.checked_empty_type_ctx, ctx) e
+        in
+        match (out, t) with
+        | Ok e_typed, Ok exp_t ->
+            let out_t = e_typed |> Expr.node_val |> fst in
+            Alcotest.check vtype_testable "Type incorrect" exp_t out_t
+        | Ok _, Error _ -> Alcotest.fail "Expected typing error but got type"
+        | Error _, Ok _ -> Alcotest.fail "Expected type but got typing error"
+        | Error t_err, Error exp_err ->
+            Alcotest.check std_typing_error_testable "Typing error mismatch"
+              exp_err t_err )
   in
   List.map ~f:create_test
     [
@@ -425,7 +435,7 @@ struct
     let ctx' = VarCtx.append ctx1 ctx2 in
     (equal_option Vtype.equal) (VarCtx.find ctx2 xname) (VarCtx.find ctx' xname)
 
-  let all_test_cases : test list =
+  let all_test_cases : unit Alcotest.test_case list =
     let open QCheck in
     let var_ctx_from_list : (string * Vtype.t) list -> VarCtx.t =
       List.fold ~init:VarCtx.empty ~f:(fun acc (xname, xtype) ->
@@ -446,7 +456,7 @@ struct
         (pair (vtype_gen type_ctx) (vtype_gen type_ctx))
     in
     let ctx_two_vtypes_arb = QCheck.make ctx_two_vtypes_gen in
-    List.map ~f:QCheck_runner.to_ounit2_test
+    List.map ~f:QCheck_alcotest.to_alcotest
       [
         Test.make ~name:"Add then get" ~count:100
           (pair ctx_two_vtypes_arb string)
@@ -495,7 +505,7 @@ module ListVariableContextTester =
 
 module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
 (* TODO - uncomment and fix
-let test_cases_arb_compound_expr_typing : test list =
+let test_cases_arb_compound_expr_typing : unit Alcotest.test_case list =
   let open QCheck in
   let open QCheck.Gen in
   let expr_gen ~(type_ctx : TestingTypeCtx.t) (t : Vtype.t) :
@@ -518,7 +528,7 @@ let test_cases_arb_compound_expr_typing : test list =
       ( (name : string),
         (type_ctx :
           (TestingTypeCtx.t, TypeChecker.typing_error) Result.t option),
-        (e_gen : TestingTypeCtx.t -> (Vtype.t * Expr.plain_t) Gen.t) ) : test =
+        (e_gen : TestingTypeCtx.t -> (Vtype.t * Expr.plain_t) Gen.t) ) : unit Alcotest.test_case =
     let type_ctx : TestingTypeCtx.t =
       Option.value ~default:(Ok TestingTypeCtx.empty) type_ctx |> function
       | Ok type_ctx -> type_ctx
@@ -533,7 +543,7 @@ let test_cases_arb_compound_expr_typing : test list =
             pair Vtype.to_source_code (Expr.to_source_code ~use_newlines:true))
         (e_gen type_ctx)
     in
-    QCheck_ounit.to_ounit2_test
+    QCheck_alcotest.to_alcotest
       (Test.make ~name ~count:100 e_arb (fun (exp_t, e) ->
            match TestingTypeChecker.check_type_ctx type_ctx with
            | Error err ->
@@ -728,9 +738,9 @@ let test_cases_arb_compound_expr_typing : test list =
               Constructor ((), "IntBox", e1) ) );
     ] *)
 (* TODO - uncomment and fix
-let test_cases_typing_maintains_structure : test =
+let test_cases_typing_maintains_structure : unit Alcotest.test_case =
   let open QCheck in
-  QCheck_ounit.to_ounit2_test
+    QCheck_alcotest.to_alcotest
     (Test.make ~name:"Typing maintains structure" ~count:100
        unit_program_arbitrary_with_default_options (fun prog ->
          let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
@@ -749,24 +759,19 @@ let test_cases_typing_maintains_structure : test =
                  Expr.equal_plain_t plain_e plain_typed_e
              | Error _ -> false))) *)
 
-let suite =
-  "Typing"
-  >::: [
-         "Expression typing" >::: test_cases_expr_typing;
-         "Expression typing full hierarchy"
-         >::: test_cases_expr_typing_full_check;
-         "Expression typing with context" >::: test_cases_typing_with_var_ctx;
-         (* TODO - uncomment and fix
-          "Arbitrary expression typing" >::: test_cases_arb_compound_expr_typing; *)
-         (* TODO - uncomment and fix
-          "Typing maintains structure"
-         >::: [ test_cases_typing_maintains_structure ]; *)
-         "Variable contexts"
-         >::: [
-                "Function context"
-                >::: FunctionVariableContextTester.all_test_cases;
-                "List context" >::: ListVariableContextTester.all_test_cases;
-                "Testing context"
-                >::: TestingVariableContextTester.all_test_cases;
-              ];
-       ]
+let suite : unit Alcotest.test_case list =
+  label_tests "Expression typing" test_cases_expr_typing
+  @ label_tests "Expression typing full hierarchy"
+      test_cases_expr_typing_full_check
+  @ label_tests "Expression typing with context" test_cases_typing_with_var_ctx
+  @
+  (* TODO - uncomment and fix
+          label_tests "Arbitrary expression typing" test_cases_arb_compound_expr_typing @ *)
+  (* TODO - uncomment and fix
+          label_tests "Typing maintains structure"
+         [ test_cases_typing_maintains_structure ] @ *)
+  label_tests "Variable contexts"
+    (label_tests "Function context" FunctionVariableContextTester.all_test_cases
+    @ label_tests "List context" ListVariableContextTester.all_test_cases
+    @ label_tests "Testing context" TestingVariableContextTester.all_test_cases
+    )

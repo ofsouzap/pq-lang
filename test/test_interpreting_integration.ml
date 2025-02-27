@@ -1,5 +1,4 @@
 open Core
-open OUnit2
 open Pq_lang
 module ProgramExecutor = Pq_lang.ProgramExecutor.SimpleExecutor
 open ProgramExecutor.Store
@@ -45,43 +44,47 @@ predOrZero %d
     x
 
 let create_test
-    ((name : string), (inp : string), (exp : ProgramExecutor.exec_res)) : test =
-  name >:: fun _ ->
-  let open Result in
-  match Frontend.run_frontend_string inp with
-  | Ok prog -> (
-      match TypeChecker.type_program prog with
-      | Ok typed_prog ->
-          let result : ProgramExecutor.exec_res =
-            ProgramExecutor.execute_program typed_prog
-          in
-          assert_equal ~cmp:override_equal_exec_res
-            ~printer:ProgramExecutor.show_exec_res exp result
+    ((name : string), (inp : string), (exp : ProgramExecutor.exec_res)) :
+    unit Alcotest.test_case =
+  ( name,
+    `Quick,
+    fun () ->
+      let open Result in
+      match Frontend.run_frontend_string inp with
+      | Ok prog -> (
+          match TypeChecker.type_program prog with
+          | Ok typed_prog ->
+              let result : ProgramExecutor.exec_res =
+                ProgramExecutor.execute_program typed_prog
+              in
+              Alcotest.check std_executor_res_testable "Execution result wrong"
+                exp result
+          | Error err ->
+              failwith
+                (sprintf "Error in typing: %s"
+                   (TypeChecker.TypingError.print err)))
       | Error err ->
           failwith
-            (sprintf "Error in typing: %s" (TypeChecker.TypingError.print err)))
-  | Error err ->
-      failwith
-        (sprintf "Error in frontend: %s"
-           (err |> Frontend.sexp_of_frontend_error |> Sexp.to_string_hum))
+            (sprintf "Error in frontend: %s"
+               (err |> Frontend.sexp_of_frontend_error |> Sexp.to_string_hum))
+  )
 
-let suite =
-  "Interpreting Integration Tests"
-  >::: List.map ~f:create_test
-         [
-           ("Program Triangles-a", program_triangles 0, Ok (Int 0));
-           ("Program Triangles-b", program_triangles 5, Ok (Int 15));
-           ( "Program Pairs0",
-             "let x = 4 in (x + 1, if false then x else x * 2 end) end",
-             Ok (Pair (Int 5, Int 8)) );
-           ( "Program Match Pairs",
-             "let p = (true, 1) in match p -> int with | ((b : bool), (x : \
-              int)) -> if b then x else 0 end end end",
-             Ok (Int 1) );
-           ("Program Pred-or-Zero-a", program_pred_or_zero 0, Ok (Int 0));
-           ("Program Pred-or-Zero-a", program_pred_or_zero 5, Ok (Int 4));
-           ( "Program int list sum",
-             {|
+let suite : unit Alcotest.test_case list =
+  List.map ~f:create_test
+    [
+      ("Program Triangles-a", program_triangles 0, Ok (Int 0));
+      ("Program Triangles-b", program_triangles 5, Ok (Int 15));
+      ( "Program Pairs0",
+        "let x = 4 in (x + 1, if false then x else x * 2 end) end",
+        Ok (Pair (Int 5, Int 8)) );
+      ( "Program Match Pairs",
+        "let p = (true, 1) in match p -> int with | ((b : bool), (x : int)) -> \
+         if b then x else 0 end end end",
+        Ok (Int 1) );
+      ("Program Pred-or-Zero-a", program_pred_or_zero 0, Ok (Int 0));
+      ("Program Pred-or-Zero-a", program_pred_or_zero 5, Ok (Int 4));
+      ( "Program int list sum",
+        {|
 type int_list =
   | Nil of unit
   | Cons of (int * int_list)
@@ -95,9 +98,9 @@ end
 
 sum_int_list (Cons (1, Cons (2, Cons (3, Cons (4, Nil ())))))
 |},
-             Ok (Int 10) );
-           ( "Program very recursive variant data type",
-             {|
+        Ok (Int 10) );
+      ( "Program very recursive variant data type",
+        {|
 type my_type =
   | A of my_type
   | B of (my_type * int)
@@ -114,9 +117,9 @@ in
   end
 end
 |},
-             Ok Unit );
-           ( "Program using first-class functions",
-             {|
+        Ok Unit );
+      ( "Program using first-class functions",
+        {|
 let f (x : int) : int =
   x + 1
 end
@@ -129,5 +132,5 @@ end
 
 apply (f, 5)
 |},
-             Ok (Int 6) );
-         ]
+        Ok (Int 6) );
+    ]
