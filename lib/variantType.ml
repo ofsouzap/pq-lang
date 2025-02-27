@@ -8,7 +8,7 @@ let constructor_existing_names ((c_name, _) : constructor) : StringSet.t =
   StringSet.singleton c_name
 
 let constructor_to_source_code ((c_name, c_type) : constructor) : string =
-  sprintf "%s of %s" c_name (Vtype.to_source_code c_type)
+  sprintf "%s of (%s)" c_name (Vtype.to_source_code c_type)
 
 let constructors_to_source_code (cs : constructor list) : string =
   List.map ~f:constructor_to_source_code cs |> String.concat ~sep:" | "
