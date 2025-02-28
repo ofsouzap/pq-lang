@@ -94,8 +94,6 @@ module type S = sig
   val empty_typing_error : typing_error
 
   type exec_err =
-    | TypeContextCreationError of TypingError.t
-        (** Error when forming a type context from a program *)
     | TypingError of typing_error
         (** Execution was halted due to a typing error *)
     | UndefinedVarError of Varname.t
@@ -184,14 +182,6 @@ module MakeStd
 
     let store_traverse : store -> (Varname.t * value) list =
       Map.to_alist ~key_order:`Increasing
-
-    let rec value_type = function
-      | Unit -> Vtype.VTypeUnit
-      | Int _ -> Vtype.VTypeInt
-      | Bool _ -> Vtype.VTypeBool
-      | Closure closure -> Vtype.VTypeFun (snd closure.param, closure.out_type)
-      | Pair (v1, v2) -> Vtype.VTypePair (value_type v1, value_type v2)
-      | VariantTypeValue ((vt_name, _), _, _) -> Vtype.VTypeCustom vt_name
   end
 
   open Store
@@ -230,7 +220,6 @@ module MakeStd
     |> String.concat ~sep:", "
 
   type exec_err =
-    | TypeContextCreationError of TypingError.t
     | TypingError of typing_error
     | UndefinedVarError of Varname.t
     | MisplacedFixError
@@ -241,8 +230,6 @@ module MakeStd
   [@@deriving sexp, equal]
 
   let print_exec_err = function
-    | TypeContextCreationError terr ->
-        "[TYPE CONTEXT CREATION ERROR: " ^ TypingError.print terr ^ "]"
     | TypingError terr -> "[TYPING ERROR: " ^ show_typing_error terr ^ "]"
     | UndefinedVarError x -> "[UNDEFINED VAR: " ^ x ^ "]"
     | MisplacedFixError -> "[MISPLACED FIX NODE]"
@@ -262,8 +249,9 @@ module MakeStd
       (Varname.t * value) list option =
     let open Option in
     match (p, v) with
-    | PatName (_, xname, xtype), v ->
-        if value_type v |> Vtype.equal xtype then Some [ (xname, v) ] else None
+    | PatName (_, xname, _), v ->
+        (* Since the program must have been type-checked, we don't need to compare the type of the pattern to the type of the value *)
+        Some [ (xname, v) ]
     | PatPair (_, p1, p2), Pair (v1, v2) ->
         match_pattern p1 v1 >>= fun m1 ->
         match_pattern p2 v2 >>= fun m2 -> Some (m1 @ m2)
@@ -440,11 +428,8 @@ module MakeStd
         >>= fun (vt, _) -> Ok (VariantTypeValue (vt, c_name, v1))
 
   let execute_program (tprog : ('tag_e, 'tag_p) TypeChecker.typed_program) =
-    let open Result in
     let prog = TypeChecker.typed_program_get_program tprog in
-    TypeCtx.create ~custom_types:prog.custom_types
-    |> Result.map_error ~f:(fun err -> TypeContextCreationError err)
-    >>= fun type_ctx ->
+    let type_ctx = TypeChecker.typed_program_get_type_ctx tprog in
     let store =
       List.fold
         ~init:(Varname.Map.empty : store)
