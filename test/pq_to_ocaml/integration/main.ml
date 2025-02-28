@@ -3,6 +3,10 @@ open Core
 let cwd = Sys_unix.getcwd ()
 let reldir = Filename.concat cwd
 
+(** Exit code expected to be produced by the executable when the input script
+    has a quotient typing error *)
+let quotient_typing_error_exit_code : int = 2
+
 let get_positive_test_case_file_paths () : string list =
   Sys_unix.readdir (reldir "test_cases/positive")
   |> Array.to_list
@@ -19,13 +23,15 @@ let get_negative_test_case_file_paths () : string list =
          | _, Some ext when equal_string ext "pq" -> true
          | _ -> false)
 
-let get_expected_output_file_paths (pq_file_path : string) : string list =
-  let file_no_ext = Filename.chop_extension pq_file_path in
-  let base_dir = Filename.dirname pq_file_path in
-  [
-    Filename.concat base_dir (file_no_ext ^ ".ml");
-    Filename.concat base_dir (file_no_ext ^ ".mli");
-  ]
+let get_expected_output_ml_file_path (pq_file_path : string) : string =
+  Filename.concat
+    (Filename.dirname pq_file_path)
+    (Filename.chop_extension pq_file_path ^ ".ml")
+
+let get_expected_output_mli_file_path (pq_file_path : string) : string =
+  Filename.concat
+    (Filename.dirname pq_file_path)
+    (Filename.chop_extension pq_file_path ^ ".mli")
 
 let run_exec_on (file_path : string) :
     Core_unix.(Process_info.t * Exit_or_signal.t) =
@@ -40,27 +46,50 @@ let check_file_exists (file_path : string) : bool =
   | `Yes -> true
   | `No | `Unknown -> false
 
-(* TODO - test that created outputs can compile using ocamlc *)
+let try_compile_output ~(ml_source_path : string) ~(mli_source_path : string) :
+    Core_unix.(Process_info.t * Exit_or_signal.t) =
+  let process =
+    Core_unix.create_process ~prog:"ocamlc"
+      ~args:[ "-c"; mli_source_path; ml_source_path ]
+  in
+  (process, Core_unix.waitpid process.pid)
 
 let test_positive ~(test_name : string) (file_path : string) :
     unit Alcotest.test_case =
   ( test_name,
     `Quick,
     fun () ->
-      let _, result = run_exec_on file_path in
-      match result with
+      (* Try run the executable *)
+      let _, exec_result = run_exec_on file_path in
+      match exec_result with
       | Error (`Exit_non_zero (exit_code : int)) ->
           Alcotest.failf "Executable failed with exit code: %d" exit_code
       | Error (`Signal signal) ->
           Alcotest.failf "Executable failed with signal: %s"
             (Signal.to_string signal)
-      | Ok () ->
-          List.iter (get_expected_output_file_paths file_path) ~f:(fun path ->
-              if check_file_exists path then ()
-              else
-                Alcotest.failf
-                  "Expected output file \"%s\" to exist but it doesn't" path);
-          () )
+      | Ok () -> (
+          let ml_path = get_expected_output_ml_file_path file_path in
+          let mli_path = get_expected_output_mli_file_path file_path in
+          (* Check the expected output files exist *)
+          if not (check_file_exists ml_path) then
+            Alcotest.failf
+              "Expected output ML file \"%s\" to exist but it doesn't" ml_path
+          else if not (check_file_exists mli_path) then
+            Alcotest.failf
+              "Expected output MLi file \"%s\" to exist but it doesn't" mli_path
+          else
+            (* Try to compile the outputs and check that it works *)
+            let _, compile_result =
+              try_compile_output ~ml_source_path:ml_path
+                ~mli_source_path:mli_path
+            in
+            match compile_result with
+            | Error (`Exit_non_zero (exit_code : int)) ->
+                Alcotest.failf "Compilation failed with exit code: %d" exit_code
+            | Error (`Signal signal) ->
+                Alcotest.failf "Compilation failed with signal: %s"
+                  (Signal.to_string signal)
+            | Ok () -> ()) )
 
 let test_negative ~(test_name : string) (file_path : string) :
     unit Alcotest.test_case =
@@ -69,9 +98,13 @@ let test_negative ~(test_name : string) (file_path : string) :
     fun () ->
       let _, result = run_exec_on file_path in
       match result with
-      | Error (`Exit_non_zero (_ : int)) ->
-          (* To simplify the tests, I don't check the exit code or error message for this execution *)
-          ()
+      | Error (`Exit_non_zero (exit_code : int)) ->
+          if equal_int quotient_typing_error_exit_code exit_code then ()
+          else
+            Alcotest.failf
+              "Expected executable to fail with exit code %d but it failed \
+               with exit code %d"
+              quotient_typing_error_exit_code exit_code
       | Error (`Signal signal) ->
           Alcotest.failf "Executable failed with signal: %s"
             (Signal.to_string signal)
