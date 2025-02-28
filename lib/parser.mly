@@ -9,16 +9,10 @@ module Unifier = Unifier.StdUnifier
 module QuotientType = QuotientType.StdQuotientType
 module CustomType = CustomType.StdCustomType
 
-let add_variant_type_definition_to_program (p : Program.StdProgram.plain_t) (vt : VariantType.t) : Program.StdProgram.plain_t =
+let add_custom_type_decl_to_program (p : Program.StdProgram.plain_t) (ct_decl : (unit, unit) Program.StdProgram.custom_type_decl) : Program.StdProgram.plain_t =
   {
     p with
-    custom_types = (VariantType vt) :: p.custom_types;
-  }
-
-let add_quotient_type_definition_to_program (p : Program.StdProgram.plain_t) (qt : QuotientType.plain_t) : Program.StdProgram.plain_t =
-  {
-    p with
-    custom_types = (QuotientType qt) :: p.custom_types;
+    custom_types = ct_decl :: p.custom_types;
   }
 
 let add_top_level_definition_to_program (p : Program.StdProgram.plain_t) (defn : Program.StdProgram.plain_top_level_defn) : Program.StdProgram.plain_t =
@@ -29,7 +23,7 @@ let add_top_level_definition_to_program (p : Program.StdProgram.plain_t) (defn :
 %}
 
 // Tokens
-%token END IF THEN ELSE LET IN TRUE FALSE REC UNIT INT BOOL MATCH WITH TYPE QTYPE OF
+%token END IF THEN ELSE LET IN TRUE FALSE REC UNIT INT BOOL MATCH WITH TYPE QTYPE OF PRIVATE
 %token PLUS MINUS STAR LPAREN RPAREN BNOT BOR BAND ASSIGN EQUATE GT GTEQ LT LTEQ ARROW BIG_ARROW COLON COMMA PIPE QUOTIENT UNIT_VAL
 %token <int> INTLIT
 %token <string> LNAME UNAME
@@ -75,6 +69,8 @@ let add_top_level_definition_to_program (p : Program.StdProgram.plain_t) (defn :
 %type <QuotientType.plain_eqcons> quotient_type_eqcons
 %type <QuotientType.plain_eqcons list> quotient_type_definition_eqconss
 %type <QuotientType.plain_t> quotient_type_definition
+
+%type <(unit, unit) Program.StdProgram.custom_type_decl> custom_type_decl
 
 %type <(string * Vtype.t)> top_level_defn_param
 %type <Program.StdProgram.plain_top_level_defn> top_level_defn
@@ -201,18 +197,25 @@ quotient_type_definition:
   | QTYPE name = LNAME ASSIGN base_type_name = LNAME eqconss = quotient_type_definition_eqconss { QuotientType.{ name; base_type_name; eqconss=eqconss } }
 ;
 
+custom_type_decl:
+  | vt = variant_type_definition { { private_flag=Program.StdProgram.Public; ct=(VariantType vt) } }
+  | PRIVATE vt = variant_type_definition { { private_flag=Program.StdProgram.Private; ct=(VariantType vt) } }
+  | qt = quotient_type_definition { { private_flag=Program.StdProgram.Private; ct=(QuotientType qt) } }
+;
+
 top_level_defn_param:
   | LPAREN x = typed_name RPAREN { x }
 ;
 
 top_level_defn:
-  | LET fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.StdProgram.{ recursive=false; name=fname; param; return_t; body=e } }
-  | LET REC fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.StdProgram.{ recursive=true; name=fname; param; return_t; body=e } }
+  | LET fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.StdProgram.{ private_flag=Program.StdProgram.Public; recursive=false; name=fname; param; return_t; body=e } }
+  | PRIVATE LET fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.StdProgram.{ private_flag=Program.StdProgram.Private; recursive=false; name=fname; param; return_t; body=e } }
+  | LET REC fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.StdProgram.{ private_flag=Program.StdProgram.Public; recursive=true; name=fname; param; return_t; body=e } }
+  | PRIVATE LET REC fname = LNAME param = top_level_defn_param COLON return_t = vtype ASSIGN e = expr END { Program.StdProgram.{ private_flag=Program.StdProgram.Private; recursive=true; name=fname; param; return_t; body=e } }
 ;
 
 prog:
   | e = expr EOF { { custom_types = []; top_level_defns=[]; e = e } }
-  | vt = variant_type_definition p = prog { add_variant_type_definition_to_program p vt }
-  | qt = quotient_type_definition p = prog { add_quotient_type_definition_to_program p qt }
+  | ct_decl = custom_type_decl p = prog { add_custom_type_decl_to_program p ct_decl }
   | defn = top_level_defn p = prog { add_top_level_definition_to_program p defn }
 ;

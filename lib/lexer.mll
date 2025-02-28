@@ -26,6 +26,7 @@ rule token = parse
   | "type" { TYPE }
   | "qtype" { QTYPE }
   | "of" { OF }
+  | "private" { PRIVATE }
   (* Operators and symbols *)
   | '+' { PLUS }
   | '-' { MINUS }
