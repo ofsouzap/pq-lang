@@ -10,4 +10,5 @@ let () =
       ("Program Executor Store", Test_programExecutor_store.suite);
       ("Type Checker", Test_typeChecker.suite);
       ("Quotient Type Checker", Test_quotientTypeChecker.suite);
+      ("OCaml Converter", Test_ocamlConverter.suite);
     ]

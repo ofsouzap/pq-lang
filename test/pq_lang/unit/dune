@@ -16,4 +16,5 @@
   test_quotientTypeChecker
   test_lexer_parser
   test_programExecutor
-  test_programExecutor_store))
+  test_programExecutor_store
+  test_ocamlConverter))

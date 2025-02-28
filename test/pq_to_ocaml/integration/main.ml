@@ -40,6 +40,8 @@ let check_file_exists (file_path : string) : bool =
   | `Yes -> true
   | `No | `Unknown -> false
 
+(* TODO - test that created outputs can compile using ocamlc *)
+
 let test_positive ~(test_name : string) (file_path : string) :
     unit Alcotest.test_case =
   ( test_name,

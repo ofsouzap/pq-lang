@@ -17,7 +17,8 @@ let make_store (vars : (string * ProgramExecutor.Store.value) list) :
       ProgramExecutor.Store.store_set store ~key:name ~value)
     ~init:ProgramExecutor.Store.empty_store
 
-let type_expr ?(custom_types : CustomType.plain_t list option)
+let type_expr
+    ?(custom_types : (unit, unit) Program.custom_type_decl list option)
     ?(top_level_defns : (unit, unit) Program.top_level_defn list option)
     (e : Expr.plain_t) : (unit, unit) TypeChecker.typed_program =
   match
@@ -202,136 +203,154 @@ let test_cases_variables : basic_test_case list =
 let test_cases_match : basic_test_case list =
   let open ProgramExecutor.Store in
   let mapf
-      ( (custom_types : CustomType.plain_t list option),
+      ( (custom_types : (unit, unit) Program.custom_type_decl list option),
         (x : Expr.plain_t),
         (y : ProgramExecutor.exec_res) ) : basic_test_case =
     (Expr.to_source_code x, type_expr ?custom_types x, y)
   in
   List.map ~f:mapf
-    [
-      ( None,
-        Let
-          ( (),
-            "x",
-            IntLit ((), 3),
-            Match
-              ( (),
-                Var ((), "x"),
-                VTypeInt,
-                Nonempty_list.from_list_unsafe
-                  [
-                    ( PatName ((), "y", VTypeInt),
-                      Add ((), Var ((), "y"), IntLit ((), 1)) );
-                  ] ) ),
-        Ok (Int 4) );
-      ( None,
-        Let
-          ( (),
-            "x",
-            BoolLit ((), false),
-            Match
-              ( (),
-                Var ((), "x"),
-                VTypeInt,
-                Nonempty_list.from_list_unsafe
-                  [
-                    ( PatName ((), "y", VTypeBool),
-                      If ((), Var ((), "y"), IntLit ((), 4), IntLit ((), 0)) );
-                    (PatName ((), "z", VTypeBool), IntLit ((), 9));
-                  ] ) ),
-        Ok (Int 0) );
-      ( None,
-        Let
-          ( (),
-            "x",
-            Pair ((), BoolLit ((), true), IntLit ((), 1)),
-            Match
-              ( (),
-                Var ((), "x"),
-                VTypeInt,
-                Nonempty_list.from_list_unsafe
-                  [
-                    ( PatPair
-                        ( (),
-                          PatName ((), "y", VTypeBool),
-                          PatName ((), "z", VTypeInt) ),
-                      If ((), Var ((), "y"), Var ((), "z"), IntLit ((), 0)) );
-                  ] ) ),
-        Ok (Int 1) );
-      ( None,
-        Let
-          ( (),
-            "x",
-            Pair
-              ( (),
-                Pair ((), BoolLit ((), true), BoolLit ((), true)),
-                IntLit ((), 1) ),
-            Match
-              ( (),
-                Var ((), "x"),
-                VTypePair (VTypeBool, VTypeBool),
-                Nonempty_list.from_list_unsafe
-                  [
-                    ( PatPair
-                        ( (),
-                          PatName ((), "y", VTypePair (VTypeBool, VTypeBool)),
-                          PatName ((), "z", VTypeInt) ),
-                      Var ((), "y") );
-                  ] ) ),
-        Ok (Pair (Bool true, Bool true)) );
-      ( Some
-          [
-            CustomType.VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-            CustomType.VariantType
-              ( "int_list",
+    Program.
+      [
+        ( None,
+          Let
+            ( (),
+              "x",
+              IntLit ((), 3),
+              Match
+                ( (),
+                  Var ((), "x"),
+                  VTypeInt,
+                  Nonempty_list.from_list_unsafe
+                    [
+                      ( PatName ((), "y", VTypeInt),
+                        Add ((), Var ((), "y"), IntLit ((), 1)) );
+                    ] ) ),
+          Ok (Int 4) );
+        ( None,
+          Let
+            ( (),
+              "x",
+              BoolLit ((), false),
+              Match
+                ( (),
+                  Var ((), "x"),
+                  VTypeInt,
+                  Nonempty_list.from_list_unsafe
+                    [
+                      ( PatName ((), "y", VTypeBool),
+                        If ((), Var ((), "y"), IntLit ((), 4), IntLit ((), 0))
+                      );
+                      (PatName ((), "z", VTypeBool), IntLit ((), 9));
+                    ] ) ),
+          Ok (Int 0) );
+        ( None,
+          Let
+            ( (),
+              "x",
+              Pair ((), BoolLit ((), true), IntLit ((), 1)),
+              Match
+                ( (),
+                  Var ((), "x"),
+                  VTypeInt,
+                  Nonempty_list.from_list_unsafe
+                    [
+                      ( PatPair
+                          ( (),
+                            PatName ((), "y", VTypeBool),
+                            PatName ((), "z", VTypeInt) ),
+                        If ((), Var ((), "y"), Var ((), "z"), IntLit ((), 0)) );
+                    ] ) ),
+          Ok (Int 1) );
+        ( None,
+          Let
+            ( (),
+              "x",
+              Pair
+                ( (),
+                  Pair ((), BoolLit ((), true), BoolLit ((), true)),
+                  IntLit ((), 1) ),
+              Match
+                ( (),
+                  Var ((), "x"),
+                  VTypePair (VTypeBool, VTypeBool),
+                  Nonempty_list.from_list_unsafe
+                    [
+                      ( PatPair
+                          ( (),
+                            PatName ((), "y", VTypePair (VTypeBool, VTypeBool)),
+                            PatName ((), "z", VTypeInt) ),
+                        Var ((), "y") );
+                    ] ) ),
+          Ok (Pair (Bool true, Bool true)) );
+        ( Some
+            [
+              {
+                private_flag = Public;
+                ct =
+                  CustomType.VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+              };
+              {
+                private_flag = Public;
+                ct =
+                  CustomType.VariantType
+                    ( "int_list",
+                      [
+                        ("Nil", VTypeUnit);
+                        ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                      ] );
+              };
+            ],
+          Match
+            ( (),
+              Constructor ((), "BoolBox", BoolLit ((), true)),
+              VTypeBool,
+              Nonempty_list.from_list_unsafe
                 [
-                  ("Nil", VTypeUnit);
-                  ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                ] );
-          ],
-        Match
-          ( (),
-            Constructor ((), "BoolBox", BoolLit ((), true)),
-            VTypeBool,
-            Nonempty_list.from_list_unsafe
-              [
-                ( PatConstructor ((), "BoolBox", PatName ((), "x", VTypeBool)),
-                  Var ((), "x") );
-              ] ),
-        Ok (Bool true) );
-      ( Some
-          [
-            CustomType.VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
-            CustomType.VariantType
-              ( "int_list",
+                  ( PatConstructor ((), "BoolBox", PatName ((), "x", VTypeBool)),
+                    Var ((), "x") );
+                ] ),
+          Ok (Bool true) );
+        ( Some
+            [
+              {
+                private_flag = Public;
+                ct =
+                  CustomType.VariantType ("bool_box", [ ("BoolBox", VTypeBool) ]);
+              };
+              {
+                private_flag = Public;
+                ct =
+                  CustomType.VariantType
+                    ( "int_list",
+                      [
+                        ("Nil", VTypeUnit);
+                        ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                      ] );
+              };
+            ],
+          Match
+            ( (),
+              Constructor
+                ( (),
+                  "Cons",
+                  Pair ((), IntLit ((), 7), Constructor ((), "Nil", UnitLit ()))
+                ),
+              VTypeInt,
+              Nonempty_list.from_list_unsafe
                 [
-                  ("Nil", VTypeUnit);
-                  ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                ] );
-          ],
-        Match
-          ( (),
-            Constructor
-              ( (),
-                "Cons",
-                Pair ((), IntLit ((), 7), Constructor ((), "Nil", UnitLit ()))
-              ),
-            VTypeInt,
-            Nonempty_list.from_list_unsafe
-              [
-                ( PatConstructor ((), "Nil", PatName ((), "x", VTypeUnit)),
-                  IntLit ((), 0) );
-                ( PatConstructor
-                    ( (),
-                      "Cons",
-                      PatPair
-                        ( (),
-                          PatName ((), "x", VTypeInt),
-                          PatName ((), "y", VTypeCustom "int_list") ) ),
-                  Var ((), "x") );
-              ] ),
-        Ok (Int 7) );
-    ]
+                  ( PatConstructor ((), "Nil", PatName ((), "x", VTypeUnit)),
+                    IntLit ((), 0) );
+                  ( PatConstructor
+                      ( (),
+                        "Cons",
+                        PatPair
+                          ( (),
+                            PatName ((), "x", VTypeInt),
+                            PatName ((), "y", VTypeCustom "int_list") ) ),
+                    Var ((), "x") );
+                ] ),
+          Ok (Int 7) );
+      ]
 
 let test_cases_constructor : basic_test_case list =
   let open ProgramExecutor.Store in
@@ -342,7 +361,10 @@ let test_cases_constructor : basic_test_case list =
     ( Expr.to_source_code y,
       type_expr
         ~custom_types:
-          (List.map ~f:(fun vt -> CustomType.VariantType vt) variant_types)
+          (List.map
+             ~f:(fun vt ->
+               Program.{ private_flag = Public; ct = CustomType.VariantType vt })
+             variant_types)
         y,
       z )
   in

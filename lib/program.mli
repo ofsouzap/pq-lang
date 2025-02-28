@@ -6,8 +6,19 @@ module type S = sig
   module QuotientType : QuotientType.S
   module CustomType : CustomType.S with module QuotientType = QuotientType
 
+  (** A flag denoting if the definition should be private *)
+  type private_flag = Public | Private [@@deriving sexp, equal]
+
+  (** A custom type declaration *)
+  type ('tag_e, 'tag_p) custom_type_decl = {
+    private_flag : private_flag;
+    ct : ('tag_e, 'tag_p) CustomType.t;
+  }
+  [@@deriving sexp, equal]
+
   (** A top-level function definition *)
   type ('tag_e, 'tag_p) top_level_defn = {
+    private_flag : private_flag;
     recursive : bool;
     name : string;
     param : Varname.t * Vtype.t;
@@ -25,7 +36,7 @@ module type S = sig
   (** A t, consisting of any number of custom type definitions, top-level
       definitions and an expression to evaluate *)
   type ('tag_e, 'tag_p) t = {
-    custom_types : ('tag_e, 'tag_p) CustomType.t list;
+    custom_types : ('tag_e, 'tag_p) custom_type_decl list;
     top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
     e : ('tag_e, 'tag_p) Expr.t;
   }

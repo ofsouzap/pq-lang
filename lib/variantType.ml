@@ -82,8 +82,13 @@ let existing_names ((vt_name, vt_cs) : t) : StringSet.t =
        ~f:(fun acc c -> Set.union (constructor_existing_names c) acc)
        vt_cs)
 
-let to_source_code ((vt_name, vt_cs) : t) : string =
-  sprintf "type %s = %s" vt_name (constructors_to_source_code vt_cs)
+let to_source_code ?(expose_construction : bool option) ((vt_name, vt_cs) : t) :
+    string =
+  let expose_construction = Option.value ~default:true expose_construction in
+  let decl = sprintf "type %s" vt_name in
+  if expose_construction then
+    sprintf "%s = %s" decl (constructors_to_source_code vt_cs)
+  else decl
 
 type variant_type = t
 

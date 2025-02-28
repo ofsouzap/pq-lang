@@ -598,8 +598,46 @@ let test_cases_variant_type_defn : test_case_full_prog list =
           {
             custom_types =
               [
-                VariantType
-                  ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+                {
+                  private_flag = Public;
+                  ct =
+                    VariantType
+                      ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+                };
+              ];
+            top_level_defns = [];
+            e = IntLit ((), 1);
+          } );
+      ( (* Simple private type definition *)
+        {|
+        private type int_or_bool = Int of int | Bool of bool
+
+        1
+        |},
+        [
+          PRIVATE;
+          TYPE;
+          LNAME "int_or_bool";
+          ASSIGN;
+          UNAME "Int";
+          OF;
+          INT;
+          PIPE;
+          UNAME "Bool";
+          OF;
+          BOOL;
+          INTLIT 1;
+        ],
+        Ok
+          {
+            custom_types =
+              [
+                {
+                  private_flag = Private;
+                  ct =
+                    VariantType
+                      ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+                };
               ];
             top_level_defns = [];
             e = IntLit ((), 1);
@@ -628,8 +666,12 @@ let test_cases_variant_type_defn : test_case_full_prog list =
           {
             custom_types =
               [
-                VariantType
-                  ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+                {
+                  private_flag = Public;
+                  ct =
+                    VariantType
+                      ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+                };
               ];
             top_level_defns = [];
             e = IntLit ((), 1);
@@ -699,12 +741,16 @@ let test_cases_variant_type_defn : test_case_full_prog list =
           {
             custom_types =
               [
-                VariantType
-                  ( "int_list",
-                    [
-                      ("Nil", VTypeUnit);
-                      ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
-                    ] );
+                {
+                  private_flag = Public;
+                  ct =
+                    VariantType
+                      ( "int_list",
+                        [
+                          ("Nil", VTypeUnit);
+                          ("Cons", VTypePair (VTypeInt, VTypeCustom "int_list"));
+                        ] );
+                };
               ];
             top_level_defns = [];
             e = IntLit ((), 1);
@@ -757,22 +803,29 @@ qtype int_boxed
         {
           custom_types =
             [
-              VariantType ("int_box", [ ("Int", VTypeInt) ]);
-              QuotientType
-                {
-                  name = "int_boxed";
-                  base_type_name = "int_box";
-                  eqconss =
-                    [
-                      {
-                        bindings = [ ("x", VTypeInt) ];
-                        body =
-                          ( PatConstructor
-                              ((), "Int", PatName ((), "x", VTypeInt)),
-                            Var ((), "x") );
-                      };
-                    ];
-                };
+              {
+                private_flag = Public;
+                ct = VariantType ("int_box", [ ("Int", VTypeInt) ]);
+              };
+              {
+                private_flag = Public;
+                ct =
+                  QuotientType
+                    {
+                      name = "int_boxed";
+                      base_type_name = "int_box";
+                      eqconss =
+                        [
+                          {
+                            bindings = [ ("x", VTypeInt) ];
+                            body =
+                              ( PatConstructor
+                                  ((), "Int", PatName ((), "x", VTypeInt)),
+                                Var ((), "x") );
+                          };
+                        ];
+                    };
+              };
             ];
           top_level_defns = [];
           e = IntLit ((), 1);
@@ -846,38 +899,49 @@ qtype int_boxed
         {
           custom_types =
             [
-              VariantType
-                ( "tree",
-                  [
-                    ("Leaf", VTypeInt);
-                    ("Node", VTypePair (VTypeCustom "tree", VTypeCustom "tree"));
-                  ] );
-              QuotientType
-                {
-                  name = "mobile";
-                  base_type_name = "tree";
-                  eqconss =
-                    [
-                      {
-                        bindings =
-                          [
-                            ("l", VTypeCustom "tree"); ("r", VTypeCustom "tree");
-                          ];
-                        body =
-                          ( PatConstructor
-                              ( (),
-                                "Node",
-                                PatPair
+              {
+                private_flag = Public;
+                ct =
+                  VariantType
+                    ( "tree",
+                      [
+                        ("Leaf", VTypeInt);
+                        ( "Node",
+                          VTypePair (VTypeCustom "tree", VTypeCustom "tree") );
+                      ] );
+              };
+              {
+                private_flag = Public;
+                ct =
+                  QuotientType
+                    {
+                      name = "mobile";
+                      base_type_name = "tree";
+                      eqconss =
+                        [
+                          {
+                            bindings =
+                              [
+                                ("l", VTypeCustom "tree");
+                                ("r", VTypeCustom "tree");
+                              ];
+                            body =
+                              ( PatConstructor
                                   ( (),
-                                    PatName ((), "l", VTypeCustom "tree"),
-                                    PatName ((), "r", VTypeCustom "tree") ) ),
-                            Constructor
-                              ( (),
-                                "Node",
-                                Pair ((), Var ((), "r"), Var ((), "l")) ) );
-                      };
-                    ];
-                };
+                                    "Node",
+                                    PatPair
+                                      ( (),
+                                        PatName ((), "l", VTypeCustom "tree"),
+                                        PatName ((), "r", VTypeCustom "tree") )
+                                  ),
+                                Constructor
+                                  ( (),
+                                    "Node",
+                                    Pair ((), Var ((), "r"), Var ((), "l")) ) );
+                          };
+                        ];
+                    };
+              };
             ];
           top_level_defns = [];
           e = IntLit ((), 1);
@@ -960,42 +1024,54 @@ qtype my_qt
         {
           custom_types =
             [
-              VariantType
-                ( "my_t",
-                  [
-                    ("Int", VTypeInt);
-                    ("Pair", VTypePair (VTypeCustom "my_t", VTypeCustom "my_t"));
-                  ] );
-              QuotientType
-                {
-                  name = "my_qt";
-                  base_type_name = "my_t";
-                  eqconss =
-                    [
-                      {
-                        bindings = [ ("x", VTypeInt) ];
-                        body =
-                          ( PatConstructor
-                              ((), "Int", PatName ((), "x", VTypeInt)),
-                            Var ((), "x") );
-                      };
-                      {
-                        bindings = [ ("x", VTypeInt) ];
-                        body =
-                          ( PatConstructor
-                              ( (),
-                                "Pair",
-                                PatPair
+              {
+                private_flag = Public;
+                ct =
+                  VariantType
+                    ( "my_t",
+                      [
+                        ("Int", VTypeInt);
+                        ( "Pair",
+                          VTypePair (VTypeCustom "my_t", VTypeCustom "my_t") );
+                      ] );
+              };
+              {
+                private_flag = Public;
+                ct =
+                  QuotientType
+                    {
+                      name = "my_qt";
+                      base_type_name = "my_t";
+                      eqconss =
+                        [
+                          {
+                            bindings = [ ("x", VTypeInt) ];
+                            body =
+                              ( PatConstructor
+                                  ((), "Int", PatName ((), "x", VTypeInt)),
+                                Var ((), "x") );
+                          };
+                          {
+                            bindings = [ ("x", VTypeInt) ];
+                            body =
+                              ( PatConstructor
                                   ( (),
-                                    PatConstructor
-                                      ((), "Int", PatName ((), "x", VTypeInt)),
-                                    PatConstructor
-                                      ((), "Int", PatName ((), "x", VTypeInt))
-                                  ) ),
-                            Var ((), "x") );
-                      };
-                    ];
-                };
+                                    "Pair",
+                                    PatPair
+                                      ( (),
+                                        PatConstructor
+                                          ( (),
+                                            "Int",
+                                            PatName ((), "x", VTypeInt) ),
+                                        PatConstructor
+                                          ( (),
+                                            "Int",
+                                            PatName ((), "x", VTypeInt) ) ) ),
+                                Var ((), "x") );
+                          };
+                        ];
+                    };
+              };
             ];
           top_level_defns = [];
           e = IntLit ((), 1);

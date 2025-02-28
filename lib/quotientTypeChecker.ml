@@ -244,14 +244,20 @@ module MakeZ3 : S = struct
     >>= fun (existing_names, flat_prog) ->
     let quotient_types : Smt.tag_quotient_type list =
       List.filter_map
-        ~f:(function QuotientType qt -> Some qt | _ -> None)
+        ~f:(function
+          | { private_flag = _; ct = QuotientType qt } -> Some qt | _ -> None)
         flat_prog.custom_types
     in
-    let state = Smt.State.state_init prog.custom_types in
+    let state =
+      Smt.State.state_init
+        (prog.custom_types
+        |> List.map ~f:(function { private_flag = _; ct } -> ct))
+    in
     let state =
       (* Add the variant type definitions to the state *)
       List.fold ~init:state
-        ~f:(fun state -> function
+        ~f:(fun state { private_flag = _; ct } ->
+          match ct with
           | VariantType vt -> state_add_variant_type vt state
           | CustomType.QuotientType _ -> state)
         flat_prog.custom_types

@@ -7,8 +7,19 @@ module type S = sig
   module QuotientType : QuotientType.S
   module CustomType : CustomType.S with module QuotientType = QuotientType
 
+  (** A flag denoting if the definition should be private *)
+  type private_flag = Public | Private [@@deriving sexp, equal]
+
+  (** A custom type declaration *)
+  type ('tag_e, 'tag_p) custom_type_decl = {
+    private_flag : private_flag;
+    ct : ('tag_e, 'tag_p) CustomType.t;
+  }
+  [@@deriving sexp, equal]
+
   (** A top-level function definition *)
   type ('tag_e, 'tag_p) top_level_defn = {
+    private_flag : private_flag;
     recursive : bool;
     name : string;
     param : Varname.t * Vtype.t;
@@ -26,7 +37,7 @@ module type S = sig
   (** A t, consisting of any number of custom type definitions, top-level
       definitions and an expression to evaluate *)
   type ('tag_e, 'tag_p) t = {
-    custom_types : ('tag_e, 'tag_p) CustomType.t list;
+    custom_types : ('tag_e, 'tag_p) custom_type_decl list;
     top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
     e : ('tag_e, 'tag_p) Expr.t;
   }
@@ -110,8 +121,37 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
   module QuotientType = CustomType.QuotientType
   module CustomType = CustomType
 
+  (** A flag denoting if the definition should be private *)
+  type private_flag = Public | Private [@@deriving sexp, equal]
+
+  let is_private_bool_to_flag (is_private : bool) : private_flag =
+    if is_private then Private else Public
+
+  (** A custom type declaration *)
+  type ('tag_e, 'tag_p) custom_type_decl = {
+    private_flag : private_flag;
+    ct : ('tag_e, 'tag_p) CustomType.t;
+  }
+  [@@deriving sexp, equal]
+
+  let custom_type_decl_to_source_code ~(use_newlines : bool) :
+      ('tag_e, 'tag_p) custom_type_decl -> string =
+    let open SourceCodeBuilder in
+    let convert (ct_decl : ('tag_e, 'tag_p) custom_type_decl) : state -> state =
+      (match ct_decl.private_flag with
+      | Public -> nothing
+      | Private -> write "private ")
+      |.>
+      match ct_decl.ct with
+      | VariantType vt -> write (VariantType.to_source_code vt)
+      | CustomType.QuotientType qt ->
+          write (QuotientType.to_source_code ~use_newlines qt)
+    in
+    SourceCodeBuilder.from_converter ~converter:convert ~use_newlines
+
   (** A top-level function definition *)
   type ('tag_e, 'tag_p) top_level_defn = {
+    private_flag : private_flag;
     recursive : bool;
     name : string;
     param : Varname.t * Vtype.t;
@@ -126,7 +166,10 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
       ('tag_e, 'tag_p) top_level_defn -> string =
     let open SourceCodeBuilder in
     let convert (defn : ('tag_e, 'tag_p) top_level_defn) : state -> state =
-      write "let "
+      (match defn.private_flag with
+      | Public -> nothing
+      | Private -> write "private ")
+      |.> write "let "
       |.> (if defn.recursive then write "rec " else nothing)
       |.> write defn.name |.> write " ("
       |.> write (fst defn.param)
@@ -141,7 +184,7 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
     SourceCodeBuilder.from_converter ~converter:convert ~use_newlines
 
   type ('tag_e, 'tag_p) t = {
-    custom_types : ('tag_e, 'tag_p) CustomType.t list;
+    custom_types : ('tag_e, 'tag_p) custom_type_decl list;
     top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
     e : ('tag_e, 'tag_p) Expr.t;
   }
@@ -155,7 +198,11 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
   let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) t) :
       ('tag_e2, 'tag_p) t =
     {
-      custom_types = List.map ~f:(CustomType.fmap_expr ~f) prog.custom_types;
+      custom_types =
+        List.map
+          ~f:(fun ct_decl ->
+            { ct_decl with ct = CustomType.fmap_expr ~f ct_decl.ct })
+          prog.custom_types;
       top_level_defns =
         List.map
           ~f:(fun defn ->
@@ -171,7 +218,11 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
   let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) t) :
       ('tag_e, 'tag_p2) t =
     {
-      custom_types = List.map ~f:(CustomType.fmap_pattern ~f) prog.custom_types;
+      custom_types =
+        List.map
+          ~f:(fun ct_decl ->
+            { ct_decl with ct = CustomType.fmap_pattern ~f ct_decl.ct })
+          prog.custom_types;
       top_level_defns =
         List.map
           ~f:(fun defn ->
@@ -187,7 +238,8 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
   let existing_names (prog : ('tag_e, 'tag_p) t) : StringSet.t =
     Set.union
       (List.fold ~init:StringSet.empty
-         ~f:(fun acc -> function
+         ~f:(fun acc ct_decl ->
+           match ct_decl.ct with
            | VariantType vt -> VariantType.existing_names vt |> Set.union acc
            | CustomType.QuotientType qt ->
                QuotientType.existing_names qt |> Set.union acc)
@@ -207,10 +259,7 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
     let use_newlines = Option.value ~default:true use_newlines in
     let type_defns_str : string list =
       List.map
-        ~f:(function
-          | VariantType vt -> VariantType.to_source_code vt
-          | CustomType.QuotientType qt ->
-              QuotientType.to_source_code ~use_newlines qt)
+        ~f:(custom_type_decl_to_source_code ~use_newlines)
         prog.custom_types
     in
     let top_level_defns_str : string list =
@@ -298,8 +347,9 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
 
     let gen_type_defns_list ~(max_variant_types : int)
         ~(max_variant_type_constructors : int) ~(allow_fun_types : bool)
-        ~(mrd : int) : ('tag_e, 'tag_p) CustomType.t list QCheck.Gen.t =
+        ~(mrd : int) : ('tag_e, 'tag_p) custom_type_decl list QCheck.Gen.t =
       (* TODO - allow this to generate quotient types too *)
+      (* TODO - allow this to generate both public and private types *)
       let open QCheck.Gen in
       int_range 0 max_variant_types >>= fun (n : int) ->
       fix
@@ -307,7 +357,8 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
           if n <= 0 then
             return
               (List.map
-                 ~f:(fun vt -> CustomType.VariantType vt)
+                 ~f:(fun vt ->
+                   { private_flag = Public; ct = CustomType.VariantType vt })
                  acc.variant_types)
           else
             VariantType.QCheck_testing.gen
@@ -359,6 +410,8 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
         Vtype.QCheck_testing.gen
           { variant_types = variant_type_names; allow_fun_types = false; mrd }
       in
+      QCheck.Gen.bool >>= fun is_private ->
+      let private_flag = is_private_bool_to_flag is_private in
       pair vtype_gen vtype_gen >>= fun (param_t, return_t) ->
       Expr_qcheck_testing.gen
         {
@@ -370,7 +423,14 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
           mrd;
         }
       >|= fun body ->
-      { recursive; name; param = (param_name, param_t); return_t; body }
+      {
+        private_flag;
+        recursive;
+        name;
+        param = (param_name, param_t);
+        return_t;
+        body;
+      }
 
     type gen_top_level_defns_acc = {
       top_level_defns : (TagExpr.t, TagPat.t) top_level_defn list;
@@ -412,8 +472,10 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
         ~pat_v_gen:opts.pat_v_gen
         ~variant_types:
           (List.filter_map
-             ~f:(function
-               | VariantType vt -> Some vt | CustomType.QuotientType _ -> None)
+             ~f:(fun ct_decl ->
+               match ct_decl.ct with
+               | VariantType vt -> Some vt
+               | CustomType.QuotientType _ -> None)
              custom_types)
         ~max_top_level_defns:opts.max_top_level_defns ~mrd:opts.mrd
       >>= fun top_level_defns ->
@@ -424,8 +486,10 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
               opts.body_type >>| Expr_qcheck_testing.vtype_to_gen_vtype_unsafe);
           variant_types =
             List.filter_map
-              ~f:(function
-                | VariantType vt -> Some vt | CustomType.QuotientType _ -> None)
+              ~f:(fun ct_decl ->
+                match ct_decl.ct with
+                | VariantType vt -> Some vt
+                | CustomType.QuotientType _ -> None)
               custom_types;
           top_level_defns =
             List.map
@@ -442,16 +506,16 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
       sprintf "[type definitions: %s]\n%s"
         QCheck.Print.(
           let open Expr_qcheck_testing in
-          let ct_to_string ct =
+          let ct_decl_to_string (ct_decl : ('tag_e, 'tag_p) custom_type_decl) =
             match print_method with
             | NoPrint -> ""
             | PrintSexp (sexp_of_expr_tag, sexp_of_pat_tag) ->
-                ct
-                |> CustomType.sexp_of_t sexp_of_expr_tag sexp_of_pat_tag
+                ct_decl
+                |> sexp_of_custom_type_decl sexp_of_expr_tag sexp_of_pat_tag
                 |> Sexp.to_string_hum
-            | PrintExprSource -> CustomType.name ct
+            | PrintExprSource -> CustomType.name ct_decl.ct
           in
-          list (fun ct -> ct |> ct_to_string) prog.custom_types)
+          list ct_decl_to_string prog.custom_types)
         (Expr_qcheck_testing.print print_method prog.e)
 
     let shrink (opts : shrink_options) : t QCheck.Shrink.t =
