@@ -200,7 +200,7 @@ quotient_type_definition:
 custom_type_decl:
   | vt = variant_type_definition { { private_flag=Program.StdProgram.Public; ct=(VariantType vt) } }
   | PRIVATE vt = variant_type_definition { { private_flag=Program.StdProgram.Private; ct=(VariantType vt) } }
-  | qt = quotient_type_definition { { private_flag=Program.StdProgram.Private; ct=(QuotientType qt) } }
+  | qt = quotient_type_definition { { private_flag=Program.StdProgram.Public; ct=(QuotientType qt) } }
 ;
 
 top_level_defn_param:
