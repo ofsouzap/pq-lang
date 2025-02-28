@@ -3,6 +3,10 @@ open Core
 let cwd = Sys_unix.getcwd ()
 let reldir = Filename.concat cwd
 
+(** Exit code expected to be produced by the executable when the input script
+    has a quotient typing error *)
+let quotient_typing_error_exit_code : int = 2
+
 let get_positive_test_case_file_paths () : string list =
   Sys_unix.readdir (reldir "test_cases/positive")
   |> Array.to_list
@@ -94,9 +98,13 @@ let test_negative ~(test_name : string) (file_path : string) :
     fun () ->
       let _, result = run_exec_on file_path in
       match result with
-      | Error (`Exit_non_zero (_ : int)) ->
-          (* To simplify the tests, I don't check the exit code or error message for this execution *)
-          ()
+      | Error (`Exit_non_zero (exit_code : int)) ->
+          if equal_int quotient_typing_error_exit_code exit_code then ()
+          else
+            Alcotest.failf
+              "Expected executable to fail with exit code %d but it failed \
+               with exit code %d"
+              quotient_typing_error_exit_code exit_code
       | Error (`Signal signal) ->
           Alcotest.failf "Executable failed with signal: %s"
             (Signal.to_string signal)
