@@ -1,8 +1,12 @@
 (test
  (name pq_lang_unit_tests)
- (libraries pq_lang.lib alcotest qcheck qcheck-alcotest)
+ (libraries
+  pq_lang.lib
+  pq_lang.testing_utils
+  alcotest
+  qcheck
+  qcheck-alcotest)
  (modules
-  testing_utils
   pq_lang_unit_tests
   pq_lang_unit_testing_utils
   pq_lang_unit_utils
@@ -16,8 +20,10 @@
 
 (test
  (name pq_lang_integration_tests)
- (libraries pq_lang.lib alcotest qcheck qcheck-alcotest)
- (modules
-  testing_utils
-  pq_lang_integration_tests
-  pq_lang_integration_interpreting))
+ (libraries
+  pq_lang.lib
+  pq_lang.testing_utils
+  alcotest
+  qcheck
+  qcheck-alcotest)
+ (modules pq_lang_integration_tests pq_lang_integration_interpreting))
