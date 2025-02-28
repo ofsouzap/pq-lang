@@ -100,14 +100,18 @@ module StdM : S with module Program = Program.StdProgram = struct
            ~use_newlines:true
       |> Ml
 
-  let variant_type_to_source : VariantType.t -> string =
+  let variant_type_to_source ~(private_flag : Program.private_flag) :
+      VariantType.t -> string =
     VariantType.to_source_code
+      ~expose_construction:
+        (match private_flag with Public -> true | Private -> false)
 
   let variant_type_to_ml (vt : VariantType.t) : ml_source =
-    vt |> variant_type_to_source |> Ml
+    vt |> variant_type_to_source ~private_flag:Public |> Ml
 
-  let variant_type_to_mli (vt : VariantType.t) : mli_source =
-    vt |> variant_type_to_source |> Mli
+  let variant_type_to_mli ~(private_flag : Program.private_flag)
+      (vt : VariantType.t) : mli_source =
+    vt |> variant_type_to_source ~private_flag |> Mli
 
   let quotient_type_to_ml (qt : ('tag_e, 'tag_p) QuotientType.t) : ml_source =
     let open SourceCodeBuilder in
@@ -164,9 +168,10 @@ module StdM : S with module Program = Program.StdProgram = struct
       |> Mli
 
   let program_to_ml (prog : ('tag_e, 'tag_p) Program.t) : ml_source =
-    List.map prog.custom_types ~f:(function
-      | QuotientType qt -> quotient_type_to_ml qt
-      | VariantType vt -> variant_type_to_ml vt)
+    List.map prog.custom_types ~f:(fun ct_decl ->
+        match ct_decl.ct with
+        | QuotientType qt -> quotient_type_to_ml qt
+        | VariantType vt -> variant_type_to_ml vt)
     |> fun vt_srcs ->
     List.map prog.top_level_defns ~f:tld_to_ml |> fun tld_srcs ->
     vt_srcs @ tld_srcs
@@ -174,11 +179,17 @@ module StdM : S with module Program = Program.StdProgram = struct
     |> String.concat ~sep:"\n\n" |> Ml
 
   let program_to_mli (prog : ('tag_e, 'tag_p) Program.t) : mli_source =
-    List.map prog.custom_types ~f:(function
-      | QuotientType qt -> quotient_type_to_mli qt
-      | VariantType vt -> variant_type_to_mli vt)
+    List.map prog.custom_types ~f:(fun ct_decl ->
+        match ct_decl.ct with
+        | QuotientType qt -> quotient_type_to_mli qt
+        | VariantType vt ->
+            variant_type_to_mli ~private_flag:ct_decl.private_flag vt)
     |> fun vt_srcs ->
-    List.map prog.top_level_defns ~f:tld_to_mli |> fun tld_srcs ->
+    List.filter_map prog.top_level_defns ~f:(fun tld ->
+        match tld.private_flag with
+        | Public -> tld_to_mli tld |> Some
+        | Private -> None)
+    |> fun tld_srcs ->
     vt_srcs @ tld_srcs
     |> List.map ~f:unwrap_mli_source
     |> String.concat ~sep:"\n\n" |> Mli
