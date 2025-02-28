@@ -11,7 +11,7 @@ module type S = sig
   type plain_t = unit t [@@deriving sexp, equal]
 
   (** Convert a tagged pattern to an untagged pattern *)
-  val to_plain_pattern : 'a t -> plain_t
+  val to_plain_t : 'a t -> plain_t
 
   (** Get the value attached to a pattern node *)
   val node_val : 'a t -> 'a

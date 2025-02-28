@@ -38,9 +38,9 @@ let process_pq_file (filename : string) : (Program.plain_t, error_exit) Result.t
   >>= fun tp ->
   let prog_for_quotient_type_checking =
     TypeChecker.typed_program_get_program tp
-    |> Program.fmap_pattern ~f:(fun (t, ()) ->
+    |> Program.fmap_pattern ~f:(fun (t, _) ->
            ({ t } : QuotientTypeChecker.Smt.pattern_tag))
-    |> Program.fmap_expr ~f:(fun (t, ()) ->
+    |> Program.fmap_expr ~f:(fun (t, _) ->
            ({ t } : QuotientTypeChecker.Smt.expr_tag))
   in
   QuotientTypeChecker.check_program prog_for_quotient_type_checking
@@ -55,7 +55,7 @@ let process_pq_file (filename : string) : (Program.plain_t, error_exit) Result.t
         ( ExitCode 2,
           sprintf "Quotient type check failed:\n%s"
             (QuotientTypeChecker.print_quotient_type_checking_failure err) )
-  | Ok () -> Ok prog
+  | Ok () -> Ok (prog |> Program.to_plain_t)
 
 let write_outputs (input_path : string) (outputs : OcamlConverter.StdM.output) :
     (unit, error_exit) Result.t =

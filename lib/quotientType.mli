@@ -69,7 +69,7 @@ module type S = sig
   val fmap_pattern :
     f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) t -> ('tag_e, 'tag_p2) t
 
-  val to_plain_quotient_type : ('tag_e, 'tag_p) t -> plain_t
+  val to_plain_t : ('tag_e, 'tag_p) t -> plain_t
 
   (** Convert a quotient type definition into source code. *)
   val to_source_code : ?use_newlines:bool -> ('tag_e, 'tag_p) t -> string

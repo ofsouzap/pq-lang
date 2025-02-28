@@ -50,6 +50,8 @@ module type S = sig
   (** A t with no tagging *)
   type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
+  val to_plain_t : ('tag_e, 'tag_p) t -> plain_t
+
   (** Map a function onto the tags of expression nodes in a t *)
   val fmap_expr :
     f:('tag_e1 -> 'tag_e2) -> ('tag_e1, 'tag_p) t -> ('tag_e2, 'tag_p) t
@@ -194,6 +196,20 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
   [@@deriving sexp, equal]
 
   type plain_t = (unit, unit) t [@@deriving sexp, equal]
+
+  let to_plain_t (prog : ('tag_e, 'tag_p) t) : plain_t =
+    {
+      custom_types =
+        List.map
+          ~f:(fun ct_decl ->
+            { ct_decl with ct = CustomType.to_plain_t ct_decl.ct })
+          prog.custom_types;
+      top_level_defns =
+        List.map
+          ~f:(fun defn -> { defn with body = Expr.to_plain_t defn.body })
+          prog.top_level_defns;
+      e = Expr.to_plain_t prog.e;
+    }
 
   let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) t) :
       ('tag_e2, 'tag_p) t =

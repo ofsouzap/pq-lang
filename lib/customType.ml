@@ -13,6 +13,8 @@ module type S = sig
 
   type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
+  val to_plain_t : ('tag_e, 'tag_p) t -> plain_t
+
   type ('tag_e, 'tag_p) typed_custom_type =
     (Vtype.t * 'tag_e, Vtype.t * 'tag_p) t
   [@@deriving sexp, equal]
@@ -29,8 +31,6 @@ module type S = sig
   val fmap_pattern :
     f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) t -> ('tag_e, 'tag_p2) t
 
-  val to_plain_custom_type : ('tag_e, 'tag_p) t -> plain_t
-
   (* TODO - QCheck_testing submodule *)
 end
 
@@ -44,6 +44,10 @@ module Make (QuotientType : QuotientType.S) :
   [@@deriving sexp, equal]
 
   type plain_t = (unit, unit) t [@@deriving sexp, equal]
+
+  let to_plain_t : ('tag_e, 'tag_p) t -> plain_t = function
+    | VariantType vt -> VariantType vt
+    | QuotientType qt -> QuotientType (QuotientType.to_plain_t qt)
 
   type ('tag_e, 'tag_p) typed_custom_type =
     (Vtype.t * 'tag_e, Vtype.t * 'tag_p) t
@@ -66,10 +70,6 @@ module Make (QuotientType : QuotientType.S) :
       ('tag_e, 'tag_p1) t -> ('tag_e, 'tag_p2) t = function
     | VariantType vt -> VariantType vt
     | QuotientType qt -> QuotientType (QuotientType.fmap_pattern ~f qt)
-
-  let to_plain_custom_type : ('tag_e, 'tag_p) t -> plain_t = function
-    | VariantType vt -> VariantType vt
-    | QuotientType qt -> QuotientType (QuotientType.to_plain_quotient_type qt)
 end
 
 module StdCustomType :

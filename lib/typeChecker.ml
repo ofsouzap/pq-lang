@@ -340,7 +340,7 @@ end = struct
         (t, TypingError.t) Result.t =
       let type_defns_map_or_err =
         custom_types
-        |> List.map ~f:CustomType.to_plain_custom_type
+        |> List.map ~f:CustomType.to_plain_t
         |> StringMap.of_list_with_key ~get_key:(function
              | VariantType (vt_name, _) -> vt_name
              | CustomType.QuotientType qt -> qt.name)
@@ -656,9 +656,7 @@ module MakeStd
                 ( PatConstructor
                     ((Vtype.VTypeCustom vt_name, v), c_name, p_typed),
                   var_ctx_from_p )
-            else
-              Error (PatternTypeMismatch (Pattern.to_plain_pattern p, c_t, p_t))
-        )
+            else Error (PatternTypeMismatch (Pattern.to_plain_t p, c_t, p_t)))
 
   let rec type_expr (((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) as ctx)
       (orig_e : ('tag_e, 'tag_p) Expr.t) :
@@ -849,9 +847,7 @@ module MakeStd
               else
                 Error
                   (TypeMismatch (t_out, t_c_e, Some "Match case expression type"))
-            else
-              Error
-                (PatternTypeMismatch (Pattern.to_plain_pattern p, t_in, p_t)))
+            else Error (PatternTypeMismatch (Pattern.to_plain_t p, t_in, p_t)))
           cs
         >>|
         fun (cs_typed_rev :
@@ -956,11 +952,11 @@ module MakeStd
       else
         Error
           (EqConsBodyExprTypeMismatch
-             (Expr.to_plain_expr body_expr, quotient_type, expr_t))
+             (Expr.to_plain_t body_expr, quotient_type, expr_t))
     else
       Error
         (EqConsBodyPatternTypeMismatch
-           (Pattern.to_plain_pattern body_pattern, quotient_type, pattern_t))
+           (Pattern.to_plain_t body_pattern, quotient_type, pattern_t))
 
   let type_custom_types ~(type_ctx : TypeCtx.t)
       (ct_decls : ('tag_e, 'tag_p) Program.custom_type_decl list) =

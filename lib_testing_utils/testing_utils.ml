@@ -191,7 +191,7 @@ end = struct
 
   let create ~(custom_types : ('tag_e, 'tag_p) CustomType.t list) :
       (t, TypeChecker.TypingError.t) Result.t =
-    Ok (List.map ~f:CustomType.to_plain_custom_type custom_types)
+    Ok (List.map ~f:CustomType.to_plain_t custom_types)
 
   let find_type_defn_by_name ctx td_name =
     List.find ctx ~f:(fun x_td -> equal_string (CustomType.name x_td) td_name)
@@ -249,10 +249,10 @@ end = struct
   let add_variant (ctx : t) (vt : VariantType.t) : t = VariantType vt :: ctx
 
   let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) QuotientType.t) : t =
-    QuotientType (QuotientType.to_plain_quotient_type qt) :: ctx
+    QuotientType (QuotientType.to_plain_t qt) :: ctx
 
   let type_defns_to_ordered_list = Fn.id
-  let from_list = List.map ~f:CustomType.to_plain_custom_type
+  let from_list = List.map ~f:CustomType.to_plain_t
 
   let variant_gen_opt (ctx : t) : VariantType.t QCheck.Gen.t option =
     let open QCheck.Gen in

@@ -89,7 +89,7 @@ module type S = sig
   type plain_typed_t = (unit, unit) typed_t [@@deriving sexp, equal]
 
   (** Delete an Expr's tagging data to form a plain Expr *)
-  val to_plain_expr : ('tag_e, 'tag_p) t -> plain_t
+  val to_plain_t : ('tag_e, 'tag_p) t -> plain_t
 
   (** Rename a variable in an expression *)
   val rename_var :

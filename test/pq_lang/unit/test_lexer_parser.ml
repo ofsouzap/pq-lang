@@ -1169,7 +1169,7 @@ let create_frontend_test ((name, inp, _, exp) : test_case_full_prog) =
   ( name,
     `Quick,
     fun () ->
-      let out = run_frontend_string inp in
+      let out = Result.(run_frontend_string inp >>| Program.to_plain_t) in
       Alcotest.(
         check
           (result
@@ -1186,7 +1186,7 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) :
   ( name,
     `Quick,
     fun () ->
-      let out = run_frontend_string inp in
+      let out = Result.(run_frontend_string inp >>| Program.to_plain_t) in
       match out with
       | Ok prog ->
           Alcotest.(check (plain_std_expr_testable `PrintSource))

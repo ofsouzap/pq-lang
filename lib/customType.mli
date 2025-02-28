@@ -12,6 +12,8 @@ module type S = sig
 
   type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
+  val to_plain_t : ('tag_e, 'tag_p) t -> plain_t
+
   type ('tag_e, 'tag_p) typed_custom_type =
     (Vtype.t * 'tag_e, Vtype.t * 'tag_p) t
   [@@deriving sexp, equal]
@@ -27,8 +29,6 @@ module type S = sig
 
   val fmap_pattern :
     f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) t -> ('tag_e, 'tag_p2) t
-
-  val to_plain_custom_type : ('tag_e, 'tag_p) t -> plain_t
 
   (* TODO - QCheck_testing submodule *)
 end

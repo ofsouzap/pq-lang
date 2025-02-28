@@ -754,8 +754,8 @@ let test_cases_typing_maintains_structure : unit Alcotest.test_case =
                TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
              with
              | Ok e_typed ->
-                 let plain_e = Expr.to_plain_expr e in
-                 let plain_typed_e = e_typed |> Expr.to_plain_expr in
+                 let plain_e = Expr.to_plain_t e in
+                 let plain_typed_e = e_typed |> Expr.to_plain_t in
                  Expr.equal_plain_t plain_e plain_typed_e
              | Error _ -> false))) *)
 
