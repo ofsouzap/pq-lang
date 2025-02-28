@@ -231,7 +231,6 @@ end = struct
 end
 
 (** Typing context for types (e.g. if a type of a certain name exists) *)
-
 module TypeContext : sig
   module type S = sig
     module CustomType : CustomType.S
@@ -534,6 +533,13 @@ module type S = sig
     ('tag_e, 'tag_p) typed_program ->
     (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t
 
+  (** Get the checked type context from a typed program expression *)
+  val typed_program_get_type_ctx_checked :
+    ('tag_e, 'tag_p) typed_program -> checked_type_ctx
+
+  (** Get the plain type context from a typed program expression *)
+  val typed_program_get_type_ctx : ('tag_e, 'tag_p) typed_program -> TypeCtx.t
+
   (** Check that a Vtype.t is valid in the given context *)
   val check_vtype :
     checked_type_ctx -> Vtype.t -> (unit, TypingError.t) Result.t
@@ -560,8 +566,6 @@ module type S = sig
     ('tag_e, 'tag_p) Program.t ->
     (('tag_e, 'tag_p) typed_program, TypingError.t) Result.t
 end
-
-(** Functor for creating modules providing type-checking functionality *)
 
 (** Functor for creating modules providing type-checking functionality *)
 module MakeStd
@@ -593,11 +597,19 @@ module MakeStd
   let checked_empty_type_ctx = TypeCtx.empty
 
   type ('tag_e, 'tag_p) typed_program =
-    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t
+    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t * checked_type_ctx
 
-  let typed_program_get_program (tp : ('tag_e, 'tag_p) typed_program) :
+  let typed_program_get_program :
+      ('tag_e, 'tag_p) typed_program ->
       (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t =
-    tp
+    fst
+
+  let typed_program_get_type_ctx_checked :
+      ('tag_e, 'tag_p) typed_program -> TypeCtx.t =
+    snd
+
+  let typed_program_get_type_ctx : ('tag_e, 'tag_p) typed_program -> TypeCtx.t =
+    snd
 
   let rec check_vtype (ctx : checked_type_ctx) :
       Vtype.t -> (unit, TypingError.t) Result.t =
@@ -1018,8 +1030,13 @@ module MakeStd
     let var_ctx = tld_fold_final_acc.defns_var_ctx in
     let tlds = tld_fold_final_acc.defns_rev |> List.rev in
     type_expr (type_ctx, var_ctx) prog.e >>| fun typed_e ->
-    Program.
-      { custom_types = custom_types_typed; top_level_defns = tlds; e = typed_e }
+    ( Program.
+        {
+          custom_types = custom_types_typed;
+          top_level_defns = tlds;
+          e = typed_e;
+        },
+      type_ctx )
 end
 
 (** Type checker for standard programs, using standard type context and variable
