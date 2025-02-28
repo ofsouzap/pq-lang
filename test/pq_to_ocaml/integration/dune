@@ -1,0 +1,18 @@
+(copy_files
+ (files test_cases/positive/*.pq))
+
+(copy_files
+ (files test_cases/negative/*.pq))
+
+(test
+ (name main)
+ (libraries
+  pq_lang.lib
+  pq_lang.testing_utils
+  core
+  core_unix
+  core_unix.sys_unix
+  alcotest
+  qcheck
+  qcheck-alcotest)
+ (modules main))

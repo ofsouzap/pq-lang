@@ -1,0 +1,19 @@
+(test
+ (name main)
+ (libraries
+  pq_lang.lib
+  pq_lang.testing_utils
+  alcotest
+  qcheck
+  qcheck-alcotest)
+ (modules
+  main
+  test_testing_utils
+  test_utils
+  test_expr
+  test_program
+  test_typeChecker
+  test_quotientTypeChecker
+  test_lexer_parser
+  test_programExecutor
+  test_programExecutor_store))

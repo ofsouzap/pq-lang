@@ -1,0 +1,9 @@
+(test
+ (name main)
+ (libraries
+  pq_lang.lib
+  pq_lang.testing_utils
+  alcotest
+  qcheck
+  qcheck-alcotest)
+ (modules main test_interpreting))
