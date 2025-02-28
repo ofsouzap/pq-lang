@@ -171,6 +171,13 @@ module type S = sig
     ('tag_e, 'tag_p) typed_program ->
     (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t
 
+  (** Get the checked type context from a typed program expression *)
+  val typed_program_get_type_ctx_checked :
+    ('tag_e, 'tag_p) typed_program -> checked_type_ctx
+
+  (** Get the plain type context from a typed program expression *)
+  val typed_program_get_type_ctx : ('tag_e, 'tag_p) typed_program -> TypeCtx.t
+
   (** Check that a Vtype.t is valid in the given context *)
   val check_vtype :
     checked_type_ctx -> Vtype.t -> (unit, TypingError.t) Result.t

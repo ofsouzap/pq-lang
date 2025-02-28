@@ -97,8 +97,6 @@ module type S = sig
   val empty_typing_error : typing_error
 
   type exec_err =
-    | TypeContextCreationError of TypingError.t
-        (** Error when forming a type context from a program *)
     | TypingError of typing_error
         (** Execution was halted due to a typing error *)
     | UndefinedVarError of Varname.t
