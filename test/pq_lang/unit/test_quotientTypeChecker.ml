@@ -34,9 +34,14 @@ let manual_tests : unit Alcotest.test_case list =
           | Ok (Ok ()), `Valid -> Ok ()
           | Ok (Ok ()), `Invalid ->
               Error "Expected failure but passed quotient type checking"
-          | Ok (Error ()), `Invalid -> Ok ()
-          | Ok (Error ()), `Valid ->
-              Error "Expected valid input but got failed quotient type check"
+          | Ok (Error _), `Invalid -> Ok ()
+          | Ok (Error err), `Valid ->
+              Error
+                (sprintf
+                   "Expected valid input but got failed quotient type check \
+                    with message:\n\
+                    %s"
+                   (QuotientTypeChecker.print_quotient_type_checking_failure err))
           | Error err, _ ->
               Error
                 (sprintf "Unexpected quotient type checking failure: %s"
