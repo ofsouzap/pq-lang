@@ -1,16 +1,23 @@
 (test
- (name test_pq_lang)
+ (name pq_lang_unit_tests)
  (libraries pq_lang.lib alcotest qcheck qcheck-alcotest)
  (modules
   testing_utils
-  test_pq_lang
-  test_testing_utils
-  test_utils
-  test_expr
-  test_program
-  test_typeChecker
-  test_quotientTypeChecker
-  test_lexer_parser
-  test_programExecutor
-  test_programExecutor_store
-  test_interpreting_integration))
+  pq_lang_unit_tests
+  pq_lang_unit_testing_utils
+  pq_lang_unit_utils
+  pq_lang_unit_expr
+  pq_lang_unit_program
+  pq_lang_unit_typeChecker
+  pq_lang_unit_quotientTypeChecker
+  pq_lang_unit_lexer_parser
+  pq_lang_unit_programExecutor
+  pq_lang_unit_programExecutor_store))
+
+(test
+ (name pq_lang_integration_tests)
+ (libraries pq_lang.lib alcotest qcheck qcheck-alcotest)
+ (modules
+  testing_utils
+  pq_lang_integration_tests
+  pq_lang_integration_interpreting))
