@@ -963,19 +963,22 @@ module MakeStd
            (Pattern.to_plain_pattern body_pattern, quotient_type, pattern_t))
 
   let type_custom_types ~(type_ctx : TypeCtx.t)
-      (custom_types : ('tag_e, 'tag_p) CustomType.t list) =
+      (ct_decls : ('tag_e, 'tag_p) Program.custom_type_decl list) =
     let open Result in
     List.map
-      ~f:(function
-        | VariantType vt -> CustomType.VariantType vt |> Ok
+      ~f:(fun ct_decl ->
+        match ct_decl.ct with
+        | VariantType vt ->
+            { ct_decl with ct = CustomType.VariantType vt } |> Ok
         | CustomType.QuotientType qt ->
             List.map
               ~f:(type_eqcons ~type_ctx ~quotient_type_name:qt.name)
               qt.eqconss
             |> Result.all
             >>| fun eqconss ->
-            { qt with eqconss } |> fun qt' -> CustomType.QuotientType qt')
-      custom_types
+            { qt with eqconss } |> fun qt' ->
+            { ct_decl with ct = CustomType.QuotientType qt' })
+      ct_decls
     |> Result.all
 
   type ('tag_e, 'tag_p) type_program_tlds_acc = {
@@ -987,7 +990,11 @@ module MakeStd
   let type_program (prog : ('tag_e, 'tag_p) Program.t) :
       (('tag_e, 'tag_p) typed_program, TypingError.t) Result.t =
     let open Result in
-    TypeCtx.create ~custom_types:prog.custom_types >>= fun type_ctx ->
+    TypeCtx.create
+      ~custom_types:
+        (prog.custom_types
+        |> List.map ~f:(fun Program.{ private_flag = _; ct } -> ct))
+    >>= fun type_ctx ->
     type_custom_types ~type_ctx prog.custom_types >>= fun custom_types_typed ->
     check_type_ctx type_ctx >>= fun type_ctx ->
     let ( <: ) = TypeCtx.subtype type_ctx in

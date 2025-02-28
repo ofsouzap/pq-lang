@@ -103,6 +103,11 @@ module FlatProgram :
      and module CustomType = CustomType.StdCustomType =
   Program.Make (FlatExpr) (CustomType.StdCustomType)
 
+let std_program_private_flag_to_flat_program_private_flag :
+    StdProgram.private_flag -> FlatProgram.private_flag = function
+  | StdProgram.Public -> Public
+  | Private -> Private
+
 type flattening_error = UnexpectedTrivialMatchCasePatternError
 [@@deriving sexp, equal]
 
@@ -406,6 +411,9 @@ let of_program ~(existing_names : StringSet.t)
       ( existing_names,
         FlatProgram.
           {
+            private_flag =
+              defn.private_flag
+              |> std_program_private_flag_to_flat_program_private_flag;
             recursive = defn.recursive;
             name = defn.name;
             param = defn.param;
@@ -419,7 +427,15 @@ let of_program ~(existing_names : StringSet.t)
   ( existing_names,
     FlatProgram.
       {
-        custom_types = prog.custom_types;
+        custom_types =
+          prog.custom_types
+          |> List.map ~f:(fun { private_flag; ct } ->
+                 {
+                   private_flag =
+                     std_program_private_flag_to_flat_program_private_flag
+                       private_flag;
+                   ct;
+                 });
         top_level_defns = List.rev flat_defns_rev;
         e = e';
       } )

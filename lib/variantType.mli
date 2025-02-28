@@ -34,7 +34,7 @@ type t = string * constructor list [@@deriving sexp, equal]
 val existing_names : t -> StringSet.t
 
 (** Convert a variant type definition into source code. *)
-val to_source_code : t -> string
+val to_source_code : ?expose_construction:bool -> t -> string
 
 module QCheck_testing : sig
   type gen_options = {

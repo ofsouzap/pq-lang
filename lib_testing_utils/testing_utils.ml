@@ -55,6 +55,7 @@ let sexp_of_token = function
   | PIPE -> Sexp.Atom "PIPE"
   | QUOTIENT -> Sexp.Atom "QUOTIENT"
   | UNIT_VAL -> Sexp.Atom "UNIT_VAL"
+  | PRIVATE -> Sexp.Atom "PRIVATE"
   | INTLIT i -> Sexp.List [ Sexp.Atom "INTLIT"; Sexp.Atom (string_of_int i) ]
   | LNAME n -> Sexp.List [ Sexp.Atom "LNAME"; Sexp.Atom n ]
   | UNAME n -> Sexp.List [ Sexp.Atom "UNAME"; Sexp.Atom n ]
