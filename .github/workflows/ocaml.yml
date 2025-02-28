@@ -36,5 +36,3 @@ jobs:
     - run: opam exec -- dune build
 
     - run: opam exec -- dune runtest
-
-# TODO - create action for testing pq_to_ocaml works and the OCaml output can build using the installed `ocaml` compiler
