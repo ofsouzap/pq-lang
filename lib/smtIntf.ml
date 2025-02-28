@@ -125,7 +125,10 @@ module type S = sig
     Assertion.t list ->
     (Utils.StringSet.t * formula, smt_intf_error) result
 
-  val check_satisfiability : formula -> [ `Sat | `Unknown | `Unsat ]
+  type model = string StringMap.t
+
+  val check_satisfiability :
+    formula -> [ `Sat of model option | `Unknown | `Unsat ]
 end
 
 module Z3Intf : S = struct
@@ -159,16 +162,25 @@ module Z3Intf : S = struct
 
   type tag_program = (expr_tag, pattern_tag) Program.t [@@deriving sexp, equal]
 
+  let custom_special_name_prefix_pq : string = "PQ-"
+  let custom_special_name_prefix_var : string = "Var-"
+  let custom_special_name_prefix_qvar : string = "QVar-"
+  let custom_special_name_prefix_vt : string = "VT-"
+  let custom_special_name_prefix_vtc : string = "VTC-"
+  let custom_special_name_prefix_vtca : string = "VTCA-"
+  let custom_special_name_prefix_fun : string = "Fun-"
+  let custom_special_name_prefix_eq : string = "Eq-"
+
   let custom_special_name x =
-    "PQ-"
+    custom_special_name_prefix_pq
     ^ (function
-        | `Var _ -> "Var-"
-        | `QuotientEqBinding _ -> "QVar-"
-        | `VariantType _ -> "VT-"
-        | `VariantTypeConstructor _ -> "VTC-"
-        | `VariantTypeConstructorAccessor _ -> "VTCA-"
-        | `Function _ -> "Fun-"
-        | `EqualityFunction _ -> "Eq-")
+        | `Var _ -> custom_special_name_prefix_var
+        | `QuotientEqBinding _ -> custom_special_name_prefix_qvar
+        | `VariantType _ -> custom_special_name_prefix_vt
+        | `VariantTypeConstructor _ -> custom_special_name_prefix_vtc
+        | `VariantTypeConstructorAccessor _ -> custom_special_name_prefix_vtca
+        | `Function _ -> custom_special_name_prefix_fun
+        | `EqualityFunction _ -> custom_special_name_prefix_eq)
         x
     ^
     match x with
@@ -296,30 +308,33 @@ module Z3Intf : S = struct
               find_root_base_type state (VTypeCustom qt.base_type_name))
       | _ -> Ok t
 
+    let pair_vtype_to_smt_custom_special_type_name : Vtype.t * Vtype.t -> string
+        =
+      (* Generates an implicitly-unique name for the instantiation of the
+            pair type for the specified two parameter types *)
+      let rec aux ((t1 : Vtype.t), (t2 : Vtype.t)) : string =
+        custom_special_name (`VariantType "pair")
+        ^ sprintf "-+%s++%s+" (vtype_name t1) (vtype_name t2)
+      and vtype_name : Vtype.t -> string = function
+        | VTypeUnit -> "Unit"
+        | VTypeInt -> "Int"
+        | VTypeBool -> "Bool"
+        | VTypePair (t1, t2) -> aux (t1, t2)
+        | VTypeFun (t1, t2) ->
+            sprintf "<%s>-><%s>" (vtype_name t1) (vtype_name t2)
+        | VTypeCustom ct_name -> ct_name
+      in
+      aux
+
     let state_add_pair_type ((t1 : Vtype.t), (t2 : Vtype.t)) (state : t) :
         (t, smt_intf_error) Result.t =
       let open Result in
       (* Make sure to only be using types for base variant types, not quotient types *)
       find_root_base_type state t1 >>= fun t1 ->
       find_root_base_type state t2 >>| fun t2 ->
-      let pair_type_vt_name : Vtype.t * Vtype.t -> string =
-        (* Generates an implicitly-unique name for the instantiation of the
-            pair type for the specified two parameter types *)
-        let rec aux ((t1 : Vtype.t), (t2 : Vtype.t)) : string =
-          custom_special_name (`VariantType "pair")
-          ^ sprintf "-+%s++%s+" (vtype_name t1) (vtype_name t2)
-        and vtype_name : Vtype.t -> string = function
-          | VTypeUnit -> "Unit"
-          | VTypeInt -> "Int"
-          | VTypeBool -> "Bool"
-          | VTypePair (t1, t2) -> aux (t1, t2)
-          | VTypeFun (t1, t2) ->
-              sprintf "%s->%s" (vtype_name t1) (vtype_name t2)
-          | VTypeCustom ct_name -> ct_name
-        in
-        aux
+      let vt_name : string =
+        pair_vtype_to_smt_custom_special_type_name (t1, t2)
       in
-      let vt_name : string = pair_type_vt_name (t1, t2) in
       let constructor_name : string =
         custom_special_name (`VariantTypeConstructor (vt_name, "pair"))
       in
@@ -934,21 +949,95 @@ module Z3Intf : S = struct
     List.map assertions ~f:(Builder.build_assertion ~state) |> Result.all
     >>| fun assertions_nodes -> (existing_names, state_nodes @ assertions_nodes)
 
+  type model = string StringMap.t
+
+  let try_map_custom_special_name_to_human_readable_name (x : string) :
+      string option =
+    let list_trim_tail (n : int) (l : 'a list) : 'a list =
+      l |> List.sub ~pos:0 ~len:(List.length l - n)
+    in
+    let open Option in
+    if equal_string x State.vt_unit_constructor_name then Some "()"
+    else
+      Option.some_if
+        (String.is_prefix ~prefix:custom_special_name_prefix_pq x)
+        (String.drop_prefix x (String.length custom_special_name_prefix_pq))
+      >>= fun x ->
+      List.fold_result ~init:()
+        ~f:(fun () ((prefix : string), (mapper : string -> string option)) ->
+          if String.is_prefix ~prefix x then
+            mapper x |> function None -> Ok () | Some x -> Error x
+          else Ok ())
+        [
+          (custom_special_name_prefix_var, some);
+          ( custom_special_name_prefix_qvar,
+            fun x ->
+              String.split x ~on:'-' |> fun split ->
+              (* Trim the "-pat" or "-expr" suffix *)
+              list_trim_tail 1 split |> String.concat ~sep:"-" |> Some );
+          (custom_special_name_prefix_vt, some);
+          (custom_special_name_prefix_vtc, some);
+          (custom_special_name_prefix_vtca, some);
+          (custom_special_name_prefix_fun, some);
+          (custom_special_name_prefix_eq, fun x -> sprintf "equal_%s" x |> Some);
+        ]
+      |> function
+      | Ok () -> None
+      | Error x -> Some x
+
+  let rec z3_expr_to_model_string (e : Z3.Expr.expr) : string =
+    if Z3.Expr.is_numeral e then Z3.Expr.to_string e
+    else
+      let fname =
+        Z3.Expr.get_func_decl e |> Z3.FuncDecl.get_name |> Z3.Symbol.to_string
+        |> fun fname ->
+        fname |> try_map_custom_special_name_to_human_readable_name
+        |> Option.value ~default:fname
+      in
+      if Z3.Expr.is_const e then fname
+      else
+        let args_str : string =
+          Z3.Expr.get_args e
+          |> List.map ~f:z3_expr_to_model_string
+          |> String.concat ~sep:", "
+        in
+        sprintf "%s (%s)" fname args_str
+
+  let z3_model_to_model (m : Z3.Model.model) : model =
+    Debug_tools.Logger.debug "-------------------------------";
+    m |> Z3.Model.get_const_decls
+    |> List.map ~f:(fun decl ->
+           let xname = Z3.FuncDecl.get_name decl |> Z3.Symbol.to_string in
+           decl
+           |> Z3.Model.get_const_interp m
+           |> Option.value_exn
+                ~message:
+                  (sprintf
+                     "Constant %s is in set of model's declared constants, but \
+                      doesn't have an interpretation"
+                     xname)
+           |> z3_expr_to_model_string
+           |> fun s -> (xname, s))
+    |> StringMap.of_alist_exn
+
   (** Check the satisifability of a given formula *)
-  let check_satisfiability (formula : formula) : [ `Sat | `Unsat | `Unknown ] =
+  let check_satisfiability (formula : formula) :
+      [ `Sat of model option | `Unsat | `Unknown ] =
     let smtlib_string =
       List.map ~f:Sexp.to_string_hum
         (* I'm using human-readable string generation for debugging/readability *)
         formula
       |> String.concat ~sep:"\n"
     in
-    let ctx = Z3.mk_context [ ("model", "false") ] in
+    let ctx = Z3.mk_context [ ("model", "true") ] in
     let ast_vec = Z3.SMT.parse_smtlib2_string ctx smtlib_string [] [] [] [] in
     let solver = Z3.Solver.mk_solver ctx None in
     (* Add the parsed formula into the solver *)
     Z3.Solver.add solver (Z3.AST.ASTVector.to_expr_list ast_vec);
     match Z3.Solver.check solver [] with
-    | Z3.Solver.SATISFIABLE -> `Sat
+    | Z3.Solver.SATISFIABLE ->
+        Option.(Z3.Solver.get_model solver >>| z3_model_to_model) |> fun m ->
+        `Sat m
     | Z3.Solver.UNSATISFIABLE -> `Unsat
     | Z3.Solver.UNKNOWN -> `Unknown
 end

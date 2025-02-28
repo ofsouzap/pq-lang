@@ -50,7 +50,11 @@ let process_pq_file (filename : string) : (Program.plain_t, error_exit) Result.t
              (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
             |> Sexp.to_string_hum) ))
   >>= function
-  | Error () -> Error (ExitCode 2, "Quotient type check failed")
+  | Error err ->
+      Error
+        ( ExitCode 2,
+          sprintf "Quotient type check failed:\n%s"
+            (QuotientTypeChecker.print_quotient_type_checking_failure err) )
   | Ok () -> Ok prog
 
 let write_outputs (input_path : string) (outputs : OcamlConverter.StdM.output) :

@@ -1,4 +1,5 @@
 open Core
+open Utils
 module Pattern = Pattern.StdPattern
 module Expr = Expr.StdExpr
 module Unifier = Unifier.StdUnifier
@@ -120,7 +121,10 @@ module type S = sig
     Assertion.t list ->
     (Utils.StringSet.t * formula, smt_intf_error) result
 
-  val check_satisfiability : formula -> [ `Sat | `Unknown | `Unsat ]
+  type model = string StringMap.t
+
+  val check_satisfiability :
+    formula -> [ `Sat of model option | `Unknown | `Unsat ]
 end
 
 module Z3Intf : S

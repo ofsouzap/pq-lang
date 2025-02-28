@@ -10,11 +10,20 @@ module type S = sig
     | SmtIntfError of Smt.smt_intf_error
   [@@deriving sexp, equal]
 
+  type quotient_type_checking_failure [@@deriving sexp, equal]
+
+  (** Print a quotient type checking failure for a human reader *)
+  val print_quotient_type_checking_failure :
+    quotient_type_checking_failure -> string
+
   (** Check if a program's quotient type usage is valid. Returns a result with
       the Ok constructor containing another result describing the actual result
       of the checking *)
   val check_program :
-    Smt.tag_program -> ((unit, unit) Result.t, quotient_typing_error) Result.t
+    Smt.tag_program ->
+    ( (unit, quotient_type_checking_failure) Result.t,
+      quotient_typing_error )
+    Result.t
 end
 
 module MakeZ3 : S = struct
@@ -72,18 +81,73 @@ module MakeZ3 : S = struct
               renames_list;
         } )
 
+  type quotient_type_checking_failure = {
+    eqcons : Smt.tag_quotient_type_eqcons;
+    case_p : Smt.tag_pattern;
+    l : Smt.tag_expr;
+    r : Smt.tag_expr;
+    model_mapping : (string * string) list;
+  }
+  [@@deriving sexp, equal]
+
+  let print_quotient_type_checking_failure
+      ({ eqcons; case_p; l; r; model_mapping } : quotient_type_checking_failure)
+      : string =
+    sprintf
+      {|Considering the given equality constructor on the match case with the given pattern, we should have that the below "Side L" and "Side R" are equivalent, but they are not, as shown by the example interpretation below.
+
+====================
+Equality Constructor
+====================
+
+%s
+
+==================
+Match Case Pattern
+==================
+
+%s
+
+======
+Side L
+======
+
+%s
+
+======
+Side R
+======
+
+%s
+
+=========================
+Falsifying Interpretation
+=========================
+
+%s
+|}
+      (eqcons |> QuotientType.eqcons_to_source_code)
+      (case_p |> Pattern.to_source_code)
+      (l |> Expr.to_source_code) (r |> Expr.to_source_code)
+      (model_mapping
+      |> List.map ~f:(fun (xname, xe) -> sprintf "%s = %s" xname xe)
+      |> String.concat ~sep:"\n")
+
+  type check_result =
+    | Err of quotient_typing_error
+    | Failure of quotient_type_checking_failure
+  [@@deriving sexp, equal]
+
   let perform_quotient_match_check ~(existing_names : StringSet.t)
       ~(quotient_type : Smt.tag_quotient_type) ~(match_node_v : Smt.expr_tag)
       ~(match_t_out : Vtype.t)
       ~(cases : (Smt.tag_pattern * Smt.tag_expr) Nonempty_list.t)
-      (state : Smt.State.t) :
-      ( StringSet.t,
-        [ `Err of quotient_typing_error | `Failure of unit ] )
-      Result.t =
+      (state : Smt.State.t) : (StringSet.t, check_result) Result.t =
     let open Result in
     let reform_match_with_arg (e1 : Smt.tag_expr) : Smt.tag_expr =
       Match (match_node_v, e1, match_t_out, cases)
     in
+    (* Iterating through each case of the match *)
     Nonempty_list.fold_result cases ~init:existing_names
       ~f:(fun existing_names (case_p, case_e) ->
         (* Use fresh names for each of the eqconss (before finding unifiers) *)
@@ -98,7 +162,7 @@ module MakeZ3 : S = struct
           |> fun (existing_names, fresh_name_eqconss_rev) ->
           (existing_names, List.rev fresh_name_eqconss_rev)
         in
-        (* Iterating through each case of the match *)
+        (* Iterating through matching eqconss of the case *)
         List.fold_result ~init:existing_names
           (List.filter_map fresh_name_eqconss ~f:(fun eqcons ->
                Unifier.simply_find_unifier ~bound_names_in_from:StringSet.empty
@@ -114,7 +178,6 @@ module MakeZ3 : S = struct
                | Error () -> None
                | Ok unifier -> Some (unifier, eqcons)))
           ~f:(fun existing_names (expr_to_eqcons_unifier, eqcons) ->
-            (* Iterating through matching eqconss of the case *)
             let state =
               (* Add the eqcons' bindings to the state *)
               List.fold ~init:state
@@ -127,12 +190,10 @@ module MakeZ3 : S = struct
             in
             let r = reform_match_with_arg (snd eqcons.body) in
             FlatPattern.of_expr ~existing_names l
-            |> Result.map_error ~f:(fun err ->
-                   `Err (PatternFlatteningError err))
+            |> Result.map_error ~f:(fun err -> Err (PatternFlatteningError err))
             >>= fun (existing_names, l_flat) ->
             FlatPattern.of_expr ~existing_names r
-            |> Result.map_error ~f:(fun err ->
-                   `Err (PatternFlatteningError err))
+            |> Result.map_error ~f:(fun err -> Err (PatternFlatteningError err))
             >>= fun (existing_names, r_flat) ->
             (* Form the main assertion of the SMT check *)
             let assertion : Smt.Assertion.t =
@@ -142,19 +203,18 @@ module MakeZ3 : S = struct
               Not (Eq (Some match_t_out, l_flat, r_flat))
             in
             Smt.create_formula ~existing_names state [ assertion ]
-            |> Result.map_error ~f:(fun err -> `Err (SmtIntfError err))
+            |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
             >>= fun (existing_names, formula) ->
             match Smt.check_satisfiability formula with
             | `Unsat -> Ok existing_names
-            | `Sat -> Error (`Failure ())
-            | `Unknown -> Error (`Err SmtUnknownResult)))
+            | `Sat model ->
+                let model_mapping = model |> Option.value_exn |> Map.to_alist in
+                Error (Failure { eqcons; case_p; l; r; model_mapping })
+            | `Unknown -> Error (Err SmtUnknownResult)))
 
   let rec check_expr ~(existing_names : StringSet.t)
       ~(quotient_types : Smt.tag_quotient_type list) (state : Smt.State.t)
-      (orig_e : Smt.tag_flat_expr) :
-      ( StringSet.t,
-        [ `Err of quotient_typing_error | `Failure of unit ] )
-      Result.t =
+      (orig_e : Smt.tag_flat_expr) : (StringSet.t, check_result) Result.t =
     let open Result in
     let open Smt.State in
     match orig_e with
@@ -189,7 +249,7 @@ module MakeZ3 : S = struct
         state_add_var_defn
           { name = xname; kind = `NonRec None; return_t = e1_type; body = e1 }
           state
-        |> Result.map_error ~f:(fun err -> `Err (SmtIntfError err))
+        |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
         >>= fun state -> check_expr ~existing_names ~quotient_types state e2
     | App (_, e1, e2) ->
         check_expr ~existing_names ~quotient_types state e1
@@ -234,7 +294,9 @@ module MakeZ3 : S = struct
         check_expr ~existing_names ~quotient_types state e
 
   let check_program (prog : Smt.tag_program) :
-      ((unit, unit) Result.t, quotient_typing_error) Result.t =
+      ( (unit, quotient_type_checking_failure) Result.t,
+        quotient_typing_error )
+      Result.t =
     (* TODO - make this take a checked program (from the Typing module's TypeChecker functor) as parameter instead of just a program *)
     let open Result in
     let open Smt.State in
@@ -277,7 +339,7 @@ module MakeZ3 : S = struct
                }
                defn_checking_state
            else Ok state)
-          |> Result.map_error ~f:(fun err -> `Err (SmtIntfError err))
+          |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
           >>= fun defn_checking_state ->
           (* Check the body of the TLD *)
           check_expr ~existing_names ~quotient_types defn_checking_state
@@ -294,7 +356,7 @@ module MakeZ3 : S = struct
               body = defn.body;
             }
             state
-          |> Result.map_error ~f:(fun err -> `Err (SmtIntfError err))
+          |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
           >>| fun state -> (existing_names, state))
         flat_prog.top_level_defns
     >>= fun (existing_names, state) ->
@@ -302,6 +364,6 @@ module MakeZ3 : S = struct
       check_expr ~existing_names ~quotient_types state flat_prog.e )
     |> function
     | Ok _ -> Ok (Ok ())
-    | Error (`Failure failure) -> Ok (Error failure)
-    | Error (`Err err) -> Error err
+    | Error (Failure failure) -> Ok (Error failure)
+    | Error (Err err) -> Error err
 end

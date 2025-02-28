@@ -9,11 +9,20 @@ module type S = sig
     | SmtIntfError of Smt.smt_intf_error
   [@@deriving sexp, equal]
 
+  type quotient_type_checking_failure [@@deriving sexp, equal]
+
+  (** Print a quotient type checking failure for a human reader *)
+  val print_quotient_type_checking_failure :
+    quotient_type_checking_failure -> string
+
   (** Check if a program's quotient type usage is valid. Returns a result with
       the Ok constructor containing another result describing the actual result
       of the checking *)
   val check_program :
-    Smt.tag_program -> ((unit, unit) Result.t, quotient_typing_error) Result.t
+    Smt.tag_program ->
+    ( (unit, quotient_type_checking_failure) Result.t,
+      quotient_typing_error )
+    Result.t
 end
 
 module MakeZ3 : S

@@ -31,7 +31,10 @@ let () =
              (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
             |> Sexp.to_string_hum))
     >>= function
-    | Error () -> Error "Quotient type check failed"
+    | Error err ->
+        Error
+          (sprintf "Quotient type check failed:\n%s"
+             (QuotientTypeChecker.print_quotient_type_checking_failure err))
     | Ok () ->
         ProgramExecutor.execute_program tp
         |> Result.map_error ~f:(fun err ->
