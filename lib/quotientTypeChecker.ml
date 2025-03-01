@@ -144,7 +144,7 @@ Equality Constructor
 ==================
 Match Case Pattern
 ==================
-(from line %d, character %d)
+(from line %d)
 
 %s
 
@@ -167,8 +167,7 @@ Falsifying Interpretation
 %s
 |}
         (eqcons |> QuotientType.eqcons_to_source_code)
-        (match_case_source_pos.lnum + 1)
-        (match_case_source_pos.bol + 1)
+        match_case_source_pos.lnum
         (case_p |> Pattern.to_source_code)
         (l |> Expr.to_source_code) (r |> Expr.to_source_code)
         (model_mapping
