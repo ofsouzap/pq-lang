@@ -1,0 +1,5 @@
+(executable
+ (public_name pq_to_ocaml_rules)
+ (name main)
+ (libraries pq_lang core)
+ (package pq_to_ocaml_rules))

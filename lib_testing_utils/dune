@@ -1,7 +1,7 @@
 (library
  (public_name pq_lang.testing_utils)
  (name testing_utils)
- (libraries core alcotest qcheck qcheck-alcotest pq_lang.lib)
+ (libraries core alcotest qcheck qcheck-alcotest pq_lang)
  (modules testing_utils)
  (preprocess
   (pps ppx_jane)))

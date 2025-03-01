@@ -1,5 +1,5 @@
 (library
- (public_name pq_lang.lib)
+ (public_name pq_lang)
  (name pq_lang)
  (libraries core qcheck z3)
  (modules

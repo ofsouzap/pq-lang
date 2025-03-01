@@ -7,7 +7,7 @@
 (test
  (name main)
  (libraries
-  pq_lang.lib
+  pq_lang
   pq_lang.testing_utils
   core
   core_unix

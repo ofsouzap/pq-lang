@@ -1,4 +1,5 @@
 (executable
  (public_name pq_exec)
  (name main)
- (libraries pq_lang.lib core cmdliner))
+ (libraries pq_lang core cmdliner)
+ (package pq_lang))
