@@ -201,60 +201,70 @@ end = struct
       | MultipleVariantTypeConstructorDefinitions _, _ ->
           false
 
-    let print (_, err) =
+    let print (pos_opt, err) =
+      let pos_str =
+        match pos_opt with
+        | None -> ""
+        | Some pos -> sprintf " at line %d" pos.Frontend.lnum
+      in
       match err with
-      | UndefinedVariable x -> "Undefined variable: " ^ x
+      | UndefinedVariable x -> sprintf "Undefined variable%s: %s" pos_str x
       | EqconsVariableNotInBindings (xname, xtype) ->
           sprintf
             "Variable %s of type %s is not in the bindings of an eqcons but is \
-             used"
+             used%s"
             xname
             (Vtype.to_source_code xtype)
+            pos_str
       | TypeMismatch (t1, t2, msg) ->
-          sprintf "Type mismatch: expected %s but got %s%s"
+          sprintf "Type mismatch%s: expected %s but got %s%s" pos_str
             (Vtype.to_source_code t1) (Vtype.to_source_code t2)
             (match msg with None -> "" | Some msg -> sprintf " (%s)" msg)
       | NoCommonRootType (t1, t2) ->
-          sprintf "Expected common root type for %s and %s but none found"
-            (Vtype.to_source_code t1) (Vtype.to_source_code t2)
+          sprintf "Expected common root type for %s and %s but none found%s"
+            (Vtype.to_source_code t1) (Vtype.to_source_code t2) pos_str
       | PatternTypeMismatch (p, t1, t2) ->
-          sprintf "Type mismatch in pattern \"%s\": expected %s but got %s"
+          sprintf "Type mismatch in pattern \"%s\": expected %s but got %s%s"
             (Pattern.to_source_code p) (Vtype.to_source_code t1)
-            (Vtype.to_source_code t2)
+            (Vtype.to_source_code t2) pos_str
       | EqConsBodyPatternTypeMismatch (pattern, t1, t2) ->
           sprintf
-            "Type mismatch in equivalence constructor body pattern for \"%s\": \
-             expected %s but got %s"
+            "Type mismatch in equivalence constructor body pattern%s for \
+             \"%s\": expected %s but got %s"
+            pos_str
             (Pattern.to_source_code pattern)
             (Vtype.to_source_code t1) (Vtype.to_source_code t2)
       | EqConsBodyExprTypeMismatch (expr, t1, t2) ->
           sprintf
-            "Type mismatch in equivalence constructor body pattern for \"%s\": \
+            "Type mismatch in equivalence constructor body expr%s for \"%s\": \
              expected %s but got %s"
+            pos_str
             (Expr.to_source_code ~use_newlines:false expr)
             (Vtype.to_source_code t1) (Vtype.to_source_code t2)
       | EqualOperatorTypeMistmatch (t1, t2) ->
-          sprintf "Trying to apply equality operator to %s and %s"
-            (Vtype.to_source_code t1) (Vtype.to_source_code t2)
+          sprintf "Trying to apply equality operator to %s and %s%s"
+            (Vtype.to_source_code t1) (Vtype.to_source_code t2) pos_str
       | ExpectedFunctionOf t ->
-          "Expected a function taking input of " ^ Vtype.to_source_code t
+          sprintf "Expected a function taking input of %s%s"
+            (Vtype.to_source_code t) pos_str
       | UndefinedVariantTypeConstructor c_name ->
-          sprintf "Undefined variant type constructor: %s" c_name
+          sprintf "Undefined variant type constructor%s: %s" pos_str c_name
       | PatternMultipleVariableDefinitions xname ->
-          sprintf "Variable named \"%s\" has been defined twice in a pattern"
-            xname
+          sprintf "Variable named \"%s\" has been defined twice in a pattern%s"
+            xname pos_str
       | MultipleTopLevelNameDefinitions xname ->
-          sprintf "Multiple top-level definitions of name \"%s\"" xname
+          sprintf "Multiple top-level definitions of name \"%s\"%s" xname
+            pos_str
       | DuplicateTypeNameDefinition vt_name ->
-          sprintf "Variant type named \"%s\" has been defined multiple times"
-            vt_name
+          sprintf "Variant type named \"%s\" has been defined multiple times%s"
+            vt_name pos_str
       | UndefinedTypeName vt_name ->
-          sprintf "Undefined variant type: %s" vt_name
+          sprintf "Undefined variant type%s: %s" pos_str vt_name
       | MultipleVariantTypeConstructorDefinitions c_name ->
           sprintf
             "Variant type constructor named \"%s\" has been defined multiple \
-             times"
-            c_name
+             times%s"
+            c_name pos_str
   end
 
   module StdTypingError :
