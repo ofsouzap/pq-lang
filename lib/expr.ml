@@ -87,7 +87,7 @@ module type S = sig
   type plain_typed_t = (unit, unit) typed_t [@@deriving sexp, equal]
 
   (** Delete an Expr's tagging data to form a plain Expr *)
-  val to_plain_expr : ('tag_e, 'tag_p) t -> plain_t
+  val to_plain_t : ('tag_e, 'tag_p) t -> plain_t
 
   (** Rename a variable in an expression *)
   val rename_var :
@@ -364,40 +364,38 @@ module Make (Pattern : Pattern.S) : S with module Pattern = Pattern = struct
 
   type plain_typed_t = (unit, unit) typed_t [@@deriving sexp, equal]
 
-  let rec to_plain_expr (e : ('tag_e, 'tag_p) t) : plain_t =
+  let rec to_plain_t (e : ('tag_e, 'tag_p) t) : plain_t =
     match e with
     | UnitLit _ -> UnitLit ()
     | IntLit (_, i) -> IntLit ((), i)
-    | Add (_, e1, e2) -> Add ((), to_plain_expr e1, to_plain_expr e2)
-    | Neg (_, e) -> Neg ((), to_plain_expr e)
-    | Subtr (_, e1, e2) -> Subtr ((), to_plain_expr e1, to_plain_expr e2)
-    | Mult (_, e1, e2) -> Mult ((), to_plain_expr e1, to_plain_expr e2)
+    | Add (_, e1, e2) -> Add ((), to_plain_t e1, to_plain_t e2)
+    | Neg (_, e) -> Neg ((), to_plain_t e)
+    | Subtr (_, e1, e2) -> Subtr ((), to_plain_t e1, to_plain_t e2)
+    | Mult (_, e1, e2) -> Mult ((), to_plain_t e1, to_plain_t e2)
     | BoolLit (_, b) -> BoolLit ((), b)
-    | BNot (_, e) -> BNot ((), to_plain_expr e)
-    | BOr (_, e1, e2) -> BOr ((), to_plain_expr e1, to_plain_expr e2)
-    | BAnd (_, e1, e2) -> BAnd ((), to_plain_expr e1, to_plain_expr e2)
-    | Pair (_, e1, e2) -> Pair ((), to_plain_expr e1, to_plain_expr e2)
-    | Eq (_, e1, e2) -> Eq ((), to_plain_expr e1, to_plain_expr e2)
-    | Gt (_, e1, e2) -> Gt ((), to_plain_expr e1, to_plain_expr e2)
-    | GtEq (_, e1, e2) -> GtEq ((), to_plain_expr e1, to_plain_expr e2)
-    | Lt (_, e1, e2) -> Lt ((), to_plain_expr e1, to_plain_expr e2)
-    | LtEq (_, e1, e2) -> LtEq ((), to_plain_expr e1, to_plain_expr e2)
-    | If (_, e1, e2, e3) ->
-        If ((), to_plain_expr e1, to_plain_expr e2, to_plain_expr e3)
+    | BNot (_, e) -> BNot ((), to_plain_t e)
+    | BOr (_, e1, e2) -> BOr ((), to_plain_t e1, to_plain_t e2)
+    | BAnd (_, e1, e2) -> BAnd ((), to_plain_t e1, to_plain_t e2)
+    | Pair (_, e1, e2) -> Pair ((), to_plain_t e1, to_plain_t e2)
+    | Eq (_, e1, e2) -> Eq ((), to_plain_t e1, to_plain_t e2)
+    | Gt (_, e1, e2) -> Gt ((), to_plain_t e1, to_plain_t e2)
+    | GtEq (_, e1, e2) -> GtEq ((), to_plain_t e1, to_plain_t e2)
+    | Lt (_, e1, e2) -> Lt ((), to_plain_t e1, to_plain_t e2)
+    | LtEq (_, e1, e2) -> LtEq ((), to_plain_t e1, to_plain_t e2)
+    | If (_, e1, e2, e3) -> If ((), to_plain_t e1, to_plain_t e2, to_plain_t e3)
     | Var (_, vname) -> Var ((), vname)
-    | Let (_, xname, e1, e2) ->
-        Let ((), xname, to_plain_expr e1, to_plain_expr e2)
-    | App (_, e1, e2) -> App ((), to_plain_expr e1, to_plain_expr e2)
+    | Let (_, xname, e1, e2) -> Let ((), xname, to_plain_t e1, to_plain_t e2)
+    | App (_, e1, e2) -> App ((), to_plain_t e1, to_plain_t e2)
     | Match (_, e, t2, cs) ->
         Match
           ( (),
-            to_plain_expr e,
+            to_plain_t e,
             t2,
             Nonempty_list.map
               ~f:(fun (p, c_e) ->
-                (Pattern.fmap ~f:(fun _ -> ()) p, to_plain_expr c_e))
+                (Pattern.fmap ~f:(fun _ -> ()) p, to_plain_t c_e))
               cs )
-    | Constructor (_, cname, e) -> Constructor ((), cname, to_plain_expr e)
+    | Constructor (_, cname, e) -> Constructor ((), cname, to_plain_t e)
 
   let rec rename_var ~(old_name : Varname.t) ~(new_name : Varname.t) = function
     | UnitLit _ as e -> e

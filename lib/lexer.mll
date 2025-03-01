@@ -2,10 +2,16 @@
 open Parser
 
 exception LexingError of char
+
+let newline lexbuf =
+  let open Lexing in
+  let curr_pos = lexbuf.lex_curr_p in
+  lexbuf.lex_curr_p <- { curr_pos with pos_lnum = curr_pos.pos_lnum + 1 }
 }
 
 let newline = '\n' | '\r' | "\r\n"
-let whitespace = [' ' '\t'] | newline
+let not_newline_whitespace = [' ' '\t']
+let whitespace = not_newline_whitespace | newline
 
 rule token = parse
   (* Keywords *)
@@ -57,13 +63,15 @@ rule token = parse
   | ['A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as name { UNAME name }
   (* Misc *)
   | eof { EOF }
-  | whitespace { token lexbuf }
+  | not_newline_whitespace { token lexbuf }
+  | newline { newline lexbuf; token lexbuf }
   | _ as c { raise (LexingError c) }
 and single_line_comment = parse
-  | newline { token lexbuf }
+  | newline { newline lexbuf; token lexbuf }
   | eof { EOF }
   | _ { single_line_comment lexbuf }
 and multi_line_comment = parse
   | "*)" { token lexbuf }
   | eof { EOF }
+  | newline { newline lexbuf; multi_line_comment lexbuf }
   | _ { multi_line_comment lexbuf }

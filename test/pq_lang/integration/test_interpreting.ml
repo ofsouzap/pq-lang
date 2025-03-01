@@ -52,7 +52,12 @@ let create_test
       let open Result in
       match Frontend.run_frontend_string inp with
       | Ok prog -> (
-          match TypeChecker.type_program prog with
+          match
+            TypeChecker.type_program
+              ~get_source_position:(function
+                | First v -> Some v | Second v -> Some v)
+              prog
+          with
           | Ok typed_prog ->
               let result : ProgramExecutor.exec_res =
                 ProgramExecutor.execute_program typed_prog

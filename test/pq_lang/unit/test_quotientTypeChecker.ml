@@ -16,16 +16,19 @@ let manual_tests : unit Alcotest.test_case list =
                  sprintf "Frontend error: %s\n"
                    (Frontend.sexp_of_frontend_error err |> Sexp.to_string_hum))
           >>= fun inp_prog ->
-          TestingTypeChecker.type_program inp_prog
+          TestingTypeChecker.type_program
+            ~get_source_position:(function
+              | First v -> Some v | Second v -> Some v)
+            inp_prog
           |> Result.map_error ~f:(fun err ->
                  sprintf "Typing error: %s\n"
                    (TypeChecker.TypingError.print err))
           >>= fun inp_typed_program ->
           inp_typed_program |> TestingTypeChecker.typed_program_get_program
-          |> Program.fmap_expr ~f:(fun (t, ()) ->
-                 ({ t } : QuotientTypeChecker.Smt.expr_tag))
-          |> Program.fmap_pattern ~f:(fun (t, ()) ->
-                 ({ t } : QuotientTypeChecker.Smt.pattern_tag))
+          |> Program.fmap_pattern ~f:(fun (t, source_pos) ->
+                 ({ t; source_pos } : QuotientTypeChecker.node_tag))
+          |> Program.fmap_expr ~f:(fun (t, source_pos) ->
+                 ({ t; source_pos } : QuotientTypeChecker.node_tag))
           |> fun inp_for_quotient_type_checking ->
           match
             ( QuotientTypeChecker.check_program inp_for_quotient_type_checking,
@@ -41,7 +44,7 @@ let manual_tests : unit Alcotest.test_case list =
                    "Expected valid input but got failed quotient type check \
                     with message:\n\
                     %s"
-                   (QuotientTypeChecker.print_quotient_type_checking_failure err))
+                   (QuotientTypeChecker.QuotientTypeCheckingFailure.print err))
           | Error err, _ ->
               Error
                 (sprintf "Unexpected quotient type checking failure: %s"

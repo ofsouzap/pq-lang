@@ -6,8 +6,13 @@ type frontend_error =
   | ParsingError  (** A parsing error occured on the token stream *)
 [@@deriving sexp, equal]
 
+type source_position = { lnum : int; cnum : int } [@@deriving sexp, equal]
+
 (** A result from trying to run the lexer and parser on an input *)
-type run_frontend_res = (Program.StdProgram.plain_t, frontend_error) Result.t
+type run_frontend_res =
+  ( (source_position, source_position) Program.StdProgram.t,
+    frontend_error )
+  Result.t
 [@@deriving sexp, equal]
 
 (** Run the lexer and parser on an input channel *)

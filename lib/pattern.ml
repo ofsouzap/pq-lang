@@ -12,7 +12,7 @@ module type S = sig
   type plain_t = unit t [@@deriving sexp, equal]
 
   (** Convert a tagged pattern to an untagged pattern *)
-  val to_plain_pattern : 'a t -> plain_t
+  val to_plain_t : 'a t -> plain_t
 
   (** Get the value attached to a pattern node *)
   val node_val : 'a t -> 'a
@@ -66,12 +66,10 @@ module StdPattern : S with type 'a t = 'a std_pattern = struct
   type 'a typed_t = (Vtype.t * 'a) t [@@deriving sexp, equal]
   type plain_t = unit t [@@deriving sexp, equal]
 
-  let rec to_plain_pattern : 'a t -> plain_t = function
+  let rec to_plain_t : 'a t -> plain_t = function
     | PatName (_, xname, t) -> PatName ((), xname, t)
-    | PatPair (_, p1, p2) ->
-        PatPair ((), to_plain_pattern p1, to_plain_pattern p2)
-    | PatConstructor (_, cname, p) ->
-        PatConstructor ((), cname, to_plain_pattern p)
+    | PatPair (_, p1, p2) -> PatPair ((), to_plain_t p1, to_plain_t p2)
+    | PatConstructor (_, cname, p) -> PatConstructor ((), cname, to_plain_t p)
 
   let node_val = function
     | PatName (v, _, _) -> v

@@ -49,6 +49,8 @@ module type S = sig
   (** A t with no tagging *)
   type plain_t = (unit, unit) t [@@deriving sexp, equal]
 
+  val to_plain_t : ('tag_e, 'tag_p) t -> plain_t
+
   (** Map a function onto the tags of expression nodes in a t *)
   val fmap_expr :
     f:('tag_e1 -> 'tag_e2) -> ('tag_e1, 'tag_p) t -> ('tag_e2, 'tag_p) t

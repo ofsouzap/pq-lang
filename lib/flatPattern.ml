@@ -14,7 +14,7 @@ module M : Pattern.S with type 'a t = 'a flat_pattern = struct
   type 'a typed_t = (Vtype.t * 'a) t [@@deriving sexp, equal]
   type plain_t = unit t [@@deriving sexp, equal]
 
-  let to_plain_pattern : 'a t -> plain_t = function
+  let to_plain_t : 'a t -> plain_t = function
     | FlatPatPair (_, (_, p1name, p1t), (_, p2name, p2t)) ->
         FlatPatPair ((), ((), p1name, p1t), ((), p2name, p2t))
     | FlatPatConstructor (_, cname, (_, p1name, p1t)) ->

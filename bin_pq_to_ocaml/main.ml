@@ -31,17 +31,19 @@ let process_pq_file (filename : string) : (Program.plain_t, error_exit) Result.t
                | LexingError c -> sprintf "Lexing error: %c" c
                | ParsingError -> "Parsing error") ))
   >>= fun prog ->
-  TypeChecker.type_program prog
+  TypeChecker.type_program
+    ~get_source_position:(function First v -> Some v | Second v -> Some v)
+    prog
   |> Result.map_error ~f:(fun err ->
          ( ExitCode 3,
            sprintf "Typing error:\n%s" (TypeChecker.TypingError.print err) ))
   >>= fun tp ->
   let prog_for_quotient_type_checking =
     TypeChecker.typed_program_get_program tp
-    |> Program.fmap_pattern ~f:(fun (t, ()) ->
-           ({ t } : QuotientTypeChecker.Smt.pattern_tag))
-    |> Program.fmap_expr ~f:(fun (t, ()) ->
-           ({ t } : QuotientTypeChecker.Smt.expr_tag))
+    |> Program.fmap_pattern ~f:(fun (t, source_pos) ->
+           ({ t; source_pos } : QuotientTypeChecker.node_tag))
+    |> Program.fmap_expr ~f:(fun (t, source_pos) ->
+           ({ t; source_pos } : QuotientTypeChecker.node_tag))
   in
   QuotientTypeChecker.check_program prog_for_quotient_type_checking
   |> Result.map_error ~f:(fun err ->
@@ -54,8 +56,8 @@ let process_pq_file (filename : string) : (Program.plain_t, error_exit) Result.t
       Error
         ( ExitCode 2,
           sprintf "Quotient type check failed:\n%s"
-            (QuotientTypeChecker.print_quotient_type_checking_failure err) )
-  | Ok () -> Ok prog
+            (QuotientTypeChecker.QuotientTypeCheckingFailure.print err) )
+  | Ok () -> Ok (prog |> Program.to_plain_t)
 
 let write_outputs (input_path : string) (outputs : OcamlConverter.StdM.output) :
     (unit, error_exit) Result.t =

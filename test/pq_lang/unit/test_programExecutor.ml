@@ -22,7 +22,7 @@ let type_expr
     ?(top_level_defns : (unit, unit) Program.top_level_defn list option)
     (e : Expr.plain_t) : (unit, unit) TypeChecker.typed_program =
   match
-    Pq_lang.TypeChecker.type_program
+    Pq_lang.TypeChecker.type_program ~get_source_position:(Fn.const None)
       {
         custom_types = Option.value ~default:[] custom_types;
         top_level_defns = Option.value ~default:[] top_level_defns;

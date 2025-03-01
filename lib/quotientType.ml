@@ -70,7 +70,7 @@ module type S = sig
   val fmap_pattern :
     f:('tag_p1 -> 'tag_p2) -> ('tag_e, 'tag_p1) t -> ('tag_e, 'tag_p2) t
 
-  val to_plain_quotient_type : ('tag_e, 'tag_p) t -> plain_t
+  val to_plain_t : ('tag_e, 'tag_p) t -> plain_t
 
   (** Convert a quotient type definition into source code. *)
   val to_source_code : ?use_newlines:bool -> ('tag_e, 'tag_p) t -> string
@@ -170,7 +170,7 @@ module Make (Expr : Expr.S) :
    fun qt ->
     { qt with eqconss = List.map ~f:(eqcons_fmap_pattern ~f) qt.eqconss }
 
-  let to_plain_quotient_type (qt : ('tag_e, 'tag_p) t) : plain_t =
+  let to_plain_t (qt : ('tag_e, 'tag_p) t) : plain_t =
     qt |> fmap_expr ~f:(fun _ -> ()) |> fmap_pattern ~f:(fun _ -> ())
 
   let to_source_code ?(use_newlines : bool option) (qt : ('tag_e, 'tag_p) t) :

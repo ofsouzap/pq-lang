@@ -5,17 +5,16 @@ open Utils
 open Pattern
 module Pattern = Pattern.StdPattern
 module Expr = Expr.StdExpr
-module Unifier = Unifier.StdUnifier
 module QuotientType = QuotientType.StdQuotientType
 module CustomType = CustomType.StdCustomType
 
-let add_custom_type_decl_to_program (p : Program.StdProgram.plain_t) (ct_decl : (unit, unit) Program.StdProgram.custom_type_decl) : Program.StdProgram.plain_t =
+let add_custom_type_decl_to_program (p : (Lexing.position, Lexing.position) Program.StdProgram.t) (ct_decl : (Lexing.position, Lexing.position) Program.StdProgram.custom_type_decl) : (Lexing.position, Lexing.position) Program.StdProgram.t =
   {
     p with
     custom_types = ct_decl :: p.custom_types;
   }
 
-let add_top_level_definition_to_program (p : Program.StdProgram.plain_t) (defn : Program.StdProgram.plain_top_level_defn) : Program.StdProgram.plain_t =
+let add_top_level_definition_to_program (p : (Lexing.position, Lexing.position) Program.StdProgram.t) (defn : (Lexing.position, Lexing.position) Program.StdProgram.top_level_defn) : (Lexing.position, Lexing.position) Program.StdProgram.t =
   {
     p with
     top_level_defns = defn :: p.top_level_defns;
@@ -46,8 +45,8 @@ let add_top_level_definition_to_program (p : Program.StdProgram.plain_t) (defn :
 
 %type <Vtype.t> vtype
 
-%type <Pattern.plain_t> pattern
-%type <Pattern.plain_t> contained_pattern
+%type <Lexing.position Pattern.t> pattern
+%type <Lexing.position Pattern.t> contained_pattern
 
 %type <VariantType.constructor> variant_type_constructor
 %type <VariantType.constructor list> variant_type_definition_constructors_no_leading_pipe
@@ -56,28 +55,28 @@ let add_top_level_definition_to_program (p : Program.StdProgram.plain_t) (defn :
 
 %type <string * Vtype.t> typed_name
 
-%type <Pattern.plain_t> match_case_pattern
-%type <Pattern.plain_t * Expr.plain_t> match_case
-%type <(Pattern.plain_t * Expr.plain_t) Nonempty_list.t> match_cases_no_leading_pipe
-%type <(Pattern.plain_t * Expr.plain_t) Nonempty_list.t> match_cases
+%type <Lexing.position Pattern.t> match_case_pattern
+%type <Lexing.position Pattern.t * (Lexing.position, Lexing.position) Expr.t> match_case
+%type <(Lexing.position Pattern.t * (Lexing.position, Lexing.position) Expr.t) Nonempty_list.t> match_cases_no_leading_pipe
+%type <(Lexing.position Pattern.t * (Lexing.position, Lexing.position) Expr.t) Nonempty_list.t> match_cases
 
-%type <Expr.plain_t> expr
-%type <Expr.plain_t> contained_expr
+%type <(Lexing.position, Lexing.position) Expr.t> expr
+%type <(Lexing.position, Lexing.position) Expr.t> contained_expr
 
 %type <(string * Vtype.t) list> quotient_type_eqcons_bindings
-%type <Pattern.plain_t * Expr.plain_t> quotient_type_eqcons_body
-%type <QuotientType.plain_eqcons> quotient_type_eqcons
-%type <QuotientType.plain_eqcons list> quotient_type_definition_eqconss
-%type <QuotientType.plain_t> quotient_type_definition
+%type <Lexing.position Pattern.t * (Lexing.position, Lexing.position) Expr.t> quotient_type_eqcons_body
+%type <(Lexing.position, Lexing.position) QuotientType.eqcons> quotient_type_eqcons
+%type <(Lexing.position, Lexing.position) QuotientType.eqcons list> quotient_type_definition_eqconss
+%type <(Lexing.position, Lexing.position) QuotientType.t> quotient_type_definition
 
-%type <(unit, unit) Program.StdProgram.custom_type_decl> custom_type_decl
+%type <(Lexing.position, Lexing.position) Program.StdProgram.custom_type_decl> custom_type_decl
 
 %type <(string * Vtype.t)> top_level_defn_param
-%type <Program.StdProgram.plain_top_level_defn> top_level_defn
+%type <(Lexing.position, Lexing.position) Program.StdProgram.top_level_defn> top_level_defn
 
 // Main program
 
-%start <Program.StdProgram.plain_t> prog
+%start <(Lexing.position, Lexing.position) Program.StdProgram.t> prog
 
 %%
 
@@ -93,13 +92,13 @@ vtype:
 
 pattern:
   | p = contained_pattern { p }
-  | n = LNAME COLON t = vtype { PatName ((), n, t) }
-  | cname = UNAME p = contained_pattern { PatConstructor ((), cname, p) }
+  | n = LNAME COLON t = vtype { PatName ($startpos, n, t) }
+  | cname = UNAME p = contained_pattern { PatConstructor ($startpos, cname, p) }
 ;
 
 contained_pattern:
   | LPAREN p = pattern RPAREN { p }
-  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair ((), p1, p2) }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair ($startpos, p1, p2) }
 ;
 
 variant_type_constructor:
@@ -126,8 +125,8 @@ typed_name:
 
 match_case_pattern:
   | LPAREN p = pattern RPAREN { p }
-  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair ((), p1, p2) }
-  | cname = UNAME p = contained_pattern { PatConstructor ((), cname, p) }
+  | LPAREN p1 = pattern COMMA p2 = pattern RPAREN { PatPair ($startpos, p1, p2) }
+  | cname = UNAME p = contained_pattern { PatConstructor ($startpos, cname, p) }
 ;
 
 match_case:
@@ -146,33 +145,33 @@ match_cases:
 
 expr:
   | e = contained_expr { e }  (* ( e ) *)
-  | e1 = expr PLUS e2 = expr { Add ((), e1, e2) }  (* e1 + e2 *)
-  | MINUS e = expr { Neg ((), e) }  (* - e *)
-  | e1 = expr MINUS e2 = expr { Subtr ((), e1, e2) }  (* e1 - e2 *)
-  | e1 = expr STAR e2 = expr { Mult ((), e1, e2) }  (* e1 * e2 *)
-  | BNOT e = expr { BNot ((), e) }  (* ~ e *)
-  | e1 = expr BOR e2 = expr { BOr ((), e1, e2) }  (* e1 || e2 *)
-  | e1 = expr BAND e2 = expr { BAnd ((), e1, e2) }  (* e1 && e2 *)
-  | e1 = expr EQUATE e2 = expr { Eq ((), e1, e2) }  (* e1 == e2 *)
-  | e1 = expr GT e2 = expr { Gt ((), e1, e2) }  (* e1 > e2 *)
-  | e1 = expr GTEQ e2 = expr { GtEq ((), e1, e2) }  (* e1 >= e2 *)
-  | e1 = expr LT e2 = expr { Lt ((), e1, e2) }  (* e1 < e2 *)
-  | e1 = expr LTEQ e2 = expr { LtEq ((), e1, e2) }  (* e1 <= e2 *)
-  | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ((), e1, e2, e3) }  (* if e1 then e2 else e3 *)
-  | LET l = LNAME ASSIGN r = expr IN subexpr = expr END { Let ((), l, r, subexpr) }  (* let l = r in subexpr end *)
-  | e1 = expr e2 = contained_expr { App ((), e1, e2) }  (* e1 e2 *)
-  | MATCH e = expr ARROW return_t = vtype WITH cs = match_cases END { Match ((), e, return_t, cs) }  (* match e -> t with cs end *)
-  | cname = UNAME e = expr { Constructor ((), cname, e) }  (* Cname e *)
+  | e1 = expr PLUS e2 = expr { Add ($startpos, e1, e2) }  (* e1 + e2 *)
+  | MINUS e = expr { Neg ($startpos, e) }  (* - e *)
+  | e1 = expr MINUS e2 = expr { Subtr ($startpos, e1, e2) }  (* e1 - e2 *)
+  | e1 = expr STAR e2 = expr { Mult ($startpos, e1, e2) }  (* e1 * e2 *)
+  | BNOT e = expr { BNot ($startpos, e) }  (* ~ e *)
+  | e1 = expr BOR e2 = expr { BOr ($startpos, e1, e2) }  (* e1 || e2 *)
+  | e1 = expr BAND e2 = expr { BAnd ($startpos, e1, e2) }  (* e1 && e2 *)
+  | e1 = expr EQUATE e2 = expr { Eq ($startpos, e1, e2) }  (* e1 == e2 *)
+  | e1 = expr GT e2 = expr { Gt ($startpos, e1, e2) }  (* e1 > e2 *)
+  | e1 = expr GTEQ e2 = expr { GtEq ($startpos, e1, e2) }  (* e1 >= e2 *)
+  | e1 = expr LT e2 = expr { Lt ($startpos, e1, e2) }  (* e1 < e2 *)
+  | e1 = expr LTEQ e2 = expr { LtEq ($startpos, e1, e2) }  (* e1 <= e2 *)
+  | IF e1 = expr THEN e2 = expr ELSE e3 = expr END { If ($startpos, e1, e2, e3) }  (* if e1 then e2 else e3 *)
+  | LET l = LNAME ASSIGN r = expr IN subexpr = expr END { Let ($startpos, l, r, subexpr) }  (* let l = r in subexpr end *)
+  | e1 = expr e2 = contained_expr { App ($startpos, e1, e2) }  (* e1 e2 *)
+  | MATCH e = expr ARROW return_t = vtype WITH cs = match_cases END { Match ($startpos, e, return_t, cs) }  (* match e -> t with cs end *)
+  | cname = UNAME e = expr { Constructor ($startpos, cname, e) }  (* Cname e *)
 ;
 
 contained_expr:
   | LPAREN e = expr RPAREN { e }  (* ( e ) *)
-  | UNIT_VAL { UnitLit () }  (* () *)
-  | i = INTLIT { IntLit ((), i) }  (* n *)
-  | TRUE { BoolLit ((), true) }  (* true *)
-  | FALSE { BoolLit ((), false) }  (* false *)
-  | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ((), e1, e2) }  (* (e1, e2) *)
-  | n = LNAME { Var ((), n) }  (* var *)
+  | UNIT_VAL { UnitLit $startpos }  (* () *)
+  | i = INTLIT { IntLit ($startpos, i) }  (* n *)
+  | TRUE { BoolLit ($startpos, true) }  (* true *)
+  | FALSE { BoolLit ($startpos, false) }  (* false *)
+  | LPAREN e1 = expr COMMA e2 = expr RPAREN { Pair ($startpos, e1, e2) }  (* (e1, e2) *)
+  | n = LNAME { Var ($startpos, n) }  (* var *)
 ;
 
 quotient_type_eqcons_bindings:

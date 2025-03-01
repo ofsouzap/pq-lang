@@ -6,7 +6,7 @@ module TypingError : sig
     module Pattern : Pattern.S
     module Expr : Expr.S
 
-    type t =
+    type err =
       | UndefinedVariable of string
           (** A variable was referenced that isn't defined in the scope *)
       | EqconsVariableNotInBindings of string * Vtype.t
@@ -48,6 +48,8 @@ module TypingError : sig
           (** The specified variant type constructor name has been defined
               multiple times *)
     [@@deriving sexp, equal]
+
+    type t = Frontend.source_position option * err
 
     val equal_variant : t -> t -> bool
     val print : t -> string
@@ -63,7 +65,7 @@ end = struct
     module Pattern : Pattern.S
     module Expr : Expr.S
 
-    type t =
+    type err =
       | UndefinedVariable of string
           (** A variable was referenced that isn't defined in the scope *)
       | EqconsVariableNotInBindings of string * Vtype.t
@@ -106,6 +108,8 @@ end = struct
               multiple times *)
     [@@deriving sexp, equal]
 
+    type t = Frontend.source_position option * err
+
     val equal_variant : t -> t -> bool
     val print : t -> string
   end
@@ -115,25 +119,52 @@ end = struct
     module Pattern = Pattern
     module Expr = Expr
 
-    type t =
+    type err =
       | UndefinedVariable of string
+          (** A variable was referenced that isn't defined in the scope *)
       | EqconsVariableNotInBindings of string * Vtype.t
+          (** A variable-type pair was used that wasn't defined in an eqcons
+              binding *)
       | TypeMismatch of Vtype.t * Vtype.t * string option
+          (** An expression was expected to have the first type but had the
+              second *)
       | NoCommonRootType of Vtype.t * Vtype.t
+          (** The types given were expected to have a common root type but
+              didn't *)
       | PatternTypeMismatch of Pattern.plain_t * Vtype.t * Vtype.t
+          (** A pattern was expected to have the first type but had the second
+          *)
       | EqConsBodyPatternTypeMismatch of Pattern.plain_t * Vtype.t * Vtype.t
+          (** The pattern of an equivalence constructor body was expected to
+              have the first type but had the second *)
       | EqConsBodyExprTypeMismatch of Expr.plain_t * Vtype.t * Vtype.t
+          (** The expression of an equivalence constructor body was expected to
+              have the first type but had the second *)
       | EqualOperatorTypeMistmatch of Vtype.t * Vtype.t
+          (** An application of the equality operation had a type mismatch as
+              the operands had the specified types instead of compatible ones *)
       | ExpectedFunctionOf of Vtype.t
+          (** A value is used as a function but isn't a function. The expected
+              input type of the function is the value *)
       | UndefinedVariantTypeConstructor of string
+          (** The specified type constructor was used but hasn't been defined *)
       | PatternMultipleVariableDefinitions of string
+          (** In a pattern, there are multiple definitions of some variable name
+          *)
       | MultipleTopLevelNameDefinitions of string
+          (** There are multiple definitions of the same top-level name *)
       | DuplicateTypeNameDefinition of string
+          (** The specified type name has been defined multiple times *)
       | UndefinedTypeName of string
+          (** The specified type name has been referenced but not defined *)
       | MultipleVariantTypeConstructorDefinitions of string
+          (** The specified variant type constructor name has been defined
+              multiple times *)
     [@@deriving sexp, equal]
 
-    let equal_variant x y =
+    type t = Frontend.source_position option * err
+
+    let equal_variant (_, x) (_, y) =
       match (x, y) with
       | UndefinedVariable _, UndefinedVariable _
       | EqconsVariableNotInBindings _, EqconsVariableNotInBindings _
@@ -170,7 +201,8 @@ end = struct
       | MultipleVariantTypeConstructorDefinitions _, _ ->
           false
 
-    let print = function
+    let print (_, err) =
+      match err with
       | UndefinedVariable x -> "Undefined variable: " ^ x
       | EqconsVariableNotInBindings (xname, xtype) ->
           sprintf
@@ -265,7 +297,12 @@ module TypeContext : sig
     val type_defns_to_ordered_list : t -> CustomType.plain_t list
 
     (** Check if one type is a subtype of another *)
-    val subtype : t -> Vtype.t -> Vtype.t -> (bool, TypingError.t) Result.t
+    val subtype :
+      ?source_position:Frontend.source_position ->
+      t ->
+      Vtype.t ->
+      Vtype.t ->
+      (bool, TypingError.t) Result.t
   end
 
   module MakeSet
@@ -315,7 +352,12 @@ end = struct
     val type_defns_to_ordered_list : t -> CustomType.plain_t list
 
     (** Check if one type is a subtype of another *)
-    val subtype : t -> Vtype.t -> Vtype.t -> (bool, TypingError.t) Result.t
+    val subtype :
+      ?source_position:Frontend.source_position ->
+      t ->
+      Vtype.t ->
+      Vtype.t ->
+      (bool, TypingError.t) Result.t
   end
 
   module MakeSet
@@ -340,13 +382,14 @@ end = struct
         (t, TypingError.t) Result.t =
       let type_defns_map_or_err =
         custom_types
-        |> List.map ~f:CustomType.to_plain_custom_type
+        |> List.map ~f:CustomType.to_plain_t
         |> StringMap.of_list_with_key ~get_key:(function
              | VariantType (vt_name, _) -> vt_name
              | CustomType.QuotientType qt -> qt.name)
       in
       match type_defns_map_or_err with
-      | `Duplicate_key dup_name -> Error (DuplicateTypeNameDefinition dup_name)
+      | `Duplicate_key dup_name ->
+          Error (None, DuplicateTypeNameDefinition dup_name)
       | `Ok type_defns_map ->
           Ok
             {
@@ -385,8 +428,9 @@ end = struct
           find_type_defn_by_name ctx ct_name |> Option.value_exn)
         ctx.custom_types_order
 
-    let rec subtype (ctx : t) (t1 : Vtype.t) (t2 : Vtype.t) :
-        (bool, TypingError.t) Result.t =
+    let rec subtype ?(source_position : Frontend.source_position option)
+        (ctx : t) (t1 : Vtype.t) (t2 : Vtype.t) : (bool, TypingError.t) Result.t
+        =
       let open Result in
       match (t1, t2) with
       | VTypeInt, VTypeInt | VTypeBool, VTypeBool | VTypeUnit, VTypeUnit ->
@@ -404,10 +448,12 @@ end = struct
       | VTypeFun _, _ -> Ok false
       | VTypeCustom c1_name, VTypeCustom c2_name -> (
           find_type_defn_by_name ctx c1_name
-          |> Result.of_option ~error:(TypingError.UndefinedTypeName c1_name)
+          |> Result.of_option
+               ~error:(source_position, TypingError.UndefinedTypeName c1_name)
           >>= fun ct1 ->
           find_type_defn_by_name ctx c2_name
-          |> Result.of_option ~error:(TypingError.UndefinedTypeName c2_name)
+          |> Result.of_option
+               ~error:(source_position, TypingError.UndefinedTypeName c2_name)
           >>= fun ct2 ->
           match (ct1, ct2) with
           | VariantType (vt1_name, _), VariantType (vt2_name, _) ->
@@ -542,17 +588,23 @@ module type S = sig
 
   (** Check that a Vtype.t is valid in the given context *)
   val check_vtype :
-    checked_type_ctx -> Vtype.t -> (unit, TypingError.t) Result.t
+    source_position:Frontend.source_position option ->
+    checked_type_ctx ->
+    Vtype.t ->
+    (unit, TypingError.t) Result.t
 
   (** Type checks a pattern in the given context, returning either the pattern's
       type and declared variables, or a pattern typing error *)
   val type_pattern :
+    get_source_position:('tag_p -> Frontend.source_position option) ->
     checked_type_ctx * VarCtx.t ->
     'tag_p Pattern.t ->
     ((Vtype.t * 'tag_p) Pattern.t * VarCtx.t, TypingError.t) Result.t
 
   (** Type checks a single expression in the given context *)
   val type_expr :
+    get_source_position:
+      (('tag_e, 'tag_p) Either.t -> Frontend.source_position option) ->
     checked_type_ctx * VarCtx.t ->
     ('tag_e, 'tag_p) Expr.t ->
     (('tag_e, 'tag_p) Expr.typed_t, TypingError.t) Result.t
@@ -563,6 +615,8 @@ module type S = sig
   (** Type checks a program in the given context, returning either a typed
       program or a typing error *)
   val type_program :
+    get_source_position:
+      (('tag_e, 'tag_p) Either.t -> Frontend.source_position option) ->
     ('tag_e, 'tag_p) Program.t ->
     (('tag_e, 'tag_p) typed_program, TypingError.t) Result.t
 end
@@ -611,19 +665,21 @@ module MakeStd
   let typed_program_get_type_ctx : ('tag_e, 'tag_p) typed_program -> TypeCtx.t =
     snd
 
-  let rec check_vtype (ctx : checked_type_ctx) :
-      Vtype.t -> (unit, TypingError.t) Result.t =
+  let rec check_vtype ~(source_position : Frontend.source_position option)
+      (ctx : checked_type_ctx) : Vtype.t -> (unit, TypingError.t) Result.t =
     let open Result in
     function
     | VTypeInt | VTypeBool | VTypeUnit -> Ok ()
     | VTypePair (t1, t2) | VTypeFun (t1, t2) ->
-        check_vtype ctx t1 >>= fun () -> check_vtype ctx t2
+        check_vtype ~source_position ctx t1 >>= fun () ->
+        check_vtype ~source_position ctx t2
     | VTypeCustom vt_name ->
         if TypeCtx.find_type_defn_by_name ctx vt_name |> Option.is_some then
           Ok ()
-        else TypingError.UndefinedTypeName vt_name |> Error
+        else (source_position, TypingError.UndefinedTypeName vt_name) |> Error
 
   let rec type_pattern
+      ~(get_source_position : 'tag_p -> Frontend.source_position option)
       (((type_ctx : checked_type_ctx), (var_ctx : VarCtx.t)) as ctx)
       (orig_p : 'tag_p Pattern.t) :
       ((Vtype.t * 'tag_p) Pattern.t * VarCtx.t, TypingError.t) Result.t =
@@ -631,13 +687,16 @@ module MakeStd
     let ( <: ) = TypeCtx.subtype type_ctx in
     match orig_p with
     | PatName (v, x_name, x_t) ->
-        check_vtype type_ctx x_t >>= fun () ->
+        check_vtype ~source_position:(get_source_position v) type_ctx x_t
+        >>= fun () ->
         if VarCtx.exists var_ctx x_name then
-          Error (PatternMultipleVariableDefinitions x_name)
+          Error
+            (get_source_position v, PatternMultipleVariableDefinitions x_name)
         else Ok (PatName ((x_t, v), x_name, x_t), VarCtx.add var_ctx x_name x_t)
     | PatPair (v, p1, p2) ->
-        type_pattern ctx p1 >>= fun (p1_typed, var_ctx_from_p1) ->
-        type_pattern (type_ctx, var_ctx_from_p1) p2
+        type_pattern ~get_source_position ctx p1
+        >>= fun (p1_typed, var_ctx_from_p1) ->
+        type_pattern ~get_source_position (type_ctx, var_ctx_from_p1) p2
         >>= fun (p2_typed, var_ctx_final) ->
         let p1_t = Pattern.node_val p1_typed |> fst in
         let p2_t = Pattern.node_val p2_typed |> fst in
@@ -646,9 +705,11 @@ module MakeStd
             var_ctx_final )
     | PatConstructor (v, c_name, p) -> (
         match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
-        | None -> Error (UndefinedVariantTypeConstructor c_name)
+        | None ->
+            Error (get_source_position v, UndefinedVariantTypeConstructor c_name)
         | Some ((vt_name, _), (_, c_t)) ->
-            type_pattern ctx p >>= fun (p_typed, var_ctx_from_p) ->
+            type_pattern ~get_source_position ctx p
+            >>= fun (p_typed, var_ctx_from_p) ->
             let p_t = Pattern.node_val p_typed |> fst in
             c_t <: p_t >>= fun subpattern_type_matches ->
             if subpattern_type_matches then
@@ -657,10 +718,14 @@ module MakeStd
                     ((Vtype.VTypeCustom vt_name, v), c_name, p_typed),
                   var_ctx_from_p )
             else
-              Error (PatternTypeMismatch (Pattern.to_plain_pattern p, c_t, p_t))
-        )
+              Error
+                ( get_source_position v,
+                  PatternTypeMismatch (Pattern.to_plain_t p, c_t, p_t) ))
 
-  let rec type_expr (((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) as ctx)
+  let rec type_expr
+      ~(get_source_position :
+         ('tag_e, 'tag_p) Either.t -> Frontend.source_position option)
+      (((type_ctx : TypeCtx.t), (var_ctx : VarCtx.t)) as ctx)
       (orig_e : ('tag_e, 'tag_p) Expr.t) :
       (('tag_e, 'tag_p) Expr.typed_t, TypingError.t) Result.t =
     let open Result in
@@ -672,7 +737,11 @@ module MakeStd
         (e : (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t) :
         ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t, TypingError.t) Result.t =
       e_type e <: exp >>= fun types_valid ->
-      if types_valid then Ok e else Error (TypeMismatch (exp, e_type e, msg))
+      if types_valid then Ok e
+      else
+        Error
+          ( get_source_position (e |> Expr.node_val |> snd |> First),
+            TypeMismatch (exp, e_type e, msg) )
     in
     let type_binop ?(msg : string option)
         (recomp :
@@ -683,8 +752,8 @@ module MakeStd
         (e1 : ('tag_e, 'tag_p) Expr.t) (e2 : ('tag_e, 'tag_p) Expr.t)
         (req_t : Vtype.t) :
         ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t, TypingError.t) Result.t =
-      type_expr ctx e1 >>= fun e1' ->
-      type_expr ctx e2 >>= fun e2' ->
+      type_expr ~get_source_position ctx e1 >>= fun e1' ->
+      type_expr ~get_source_position ctx e2 >>= fun e2' ->
       be_of_type
         ?msg:(Option.map msg ~f:(fun s -> sprintf "%s (first arg)" s))
         req_t e1'
@@ -701,7 +770,7 @@ module MakeStd
           (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t)
         (e1 : ('tag_e, 'tag_p) Expr.t) (req_t : Vtype.t) :
         ((Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t, TypingError.t) Result.t =
-      type_expr ctx e1 >>= fun e1' ->
+      type_expr ~get_source_position ctx e1 >>= fun e1' ->
       be_of_type ?msg req_t e1' >>= fun _ -> Ok (recomp e1' (e_type e1'))
     in
     let type_int_compare ?(msg : string option)
@@ -710,14 +779,20 @@ module MakeStd
           (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t ->
           (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Expr.t)
         (e1 : ('tag_e, 'tag_p) Expr.t) (e2 : ('tag_e, 'tag_p) Expr.t) =
-      type_expr ctx e1 >>= fun e1' ->
-      type_expr ctx e2 >>= fun e2' ->
+      type_expr ~get_source_position ctx e1 >>= fun e1' ->
+      type_expr ~get_source_position ctx e2 >>= fun e2' ->
       let t1 = e_type e1' in
       let t2 = e_type e2' in
       match (t1, t2) with
       | VTypeInt, VTypeInt -> Ok (recomp e1' e2')
-      | VTypeInt, _ -> Error (TypeMismatch (VTypeInt, t2, msg))
-      | _, _ -> Error (TypeMismatch (VTypeInt, t1, msg))
+      | VTypeInt, _ ->
+          Error
+            ( get_source_position (e2 |> Expr.node_val |> First),
+              TypeMismatch (VTypeInt, t2, msg) )
+      | _, _ ->
+          Error
+            ( get_source_position (e1 |> Expr.node_val |> First),
+              TypeMismatch (VTypeInt, t1, msg) )
     in
     match orig_e with
     | UnitLit v -> Ok (UnitLit (VTypeUnit, v))
@@ -750,20 +825,23 @@ module MakeStd
           (fun e1' e2' t -> BAnd ((t, v), e1', e2'))
           e1 e2 VTypeBool
     | Pair (v, e1, e2) ->
-        type_expr ctx e1 >>= fun e1' ->
-        type_expr ctx e2 >>= fun e2' ->
+        type_expr ~get_source_position ctx e1 >>= fun e1' ->
+        type_expr ~get_source_position ctx e2 >>= fun e2' ->
         let t1 = e_type e1' in
         let t2 = e_type e2' in
         Ok (Expr.Pair ((Vtype.VTypePair (t1, t2), v), e1', e2'))
     | Eq (v, e1, e2) -> (
-        type_expr ctx e1 >>= fun e1' ->
-        type_expr ctx e2 >>= fun e2' ->
+        type_expr ~get_source_position ctx e1 >>= fun e1' ->
+        type_expr ~get_source_position ctx e2 >>= fun e2' ->
         let t1 = e_type e1' in
         let t2 = e_type e2' in
         match (t1, t2) with
         | VTypeInt, VTypeInt | VTypeBool, VTypeBool ->
             Ok (Expr.Eq ((Vtype.VTypeBool, v), e1', e2'))
-        | _, _ -> Error (EqualOperatorTypeMistmatch (t1, t2)))
+        | _, _ ->
+            Error
+              ( get_source_position (First v),
+                EqualOperatorTypeMistmatch (t1, t2) ))
     | Gt (v, e1, e2) ->
         type_int_compare ~msg:"Gt node"
           (fun e1' e2' -> Gt ((VTypeBool, v), e1', e2'))
@@ -781,31 +859,38 @@ module MakeStd
           (fun e1' e2' -> LtEq ((VTypeBool, v), e1', e2'))
           e1 e2
     | If (v, e1, e2, e3) ->
-        type_expr ctx e1 >>= fun e1' ->
+        type_expr ~get_source_position ctx e1 >>= fun e1' ->
         be_of_type ~msg:"If cond node" VTypeBool e1' >>= fun _ ->
-        type_expr ctx e2 >>= fun e2' ->
-        type_expr ctx e3 >>= fun e3' ->
+        type_expr ~get_source_position ctx e2 >>= fun e2' ->
+        type_expr ~get_source_position ctx e3 >>= fun e3' ->
         let t2 = e_type e2' in
         let t3 = e_type e3' in
         t2 <: t3 >>= fun t2_sub_t3 ->
         t3 <: t2 >>= fun t3_sub_t2 ->
         (if t2_sub_t3 then Ok t3
          else if t3_sub_t2 then Ok t2
-         else Error (TypingError.NoCommonRootType (t2, t3)))
+         else
+           Error
+             ( get_source_position (First v),
+               TypingError.NoCommonRootType (t2, t3) ))
         >>= fun t_out -> Ok (Expr.If ((t_out, v), e1', e2', e3'))
     | Var (v, xname) -> (
         match VarCtx.find var_ctx xname with
         | Some t -> Ok (Var ((t, v), xname))
-        | None -> Error (UndefinedVariable xname))
+        | None -> Error (get_source_position (First v), UndefinedVariable xname)
+        )
     | Let (v, xname, e1, e2) ->
-        type_expr ctx e1 >>= fun e1' ->
+        type_expr ~get_source_position ctx e1 >>= fun e1' ->
         let t1 = e_type e1' in
-        type_expr (type_ctx, VarCtx.add var_ctx xname t1) e2 >>= fun e2' ->
+        type_expr ~get_source_position
+          (type_ctx, VarCtx.add var_ctx xname t1)
+          e2
+        >>= fun e2' ->
         let t2 = e_type e2' in
         Ok (Expr.Let ((t2, v), xname, e1', e2'))
     | App (v, e1, e2) -> (
-        type_expr ctx e1 >>= fun e1' ->
-        type_expr ctx e2 >>= fun e2' ->
+        type_expr ~get_source_position ctx e1 >>= fun e1' ->
+        type_expr ~get_source_position ctx e2 >>= fun e2' ->
         let t1 = e_type e1' in
         let t2 = e_type e2' in
         match t1 with
@@ -813,10 +898,15 @@ module MakeStd
             t2 <: t11 >>= fun arg_type_valid ->
             if arg_type_valid then Ok (Expr.App ((t12, v), e1', e2'))
             else
-              Error (TypeMismatch (t11, t2, Some "App node function argument"))
-        | _ -> Error (ExpectedFunctionOf t1))
+              Error
+                ( get_source_position (e2 |> Expr.node_val |> First),
+                  TypeMismatch (t11, t2, Some "App node function argument") )
+        | _ ->
+            Error
+              ( get_source_position (e1 |> Expr.node_val |> First),
+                ExpectedFunctionOf t2 ))
     | Match (v, e, t_out, cs) ->
-        type_expr ctx e >>= fun e' ->
+        type_expr ~get_source_position ctx e >>= fun e' ->
         let t_in = e_type e' in
         (* Type the cases and check them against each other, as well as determining the type of the output *)
         Nonempty_list.fold_result_consume_init ~init:()
@@ -831,14 +921,18 @@ module MakeStd
             ->
             (* First, try type the pattern *)
             (* TODO - don't allow the case patterns to be PatName. Check that they are compound patterns *)
-            type_pattern (type_ctx, VarCtx.empty) p >>= fun (typed_p, p_ctx) ->
+            type_pattern
+              ~get_source_position:(fun p -> get_source_position (Second p))
+              (type_ctx, VarCtx.empty) p
+            >>= fun (typed_p, p_ctx) ->
             let p_t : Vtype.t = Pattern.node_val typed_p |> fst in
             (* Check the pattern's type *)
             p_t <: t_in >>= fun pattern_type_valid ->
             if pattern_type_valid then
               let case_ctx = VarCtx.append var_ctx p_ctx in
               (* Then, type the case's expression using the extended context *)
-              type_expr (type_ctx, case_ctx) c_e >>= fun c_e' ->
+              type_expr ~get_source_position (type_ctx, case_ctx) c_e
+              >>= fun c_e' ->
               let t_c_e = e_type c_e' in
               t_c_e <: t_out >>= fun case_t_compatible ->
               if case_t_compatible then
@@ -848,10 +942,13 @@ module MakeStd
                     Ok (Nonempty_list.cons (typed_p, c_e') cs_prev_rev)
               else
                 Error
-                  (TypeMismatch (t_out, t_c_e, Some "Match case expression type"))
+                  ( get_source_position (c_e |> Expr.node_val |> First),
+                    TypeMismatch
+                      (t_out, t_c_e, Some "Match case expression type") )
             else
               Error
-                (PatternTypeMismatch (Pattern.to_plain_pattern p, t_in, p_t)))
+                ( get_source_position (p |> Pattern.node_val |> Second),
+                  PatternTypeMismatch (Pattern.to_plain_t p, t_in, p_t) ))
           cs
         >>|
         fun (cs_typed_rev :
@@ -860,16 +957,22 @@ module MakeStd
               Nonempty_list.t)
         -> Expr.Match ((t_out, v), e', t_out, Nonempty_list.rev cs_typed_rev)
     | Constructor (v, c_name, e1) -> (
-        type_expr ctx e1 >>= fun e1' ->
+        type_expr ~get_source_position ctx e1 >>= fun e1' ->
         let t1 = e_type e1' in
         match TypeCtx.find_variant_type_with_constructor type_ctx c_name with
-        | None -> Error (UndefinedVariantTypeConstructor c_name)
+        | None ->
+            Error
+              ( get_source_position (First v),
+                UndefinedVariantTypeConstructor c_name )
         | Some ((vt_name, _), (_, c_t)) ->
             c_t <: t1 >>= fun subexpr_type_valid ->
             if subexpr_type_valid then
               Ok
                 (Expr.Constructor ((Vtype.VTypeCustom vt_name, v), c_name, e1'))
-            else Error (TypeMismatch (c_t, t1, Some "Constructor argument")))
+            else
+              Error
+                ( get_source_position (e1 |> Expr.node_val |> First),
+                  TypeMismatch (c_t, t1, Some "Constructor argument") ))
 
   type ('tag_e, 'tag_p) checking_type_ctx_acc = {
     types : StringSet.t;
@@ -893,7 +996,7 @@ module MakeStd
         } ~f:(fun acc td ->
         let td_name = CustomType.name td in
         if Set.mem acc.types td_name then
-          Error (TypingError.DuplicateTypeNameDefinition td_name)
+          Error (None, TypingError.DuplicateTypeNameDefinition td_name)
         else
           let acc : ('tag_e, 'tag_p) checking_type_ctx_acc =
             { acc with types = Set.add acc.types td_name }
@@ -904,8 +1007,9 @@ module MakeStd
               List.fold_result cs ~init:acc ~f:(fun acc (c_name, _) ->
                   if Set.mem acc.constructors c_name then
                     Error
-                      (TypingError.MultipleVariantTypeConstructorDefinitions
-                         c_name)
+                      ( None,
+                        TypingError.MultipleVariantTypeConstructorDefinitions
+                          c_name )
                   else
                     Ok
                       {
@@ -915,12 +1019,15 @@ module MakeStd
           | CustomType.QuotientType qt ->
               (* First, check that the base type is an existing type *)
               if Set.mem acc.types qt.base_type_name then Ok acc
-              else Error (UndefinedTypeName qt.base_type_name))
+              else Error (None, UndefinedTypeName qt.base_type_name))
           >>| fun acc ->
           { acc with type_defns_list = td :: acc.type_defns_list })
     >>= acc_to_checked_type_ctx
 
-  let type_eqcons ~(type_ctx : TypeCtx.t) ~(quotient_type_name : string)
+  let type_eqcons
+      ~(get_source_position :
+         ('tag_e, 'tag_p) Either.t -> Frontend.source_position option)
+      ~(type_ctx : TypeCtx.t) ~(quotient_type_name : string)
       (eqcons : ('tag_e, 'tag_p) QuotientType.eqcons) :
       (('tag_e, 'tag_p) QuotientType.typed_eqcons, TypingError.t) Result.t =
     let open Result in
@@ -930,23 +1037,30 @@ module MakeStd
     (* Create a variable context from only the bindings *)
     List.fold_result ~init:VarCtx.empty
       ~f:(fun acc_var_ctx (xname, xtype) ->
-        check_vtype type_ctx xtype >>| fun () ->
+        check_vtype ~source_position:None type_ctx xtype >>| fun () ->
         VarCtx.add acc_var_ctx xname xtype)
       eqcons.bindings
     >>= fun bindings_var_ctx ->
     (* Type the pattern *)
-    type_pattern (type_ctx, VarCtx.empty) body_pattern
+    type_pattern
+      ~get_source_position:(fun p -> get_source_position (Second p))
+      (type_ctx, VarCtx.empty) body_pattern
     >>= fun (typed_pattern, pattern_var_ctx) ->
     (* Check that all the defined variables in the pattern come from the bindings  *)
     List.fold_result ~init:()
       ~f:(fun () (xname, xtype) ->
         match VarCtx.find bindings_var_ctx xname with
         | Some ctx_xtype when Vtype.equal ctx_xtype xtype -> Ok ()
-        | _ -> Error (TypingError.EqconsVariableNotInBindings (xname, xtype)))
+        | _ ->
+            Error
+              ( get_source_position
+                  (typed_pattern |> Pattern.node_val |> snd |> Second),
+                TypingError.EqconsVariableNotInBindings (xname, xtype) ))
       (pattern_var_ctx |> VarCtx.to_list)
     >>= fun () ->
     (* Type the expression, with the bindings' variable context *)
-    type_expr (type_ctx, bindings_var_ctx) body_expr >>= fun typed_body ->
+    type_expr ~get_source_position (type_ctx, bindings_var_ctx) body_expr
+    >>= fun typed_body ->
     let pattern_t = typed_pattern |> Pattern.node_val |> fst in
     let expr_t = typed_body |> Expr.node_val |> fst in
     pattern_t <: quotient_type >>= fun pattern_t_valid ->
@@ -955,14 +1069,19 @@ module MakeStd
       if expr_t_valid then Ok { eqcons with body = (typed_pattern, typed_body) }
       else
         Error
-          (EqConsBodyExprTypeMismatch
-             (Expr.to_plain_expr body_expr, quotient_type, expr_t))
+          ( get_source_position (eqcons.body |> snd |> Expr.node_val |> First),
+            EqConsBodyExprTypeMismatch
+              (Expr.to_plain_t body_expr, quotient_type, expr_t) )
     else
       Error
-        (EqConsBodyPatternTypeMismatch
-           (Pattern.to_plain_pattern body_pattern, quotient_type, pattern_t))
+        ( get_source_position (eqcons.body |> fst |> Pattern.node_val |> Second),
+          EqConsBodyPatternTypeMismatch
+            (Pattern.to_plain_t body_pattern, quotient_type, pattern_t) )
 
-  let type_custom_types ~(type_ctx : TypeCtx.t)
+  let type_custom_types
+      ~(get_source_position :
+         ('tag_e, 'tag_p) Either.t -> Frontend.source_position option)
+      ~(type_ctx : TypeCtx.t)
       (ct_decls : ('tag_e, 'tag_p) Program.custom_type_decl list) =
     let open Result in
     List.map
@@ -972,7 +1091,9 @@ module MakeStd
             { ct_decl with ct = CustomType.VariantType vt } |> Ok
         | CustomType.QuotientType qt ->
             List.map
-              ~f:(type_eqcons ~type_ctx ~quotient_type_name:qt.name)
+              ~f:
+                (type_eqcons ~get_source_position ~type_ctx
+                   ~quotient_type_name:qt.name)
               qt.eqconss
             |> Result.all
             >>| fun eqconss ->
@@ -987,7 +1108,10 @@ module MakeStd
     defns_var_ctx : VarCtx.t;
   }
 
-  let type_program (prog : ('tag_e, 'tag_p) Program.t) :
+  let type_program
+      ~(get_source_position :
+         ('tag_e, 'tag_p) Either.t -> Frontend.source_position option)
+      (prog : ('tag_e, 'tag_p) Program.t) :
       (('tag_e, 'tag_p) typed_program, TypingError.t) Result.t =
     let open Result in
     TypeCtx.create
@@ -995,7 +1119,8 @@ module MakeStd
         (prog.custom_types
         |> List.map ~f:(fun Program.{ private_flag = _; ct } -> ct))
     >>= fun type_ctx ->
-    type_custom_types ~type_ctx prog.custom_types >>= fun custom_types_typed ->
+    type_custom_types ~get_source_position ~type_ctx prog.custom_types
+    >>= fun custom_types_typed ->
     check_type_ctx type_ctx >>= fun type_ctx ->
     let ( <: ) = TypeCtx.subtype type_ctx in
     List.fold_result (* Check the top-level definitions *)
@@ -1003,7 +1128,9 @@ module MakeStd
       ~f:(fun acc defn ->
         (* Check the definition's name doesn't already exist *)
         if VarCtx.exists acc.defns_var_ctx defn.name then
-          Error (TypingError.MultipleTopLevelNameDefinitions defn.name)
+          Error
+            ( get_source_position (defn.body |> Expr.node_val |> First),
+              TypingError.MultipleTopLevelNameDefinitions defn.name )
         else
           (* Type the TLD's body *)
           let body_var_ctx =
@@ -1016,7 +1143,8 @@ module MakeStd
                 (VTypeFun (snd defn.param, defn.return_t))
             else Fn.id
           in
-          type_expr (type_ctx, body_var_ctx) defn.body >>= fun typed_body ->
+          type_expr ~get_source_position (type_ctx, body_var_ctx) defn.body
+          >>= fun typed_body ->
           let typed_body_t = typed_body |> Expr.node_val |> fst in
           typed_body_t <: defn.return_t >>= fun return_t_valid ->
           if return_t_valid then
@@ -1028,15 +1156,16 @@ module MakeStd
               }
           else
             Error
-              (TypeMismatch
-                 ( defn.return_t,
-                   typed_body_t,
-                   Some "Top-level defintion return type" )))
+              ( get_source_position (defn.body |> Expr.node_val |> First),
+                TypeMismatch
+                  ( defn.return_t,
+                    typed_body_t,
+                    Some "Top-level defintion return type" ) ))
       prog.top_level_defns
     >>= fun tld_fold_final_acc ->
     let var_ctx = tld_fold_final_acc.defns_var_ctx in
     let tlds = tld_fold_final_acc.defns_rev |> List.rev in
-    type_expr (type_ctx, var_ctx) prog.e >>| fun typed_e ->
+    type_expr ~get_source_position (type_ctx, var_ctx) prog.e >>| fun typed_e ->
     ( Program.
         {
           custom_types = custom_types_typed;
@@ -1059,16 +1188,23 @@ module StdSimpleTypeChecker :
   MakeStd (TypeContext.StdSetTypeContext) (VarContext.ListTypingVarContext)
 
 let type_expr ~(type_ctx : StdSimpleTypeChecker.TypeCtx.t)
+    ~(get_source_position :
+       ('tag_e, 'tag_p) Either.t -> Frontend.source_position option)
     (e : ('tag_e, 'tag_p) StdSimpleTypeChecker.Expr.t) :
     ( ('tag_e, 'tag_p) StdSimpleTypeChecker.Expr.typed_t,
       StdSimpleTypeChecker.TypingError.t )
     Result.t =
   let open Result in
   StdSimpleTypeChecker.check_type_ctx type_ctx >>= fun type_ctx ->
-  StdSimpleTypeChecker.type_expr (type_ctx, StdSimpleTypeChecker.VarCtx.empty) e
+  StdSimpleTypeChecker.type_expr ~get_source_position
+    (type_ctx, StdSimpleTypeChecker.VarCtx.empty)
+    e
 
-let type_program (prog : ('tag_e, 'tag_p) Program.StdProgram.t) :
+let type_program
+    ~(get_source_position :
+       ('tag_e, 'tag_p) Either.t -> Frontend.source_position option)
+    (prog : ('tag_e, 'tag_p) Program.StdProgram.t) :
     ( ('tag_e, 'tag_p) StdSimpleTypeChecker.typed_program,
       StdSimpleTypeChecker.TypingError.t )
     Result.t =
-  StdSimpleTypeChecker.type_program prog
+  StdSimpleTypeChecker.type_program ~get_source_position prog

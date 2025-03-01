@@ -87,9 +87,9 @@ let override_equal_exec_res (a : ProgramExecutor.exec_res)
 let override_equal_typing_error (a : TypeChecker.TypingError.t)
     (b : TypeChecker.TypingError.t) : bool =
   match (a, b) with
-  | TypeMismatch (ta1, ta2, _), TypeMismatch (tb1, tb2, _) ->
+  | (_, TypeMismatch (ta1, ta2, _)), (_, TypeMismatch (tb1, tb2, _)) ->
       Vtype.equal ta1 tb1 && Vtype.equal ta2 tb2
-  | _ -> TypeChecker.TypingError.equal a b
+  | _ -> TypeChecker.TypingError.equal_variant a b
 
 let vtype_testable : Vtype.t Alcotest.testable =
   Alcotest.testable (Fmt.of_to_string Vtype.to_source_code) Vtype.equal
@@ -141,6 +141,12 @@ let std_typing_error_testable : TypeChecker.TypingError.t Alcotest.testable =
     (Fmt.of_to_string TypeChecker.TypingError.print)
     override_equal_typing_error
 
+let std_typing_error_err_testable :
+    TypeChecker.TypingError.err Alcotest.testable =
+  Alcotest.testable
+    (Fmt.of_to_string (fun err -> TypeChecker.TypingError.print (None, err)))
+    (fun a b -> override_equal_typing_error (None, a) (None, b))
+
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
   include
@@ -191,7 +197,7 @@ end = struct
 
   let create ~(custom_types : ('tag_e, 'tag_p) CustomType.t list) :
       (t, TypeChecker.TypingError.t) Result.t =
-    Ok (List.map ~f:CustomType.to_plain_custom_type custom_types)
+    Ok (List.map ~f:CustomType.to_plain_t custom_types)
 
   let find_type_defn_by_name ctx td_name =
     List.find ctx ~f:(fun x_td -> equal_string (CustomType.name x_td) td_name)
@@ -209,8 +215,8 @@ end = struct
           >>| fun c -> (vt, c)
       | CustomType.QuotientType _ -> None)
 
-  let rec subtype (ctx : t) (t1 : Vtype.t) (t2 : Vtype.t) :
-      (bool, TypeChecker.TypingError.t) Result.t =
+  let rec subtype ?(source_position : Frontend.source_position option) (ctx : t)
+      (t1 : Vtype.t) (t2 : Vtype.t) : (bool, TypingError.t) Result.t =
     let open Result in
     match (t1, t2) with
     | VTypeInt, VTypeInt | VTypeBool, VTypeBool | VTypeUnit, VTypeUnit ->
@@ -229,11 +235,11 @@ end = struct
     | VTypeCustom c1_name, VTypeCustom c2_name -> (
         find_type_defn_by_name ctx c1_name
         |> Result.of_option
-             ~error:(TypeChecker.TypingError.UndefinedTypeName c1_name)
+             ~error:(source_position, TypingError.UndefinedTypeName c1_name)
         >>= fun ct1 ->
         find_type_defn_by_name ctx c2_name
         |> Result.of_option
-             ~error:(TypeChecker.TypingError.UndefinedTypeName c2_name)
+             ~error:(source_position, TypingError.UndefinedTypeName c2_name)
         >>= fun ct2 ->
         match (ct1, ct2) with
         | VariantType (vt1_name, _), VariantType (vt2_name, _) ->
@@ -249,10 +255,10 @@ end = struct
   let add_variant (ctx : t) (vt : VariantType.t) : t = VariantType vt :: ctx
 
   let add_quotient (ctx : t) (qt : ('tag_e, 'tag_p) QuotientType.t) : t =
-    QuotientType (QuotientType.to_plain_quotient_type qt) :: ctx
+    QuotientType (QuotientType.to_plain_t qt) :: ctx
 
   let type_defns_to_ordered_list = Fn.id
-  let from_list = List.map ~f:CustomType.to_plain_custom_type
+  let from_list = List.map ~f:CustomType.to_plain_t
 
   let variant_gen_opt (ctx : t) : VariantType.t QCheck.Gen.t option =
     let open QCheck.Gen in

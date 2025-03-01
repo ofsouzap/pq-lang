@@ -39,7 +39,7 @@ let test_cases_expr_typing : unit Alcotest.test_case list =
   let create_test
       ( (type_ctx : (TypeCtx.t, TypeChecker.TypingError.t) Result.t option),
         (e : Expr.plain_t),
-        (t : (Vtype.t, TypingError.t) Result.t) ) : unit Alcotest.test_case =
+        (t : (Vtype.t, TypingError.err) Result.t) ) : unit Alcotest.test_case =
     ( Expr.to_source_code e,
       `Quick,
       fun () ->
@@ -51,15 +51,18 @@ let test_cases_expr_typing : unit Alcotest.test_case list =
                 (sprintf "Error creating type context: %s"
                    (TypingError.print err))
         in
-        let out = Pq_lang.TypeChecker.type_expr ~type_ctx e in
+        let out =
+          Pq_lang.TypeChecker.type_expr ~type_ctx
+            ~get_source_position:(Fn.const None) e
+        in
         match (out, t) with
         | Ok e_typed, Ok exp_t ->
             let out_t = e_typed |> Expr.node_val |> fst in
             Alcotest.check vtype_testable "Resulting type incorrect" exp_t out_t
         | Ok _, Error _ -> Alcotest.fail "Expected typing error but got type"
         | Error _, Ok _ -> Alcotest.fail "Expected type but got typing error"
-        | Error t_err, Error exp_err ->
-            Alcotest.check std_typing_error_testable
+        | Error (_, t_err), Error exp_err ->
+            Alcotest.check std_typing_error_err_testable
               "Returned errors mismatched" exp_err t_err )
   in
   List.map ~f:create_test
@@ -318,7 +321,7 @@ let test_cases_expr_typing_full_check : unit Alcotest.test_case list =
         let out =
           Pq_lang.TypeChecker.type_expr
             ~type_ctx:(Option.value ~default:TypeCtx.empty type_ctx)
-            e
+            ~get_source_position:(Fn.const None) e
         in
         match out with
         | Ok e_typed ->
@@ -376,7 +379,7 @@ let test_cases_typing_with_var_ctx : unit Alcotest.test_case list =
   let create_test
       ( (ctx_list : (string * Vtype.t) list),
         (e : Expr.plain_t),
-        (t : (Vtype.t, TypingError.t) Result.t) ) : unit Alcotest.test_case =
+        (t : (Vtype.t, TypingError.err) Result.t) ) : unit Alcotest.test_case =
     let ctx =
       List.fold ~init:VarCtx.empty
         ~f:(fun acc (xname, xtype) -> VarCtx.add acc xname xtype)
@@ -390,7 +393,9 @@ let test_cases_typing_with_var_ctx : unit Alcotest.test_case list =
       `Quick,
       fun () ->
         let out =
-          TypeChecker.type_expr (TypeChecker.checked_empty_type_ctx, ctx) e
+          TypeChecker.type_expr ~get_source_position:(Fn.const None)
+            (TypeChecker.checked_empty_type_ctx, ctx)
+            e
         in
         match (out, t) with
         | Ok e_typed, Ok exp_t ->
@@ -398,8 +403,8 @@ let test_cases_typing_with_var_ctx : unit Alcotest.test_case list =
             Alcotest.check vtype_testable "Type incorrect" exp_t out_t
         | Ok _, Error _ -> Alcotest.fail "Expected typing error but got type"
         | Error _, Ok _ -> Alcotest.fail "Expected type but got typing error"
-        | Error t_err, Error exp_err ->
-            Alcotest.check std_typing_error_testable "Typing error mismatch"
+        | Error (_, t_err), Error exp_err ->
+            Alcotest.check std_typing_error_err_testable "Typing error mismatch"
               exp_err t_err )
   in
   List.map ~f:create_test
@@ -754,8 +759,8 @@ let test_cases_typing_maintains_structure : unit Alcotest.test_case =
                TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
              with
              | Ok e_typed ->
-                 let plain_e = Expr.to_plain_expr e in
-                 let plain_typed_e = e_typed |> Expr.to_plain_expr in
+                 let plain_e = Expr.to_plain_t e in
+                 let plain_typed_e = e_typed |> Expr.to_plain_t in
                  Expr.equal_plain_t plain_e plain_typed_e
              | Error _ -> false))) *)
 
