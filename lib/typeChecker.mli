@@ -4,6 +4,8 @@ module TypingError : sig
     module Pattern : Pattern.S
     module Expr : Expr.S
 
+    (* TODO - include information about source position of errors *)
+
     type t =
       | UndefinedVariable of string
           (** A variable was referenced that isn't defined in the scope *)
