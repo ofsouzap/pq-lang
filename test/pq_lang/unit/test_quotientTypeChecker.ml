@@ -16,7 +16,10 @@ let manual_tests : unit Alcotest.test_case list =
                  sprintf "Frontend error: %s\n"
                    (Frontend.sexp_of_frontend_error err |> Sexp.to_string_hum))
           >>= fun inp_prog ->
-          TestingTypeChecker.type_program inp_prog
+          TestingTypeChecker.type_program
+            ~get_source_position:(function
+              | First v -> Some v | Second v -> Some v)
+            inp_prog
           |> Result.map_error ~f:(fun err ->
                  sprintf "Typing error: %s\n"
                    (TypeChecker.TypingError.print err))

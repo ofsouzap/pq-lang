@@ -16,7 +16,9 @@ let () =
                | LexingError c -> sprintf "Lexing error: %c" c
                | ParsingError -> "Parsing error"))
     >>= fun prog ->
-    TypeChecker.type_program prog
+    TypeChecker.type_program
+      ~get_source_position:(function First v -> Some v | Second v -> Some v)
+      prog
     |> Result.map_error ~f:(fun err ->
            sprintf "Typing error: %s" (TypeChecker.TypingError.print err))
     >>= fun tp ->

@@ -1,12 +1,12 @@
+open Core
+
 (** Typing errors *)
 module TypingError : sig
   module type S = sig
     module Pattern : Pattern.S
     module Expr : Expr.S
 
-    (* TODO - include information about source position of errors *)
-
-    type t =
+    type err =
       | UndefinedVariable of string
           (** A variable was referenced that isn't defined in the scope *)
       | EqconsVariableNotInBindings of string * Vtype.t
@@ -48,6 +48,8 @@ module TypingError : sig
           (** The specified variant type constructor name has been defined
               multiple times *)
     [@@deriving sexp, equal]
+
+    type t = Frontend.source_position option * err
 
     val equal_variant : t -> t -> bool
     val print : t -> string
@@ -95,7 +97,12 @@ module TypeContext : sig
     val type_defns_to_ordered_list : t -> CustomType.plain_t list
 
     (** Check if one type is a subtype of another *)
-    val subtype : t -> Vtype.t -> Vtype.t -> (bool, TypingError.t) Result.t
+    val subtype :
+      ?source_position:Frontend.source_position ->
+      t ->
+      Vtype.t ->
+      Vtype.t ->
+      (bool, TypingError.t) Result.t
   end
 
   module MakeSet
@@ -182,17 +189,23 @@ module type S = sig
 
   (** Check that a Vtype.t is valid in the given context *)
   val check_vtype :
-    checked_type_ctx -> Vtype.t -> (unit, TypingError.t) Result.t
+    source_position:Frontend.source_position option ->
+    checked_type_ctx ->
+    Vtype.t ->
+    (unit, TypingError.t) Result.t
 
   (** Type checks a pattern in the given context, returning either the pattern's
       type and declared variables, or a pattern typing error *)
   val type_pattern :
+    get_source_position:('tag_p -> Frontend.source_position option) ->
     checked_type_ctx * VarCtx.t ->
     'tag_p Pattern.t ->
     ((Vtype.t * 'tag_p) Pattern.t * VarCtx.t, TypingError.t) Result.t
 
   (** Type checks a single expression in the given context *)
   val type_expr :
+    get_source_position:
+      (('tag_e, 'tag_p) Either.t -> Frontend.source_position option) ->
     checked_type_ctx * VarCtx.t ->
     ('tag_e, 'tag_p) Expr.t ->
     (('tag_e, 'tag_p) Expr.typed_t, TypingError.t) Result.t
@@ -203,6 +216,8 @@ module type S = sig
   (** Type checks a program in the given context, returning either a typed
       program or a typing error *)
   val type_program :
+    get_source_position:
+      (('tag_e, 'tag_p) Either.t -> Frontend.source_position option) ->
     ('tag_e, 'tag_p) Program.t ->
     (('tag_e, 'tag_p) typed_program, TypingError.t) Result.t
 end
@@ -236,6 +251,8 @@ module StdSimpleTypeChecker :
 (** Type program using the default context and program implementations *)
 val type_expr :
   type_ctx:StdSimpleTypeChecker.TypeCtx.t ->
+  get_source_position:
+    (('tag_e, 'tag_p) Either.t -> Frontend.source_position option) ->
   ('tag_e, 'tag_p) StdSimpleTypeChecker.Expr.t ->
   ( ('tag_e, 'tag_p) StdSimpleTypeChecker.Expr.typed_t,
     StdSimpleTypeChecker.TypingError.t )
@@ -243,6 +260,8 @@ val type_expr :
 
 (** Type program using the default context implementations *)
 val type_program :
+  get_source_position:
+    (('tag_e, 'tag_p) Either.t -> Frontend.source_position option) ->
   ('tag_e, 'tag_p) StdSimpleTypeChecker.Program.t ->
   ( ('tag_e, 'tag_p) StdSimpleTypeChecker.typed_program,
     StdSimpleTypeChecker.TypingError.t )

@@ -31,7 +31,9 @@ let process_pq_file (filename : string) : (Program.plain_t, error_exit) Result.t
                | LexingError c -> sprintf "Lexing error: %c" c
                | ParsingError -> "Parsing error") ))
   >>= fun prog ->
-  TypeChecker.type_program prog
+  TypeChecker.type_program
+    ~get_source_position:(function First v -> Some v | Second v -> Some v)
+    prog
   |> Result.map_error ~f:(fun err ->
          ( ExitCode 3,
            sprintf "Typing error:\n%s" (TypeChecker.TypingError.print err) ))

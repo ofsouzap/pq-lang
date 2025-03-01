@@ -87,9 +87,9 @@ let override_equal_exec_res (a : ProgramExecutor.exec_res)
 let override_equal_typing_error (a : TypeChecker.TypingError.t)
     (b : TypeChecker.TypingError.t) : bool =
   match (a, b) with
-  | TypeMismatch (ta1, ta2, _), TypeMismatch (tb1, tb2, _) ->
+  | (_, TypeMismatch (ta1, ta2, _)), (_, TypeMismatch (tb1, tb2, _)) ->
       Vtype.equal ta1 tb1 && Vtype.equal ta2 tb2
-  | _ -> TypeChecker.TypingError.equal a b
+  | _ -> TypeChecker.TypingError.equal_variant a b
 
 let vtype_testable : Vtype.t Alcotest.testable =
   Alcotest.testable (Fmt.of_to_string Vtype.to_source_code) Vtype.equal
@@ -140,6 +140,12 @@ let std_typing_error_testable : TypeChecker.TypingError.t Alcotest.testable =
   Alcotest.testable
     (Fmt.of_to_string TypeChecker.TypingError.print)
     override_equal_typing_error
+
+let std_typing_error_err_testable :
+    TypeChecker.TypingError.err Alcotest.testable =
+  Alcotest.testable
+    (Fmt.of_to_string (fun err -> TypeChecker.TypingError.print (None, err)))
+    (fun a b -> override_equal_typing_error (None, a) (None, b))
 
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
@@ -209,8 +215,8 @@ end = struct
           >>| fun c -> (vt, c)
       | CustomType.QuotientType _ -> None)
 
-  let rec subtype (ctx : t) (t1 : Vtype.t) (t2 : Vtype.t) :
-      (bool, TypeChecker.TypingError.t) Result.t =
+  let rec subtype ?(source_position : Frontend.source_position option) (ctx : t)
+      (t1 : Vtype.t) (t2 : Vtype.t) : (bool, TypingError.t) Result.t =
     let open Result in
     match (t1, t2) with
     | VTypeInt, VTypeInt | VTypeBool, VTypeBool | VTypeUnit, VTypeUnit ->
@@ -229,11 +235,11 @@ end = struct
     | VTypeCustom c1_name, VTypeCustom c2_name -> (
         find_type_defn_by_name ctx c1_name
         |> Result.of_option
-             ~error:(TypeChecker.TypingError.UndefinedTypeName c1_name)
+             ~error:(source_position, TypingError.UndefinedTypeName c1_name)
         >>= fun ct1 ->
         find_type_defn_by_name ctx c2_name
         |> Result.of_option
-             ~error:(TypeChecker.TypingError.UndefinedTypeName c2_name)
+             ~error:(source_position, TypingError.UndefinedTypeName c2_name)
         >>= fun ct2 ->
         match (ct1, ct2) with
         | VariantType (vt1_name, _), VariantType (vt2_name, _) ->

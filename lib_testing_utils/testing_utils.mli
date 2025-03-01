@@ -73,6 +73,9 @@ val std_executor_error_testable : ProgramExecutor.exec_err Alcotest.testable
 val std_executor_res_testable : ProgramExecutor.exec_res Alcotest.testable
 val std_typing_error_testable : TypeChecker.TypingError.t Alcotest.testable
 
+val std_typing_error_err_testable :
+  TypeChecker.TypingError.err Alcotest.testable
+
 (** Implementation of a type context useful for tests *)
 module TestingTypeCtx : sig
   include
