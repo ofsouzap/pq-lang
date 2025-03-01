@@ -4,24 +4,30 @@ open Utils
 module type S = sig
   module Smt : SmtIntf.S
 
+  type node_tag = { source_pos : Frontend.source_position; t : Vtype.t }
+
   type quotient_typing_error =
     | SmtUnknownResult
     | PatternFlatteningError of FlatPattern.flattening_error
     | SmtIntfError of Smt.smt_intf_error
   [@@deriving sexp, equal]
 
-  type quotient_type_checking_failure [@@deriving sexp, equal]
+  module QuotientTypeCheckingFailure : sig
+    type t [@@deriving sexp, equal]
 
-  (** Print a quotient type checking failure for a human reader *)
-  val print_quotient_type_checking_failure :
-    quotient_type_checking_failure -> string
+    (** Get the source position at which the problematic match case is *)
+    val get_match_case_source_pos : t -> Frontend.source_position
+
+    (** Print a quotient type checking failure for a human reader *)
+    val print : t -> string
+  end
 
   (** Check if a program's quotient type usage is valid. Returns a result with
       the Ok constructor containing another result describing the actual result
       of the checking *)
   val check_program :
-    Smt.tag_program ->
-    ( (unit, quotient_type_checking_failure) Result.t,
+    (node_tag, node_tag) Program.StdProgram.t ->
+    ( (unit, QuotientTypeCheckingFailure.t) Result.t,
       quotient_typing_error )
     Result.t
 end
@@ -37,6 +43,35 @@ module MakeZ3 : S = struct
   module QuotientType = QuotientType.StdQuotientType
   module CustomType = CustomType.StdCustomType
   module Program = Program.StdProgram
+
+  type node_tag = { source_pos : Frontend.source_position; t : Vtype.t }
+  [@@deriving sexp, equal]
+
+  let node_tag_to_smt_pattern_tag { source_pos = _; t } : Smt.pattern_tag =
+    { t }
+
+  let node_tag_to_smt_expr_tag { source_pos = _; t } : Smt.expr_tag = { t }
+
+  type tag_pattern = node_tag Pattern.t [@@deriving sexp, equal]
+  type tag_expr = (node_tag, node_tag) Expr.t [@@deriving sexp, equal]
+  type tag_unifier = (node_tag, node_tag) Unifier.t [@@deriving sexp, equal]
+
+  type tag_quotient_type = (node_tag, node_tag) QuotientType.t
+  [@@deriving sexp, equal]
+
+  type tag_quotient_type_eqcons = (node_tag, node_tag) QuotientType.eqcons
+  [@@deriving sexp, equal]
+
+  type tag_program = (node_tag, node_tag) Program.t [@@deriving sexp, equal]
+
+  type tag_flat_expr = (node_tag, node_tag) FlatPattern.FlatExpr.t
+  [@@deriving sexp, equal]
+
+  let tag_flat_expr_to_smt_flat_expr (e : tag_flat_expr) :
+      (Smt.expr_tag, Smt.pattern_tag) FlatPattern.FlatExpr.t =
+    e
+    |> FlatPattern.FlatExpr.fmap ~f:node_tag_to_smt_expr_tag
+    |> FlatPattern.FlatExpr.fmap_pattern ~f:node_tag_to_smt_pattern_tag
 
   type quotient_typing_error =
     | SmtUnknownResult
@@ -57,8 +92,8 @@ module MakeZ3 : S = struct
     (new_name, Set.add existing_names new_name)
 
   let use_fresh_names_for_eqcons ~(existing_names : StringSet.t)
-      (eqcons : Smt.tag_quotient_type_eqcons) :
-      StringSet.t * Smt.tag_quotient_type_eqcons =
+      (eqcons : tag_quotient_type_eqcons) :
+      StringSet.t * tag_quotient_type_eqcons =
     List.fold ~init:(existing_names, [], [])
       ~f:(fun (existing_names, acc_map, acc_bindings_rev) (xname, xtype) ->
         let xname', existing_names =
@@ -81,20 +116,23 @@ module MakeZ3 : S = struct
               renames_list;
         } )
 
-  type quotient_type_checking_failure = {
-    eqcons : Smt.tag_quotient_type_eqcons;
-    case_p : Smt.tag_pattern;
-    l : Smt.tag_expr;
-    r : Smt.tag_expr;
-    model_mapping : (string * string) list;
-  }
-  [@@deriving sexp, equal]
+  module QuotientTypeCheckingFailure = struct
+    type t = {
+      eqcons : tag_quotient_type_eqcons;
+      case_p : tag_pattern;
+      l : tag_expr;
+      r : tag_expr;
+      model_mapping : (string * string) list;
+    }
+    [@@deriving sexp, equal]
 
-  let print_quotient_type_checking_failure
-      ({ eqcons; case_p; l; r; model_mapping } : quotient_type_checking_failure)
-      : string =
-    sprintf
-      {|Considering the given equality constructor on the match case with the given pattern, we should have that the below "Side L" and "Side R" are equivalent, but they are not, as shown by the example interpretation below.
+    let get_match_case_source_pos ({ case_p; _ } : t) : Frontend.source_position
+        =
+      (Pattern.node_val case_p).source_pos
+
+    let print ({ eqcons; case_p; l; r; model_mapping } : t) : string =
+      sprintf
+        {|Considering the given equality constructor on the match case with the given pattern, we should have that the below "Side L" and "Side R" are equivalent, but they are not, as shown by the example interpretation below.
 
 ====================
 Equality Constructor
@@ -126,25 +164,26 @@ Falsifying Interpretation
 
 %s
 |}
-      (eqcons |> QuotientType.eqcons_to_source_code)
-      (case_p |> Pattern.to_source_code)
-      (l |> Expr.to_source_code) (r |> Expr.to_source_code)
-      (model_mapping
-      |> List.map ~f:(fun (xname, xe) -> sprintf "%s = %s" xname xe)
-      |> String.concat ~sep:"\n")
+        (eqcons |> QuotientType.eqcons_to_source_code)
+        (case_p |> Pattern.to_source_code)
+        (l |> Expr.to_source_code) (r |> Expr.to_source_code)
+        (model_mapping
+        |> List.map ~f:(fun (xname, xe) -> sprintf "%s = %s" xname xe)
+        |> String.concat ~sep:"\n")
+  end
 
   type check_result =
     | Err of quotient_typing_error
-    | Failure of quotient_type_checking_failure
+    | Failure of QuotientTypeCheckingFailure.t
   [@@deriving sexp, equal]
 
   let perform_quotient_match_check ~(existing_names : StringSet.t)
-      ~(quotient_type : Smt.tag_quotient_type) ~(match_node_v : Smt.expr_tag)
+      ~(quotient_type : tag_quotient_type) ~(match_node_v : node_tag)
       ~(match_t_out : Vtype.t)
-      ~(cases : (Smt.tag_pattern * Smt.tag_expr) Nonempty_list.t)
-      (state : Smt.State.t) : (StringSet.t, check_result) Result.t =
+      ~(cases : (tag_pattern * tag_expr) Nonempty_list.t) (state : Smt.State.t)
+      : (StringSet.t, check_result) Result.t =
     let open Result in
-    let reform_match_with_arg (e1 : Smt.tag_expr) : Smt.tag_expr =
+    let reform_match_with_arg (e1 : tag_expr) : tag_expr =
       Match (match_node_v, e1, match_t_out, cases)
     in
     (* Iterating through each case of the match *)
@@ -167,13 +206,10 @@ Falsifying Interpretation
           (List.filter_map fresh_name_eqconss ~f:(fun eqcons ->
                Unifier.simply_find_unifier ~bound_names_in_from:StringSet.empty
                  ~from_expr:
-                   (case_p
-                   |> std_expr_of_std_pattern
-                        ~convert_tag:Smt.pattern_tag_to_expr_tag)
+                   (case_p |> std_expr_of_std_pattern ~convert_tag:Fn.id)
                  ~to_expr:
                    (fst eqcons.body
-                   |> std_expr_of_std_pattern
-                        ~convert_tag:Smt.pattern_tag_to_expr_tag)
+                   |> std_expr_of_std_pattern ~convert_tag:Fn.id)
                |> function
                | Error () -> None
                | Ok unifier -> Some (unifier, eqcons)))
@@ -200,7 +236,11 @@ Falsifying Interpretation
               let open Smt.Assertion in
               (* Note that I use the negation as we are looking or validity, not satisifability:
                 the condition must be necessarily true, so we check that the negation is unsatisfiable *)
-              Not (Eq (Some match_t_out, l_flat, r_flat))
+              Not
+                (Eq
+                   ( Some match_t_out,
+                     tag_flat_expr_to_smt_flat_expr l_flat,
+                     tag_flat_expr_to_smt_flat_expr r_flat ))
             in
             Smt.create_formula ~existing_names state [ assertion ]
             |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
@@ -213,8 +253,8 @@ Falsifying Interpretation
             | `Unknown -> Error (Err SmtUnknownResult)))
 
   let rec check_expr ~(existing_names : StringSet.t)
-      ~(quotient_types : Smt.tag_quotient_type list) (state : Smt.State.t)
-      (orig_e : Smt.tag_flat_expr) : (StringSet.t, check_result) Result.t =
+      ~(quotient_types : tag_quotient_type list) (state : Smt.State.t)
+      (orig_e : tag_flat_expr) : (StringSet.t, check_result) Result.t =
     let open Result in
     let open Smt.State in
     match orig_e with
@@ -247,7 +287,12 @@ Falsifying Interpretation
         let e1_type = (FlatPattern.FlatExpr.node_val e1).t in
 
         state_add_var_defn
-          { name = xname; kind = `NonRec None; return_t = e1_type; body = e1 }
+          {
+            name = xname;
+            kind = `NonRec None;
+            return_t = e1_type;
+            body = tag_flat_expr_to_smt_flat_expr e1;
+          }
           state
         |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
         >>= fun state -> check_expr ~existing_names ~quotient_types state e2
@@ -293,8 +338,8 @@ Falsifying Interpretation
     | Constructor (_, _, e) ->
         check_expr ~existing_names ~quotient_types state e
 
-  let check_program (prog : Smt.tag_program) :
-      ( (unit, quotient_type_checking_failure) Result.t,
+  let check_program (prog : tag_program) :
+      ( (unit, QuotientTypeCheckingFailure.t) Result.t,
         quotient_typing_error )
       Result.t =
     (* TODO - make this take a checked program (from the Typing module's TypeChecker functor) as parameter instead of just a program *)
@@ -304,7 +349,7 @@ Falsifying Interpretation
     FlatPattern.of_program ~existing_names prog
     |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
     >>= fun (existing_names, flat_prog) ->
-    let quotient_types : Smt.tag_quotient_type list =
+    let quotient_types : tag_quotient_type list =
       List.filter_map
         ~f:(function
           | { private_flag = _; ct = QuotientType qt } -> Some qt | _ -> None)
@@ -313,7 +358,10 @@ Falsifying Interpretation
     let state =
       Smt.State.state_init
         (prog.custom_types
-        |> List.map ~f:(function { private_flag = _; ct } -> ct))
+        |> List.map ~f:(fun { private_flag = _; ct } ->
+               ct
+               |> CustomType.fmap_expr ~f:node_tag_to_smt_expr_tag
+               |> CustomType.fmap_pattern ~f:node_tag_to_smt_pattern_tag))
     in
     let state =
       (* Add the variant type definitions to the state *)
@@ -335,7 +383,7 @@ Falsifying Interpretation
                  name = defn.name;
                  kind = `Rec defn.param;
                  return_t = defn.return_t;
-                 body = defn.body;
+                 body = tag_flat_expr_to_smt_flat_expr defn.body;
                }
                defn_checking_state
            else Ok state)
@@ -353,7 +401,7 @@ Falsifying Interpretation
                 (if defn.recursive then `Rec defn.param
                  else `NonRec (Some defn.param));
               return_t = defn.return_t;
-              body = defn.body;
+              body = tag_flat_expr_to_smt_flat_expr defn.body;
             }
             state
           |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))

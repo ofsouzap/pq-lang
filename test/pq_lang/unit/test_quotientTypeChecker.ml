@@ -22,10 +22,10 @@ let manual_tests : unit Alcotest.test_case list =
                    (TypeChecker.TypingError.print err))
           >>= fun inp_typed_program ->
           inp_typed_program |> TestingTypeChecker.typed_program_get_program
-          |> Program.fmap_expr ~f:(fun (t, _) ->
-                 ({ t } : QuotientTypeChecker.Smt.expr_tag))
-          |> Program.fmap_pattern ~f:(fun (t, _) ->
-                 ({ t } : QuotientTypeChecker.Smt.pattern_tag))
+          |> Program.fmap_pattern ~f:(fun (t, source_pos) ->
+                 ({ t; source_pos } : QuotientTypeChecker.node_tag))
+          |> Program.fmap_expr ~f:(fun (t, source_pos) ->
+                 ({ t; source_pos } : QuotientTypeChecker.node_tag))
           |> fun inp_for_quotient_type_checking ->
           match
             ( QuotientTypeChecker.check_program inp_for_quotient_type_checking,
@@ -41,7 +41,7 @@ let manual_tests : unit Alcotest.test_case list =
                    "Expected valid input but got failed quotient type check \
                     with message:\n\
                     %s"
-                   (QuotientTypeChecker.print_quotient_type_checking_failure err))
+                   (QuotientTypeChecker.QuotientTypeCheckingFailure.print err))
           | Error err, _ ->
               Error
                 (sprintf "Unexpected quotient type checking failure: %s"

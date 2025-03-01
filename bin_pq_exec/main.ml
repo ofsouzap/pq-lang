@@ -22,10 +22,10 @@ let () =
     >>= fun tp ->
     QuotientTypeChecker.check_program
       (TypeChecker.typed_program_get_program tp
-      |> Program.fmap_pattern ~f:(fun (t, _) ->
-             ({ t } : QuotientTypeChecker.Smt.pattern_tag))
-      |> Program.fmap_expr ~f:(fun (t, _) ->
-             ({ t } : QuotientTypeChecker.Smt.expr_tag)))
+      |> Program.fmap_pattern ~f:(fun (t, source_pos) ->
+             ({ t; source_pos } : QuotientTypeChecker.node_tag))
+      |> Program.fmap_expr ~f:(fun (t, source_pos) ->
+             ({ t; source_pos } : QuotientTypeChecker.node_tag)))
     |> Result.map_error ~f:(fun err ->
            sprintf "Quotient type checking error: %s"
              (err |> QuotientTypeChecker.sexp_of_quotient_typing_error
@@ -34,7 +34,7 @@ let () =
     | Error err ->
         Error
           (sprintf "Quotient type check failed:\n%s"
-             (QuotientTypeChecker.print_quotient_type_checking_failure err))
+             (QuotientTypeChecker.QuotientTypeCheckingFailure.print err))
     | Ok () ->
         ProgramExecutor.execute_program tp
         |> Result.map_error ~f:(fun err ->
