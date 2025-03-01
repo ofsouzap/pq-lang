@@ -130,7 +130,8 @@ module MakeZ3 : S = struct
         =
       (Pattern.node_val case_p).source_pos
 
-    let print ({ eqcons; case_p; l; r; model_mapping } : t) : string =
+    let print ({ eqcons; case_p; l; r; model_mapping } as x : t) : string =
+      let match_case_source_pos = get_match_case_source_pos x in
       sprintf
         {|Considering the given equality constructor on the match case with the given pattern, we should have that the below "Side L" and "Side R" are equivalent, but they are not, as shown by the example interpretation below.
 
@@ -143,6 +144,7 @@ Equality Constructor
 ==================
 Match Case Pattern
 ==================
+(from line %d, character %d)
 
 %s
 
@@ -165,6 +167,8 @@ Falsifying Interpretation
 %s
 |}
         (eqcons |> QuotientType.eqcons_to_source_code)
+        (match_case_source_pos.lnum + 1)
+        (match_case_source_pos.bol + 1)
         (case_p |> Pattern.to_source_code)
         (l |> Expr.to_source_code) (r |> Expr.to_source_code)
         (model_mapping

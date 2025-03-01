@@ -18,9 +18,9 @@ let lex_parse_from_lexbuf (lexbuf : Lexing.lexbuf) : run_frontend_res =
   >>| fun prog ->
   prog
   |> Program.fmap_expr ~f:(fun lex_pos ->
-         { lnum = lex_pos.Lexing.pos_lnum; bol = lex_pos.Lexing.pos_bol })
+         Lexing.{ lnum = lex_pos.pos_lnum; bol = lex_pos.pos_bol })
   |> Program.fmap_pattern ~f:(fun lex_pos ->
-         { lnum = lex_pos.Lexing.pos_lnum; bol = lex_pos.Lexing.pos_bol })
+         Lexing.{ lnum = lex_pos.pos_lnum; bol = lex_pos.pos_bol })
 
 let run_frontend_channel (input : In_channel.t) : run_frontend_res =
   lex_parse_from_lexbuf (Lexing.from_channel input)
