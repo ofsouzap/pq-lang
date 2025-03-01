@@ -1,4 +1,4 @@
 (executable
  (public_name pq_to_ocaml)
  (name main)
- (libraries pq_lang.lib))
+ (libraries pq_lang.lib core cmdliner))
