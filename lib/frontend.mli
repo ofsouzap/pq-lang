@@ -6,7 +6,7 @@ type frontend_error =
   | ParsingError  (** A parsing error occured on the token stream *)
 [@@deriving sexp, equal]
 
-type source_position = { lnum : int; bol : int } [@@deriving sexp, equal]
+type source_position = { lnum : int; cnum : int } [@@deriving sexp, equal]
 
 (** A result from trying to run the lexer and parser on an input *)
 type run_frontend_res =
