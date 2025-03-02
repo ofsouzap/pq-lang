@@ -38,12 +38,3 @@
    (>= "0.23"))
   (cmdliner
    (>= "1.0.4"))))
-
-(package
- (name pq_to_ocaml_rules)
- (synopsis "Dune rules for PQ to OCaml conversion")
- (depends
-  (dune
-   (>= "3.11"))
-  (dune-build-info
-   (>= "3.11"))))
