@@ -39,7 +39,7 @@ module type S = sig
   type ('tag_e, 'tag_p) t = {
     custom_types : ('tag_e, 'tag_p) custom_type_decl list;
     top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
-    e : ('tag_e, 'tag_p) Expr.t;
+    body : ('tag_e, 'tag_p) Expr.t option;
   }
   [@@deriving sexp, equal]
 
@@ -188,7 +188,7 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
   type ('tag_e, 'tag_p) t = {
     custom_types : ('tag_e, 'tag_p) custom_type_decl list;
     top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
-    e : ('tag_e, 'tag_p) Expr.t;
+    body : ('tag_e, 'tag_p) Expr.t option;
   }
   [@@deriving sexp, equal]
 
@@ -208,7 +208,7 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
         List.map
           ~f:(fun defn -> { defn with body = Expr.to_plain_t defn.body })
           prog.top_level_defns;
-      e = Expr.to_plain_t prog.e;
+      body = Option.map ~f:Expr.to_plain_t prog.body;
     }
 
   let fmap_expr ~(f : 'tag_e1 -> 'tag_e2) (prog : ('tag_e1, 'tag_p) t) :
@@ -228,7 +228,7 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
               return_t = defn.return_t;
             })
           prog.top_level_defns;
-      e = Expr.fmap ~f prog.e;
+      body = Option.map ~f:(Expr.fmap ~f) prog.body;
     }
 
   let fmap_pattern ~(f : 'tag_p1 -> 'tag_p2) (prog : ('tag_e, 'tag_p1) t) :
@@ -248,7 +248,7 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
               return_t = defn.return_t;
             })
           prog.top_level_defns;
-      e = Expr.fmap_pattern ~f prog.e;
+      body = Option.map ~f:(Expr.fmap_pattern ~f) prog.body;
     }
 
   let existing_names (prog : ('tag_e, 'tag_p) t) : StringSet.t =
@@ -268,7 +268,8 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
                    (StringSet.singleton (fst defn.param))
                    (Expr.existing_names defn.body)))
             prog.top_level_defns)
-         (Expr.existing_names prog.e))
+         (Option.value_map ~default:StringSet.empty ~f:Expr.existing_names
+            prog.body))
 
   let to_source_code ?(use_newlines : bool option) (prog : ('tag_e, 'tag_p) t) :
       string =
@@ -283,9 +284,11 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
         ~f:(top_level_defn_to_source_code ~use_newlines)
         prog.top_level_defns
     in
-    let e_str : string = Expr.to_source_code ~use_newlines prog.e in
+    let body_str : string option =
+      Option.map ~f:(Expr.to_source_code ~use_newlines) prog.body
+    in
     let str_parts : string list =
-      type_defns_str @ top_level_defns_str @ [ e_str ]
+      type_defns_str @ top_level_defns_str @ Option.to_list body_str
     in
     String.concat ~sep:(if use_newlines then "\n" else " ") str_parts
 
@@ -495,50 +498,38 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
              custom_types)
         ~max_top_level_defns:opts.max_top_level_defns ~mrd:opts.mrd
       >>= fun top_level_defns ->
-      Expr_qcheck_testing.gen
-        {
-          t =
-            Option.(
-              opts.body_type >>| Expr_qcheck_testing.vtype_to_gen_vtype_unsafe);
-          variant_types =
-            List.filter_map
-              ~f:(fun ct_decl ->
-                match ct_decl.ct with
-                | VariantType vt -> Some vt
-                | CustomType.QuotientType _ -> None)
-              custom_types;
-          top_level_defns =
-            List.map
-              ~f:(fun defn -> (defn.name, (snd defn.param, defn.return_t)))
-              top_level_defns;
-          v_gen = opts.expr_v_gen;
-          pat_v_gen = opts.pat_v_gen;
-          mrd = opts.mrd;
-        }
-      >|= fun e -> { custom_types; top_level_defns; e }
+      option
+        (Expr_qcheck_testing.gen
+           {
+             t =
+               Option.(
+                 opts.body_type
+                 >>| Expr_qcheck_testing.vtype_to_gen_vtype_unsafe);
+             variant_types =
+               List.filter_map
+                 ~f:(fun ct_decl ->
+                   match ct_decl.ct with
+                   | VariantType vt -> Some vt
+                   | CustomType.QuotientType _ -> None)
+                 custom_types;
+             top_level_defns =
+               List.map
+                 ~f:(fun defn -> (defn.name, (snd defn.param, defn.return_t)))
+                 top_level_defns;
+             v_gen = opts.expr_v_gen;
+             pat_v_gen = opts.pat_v_gen;
+             mrd = opts.mrd;
+           })
+      >|= fun body -> { custom_types; top_level_defns; body }
 
-    let print (print_method : print_options) : t QCheck.Print.t =
-     fun prog ->
-      sprintf "[type definitions: %s]\n%s"
-        QCheck.Print.(
-          let open Expr_qcheck_testing in
-          let ct_decl_to_string (ct_decl : ('tag_e, 'tag_p) custom_type_decl) =
-            match print_method with
-            | NoPrint -> ""
-            | PrintSexp (sexp_of_expr_tag, sexp_of_pat_tag) ->
-                ct_decl
-                |> sexp_of_custom_type_decl sexp_of_expr_tag sexp_of_pat_tag
-                |> Sexp.to_string_hum
-            | PrintExprSource -> CustomType.name ct_decl.ct
-          in
-          list ct_decl_to_string prog.custom_types)
-        (Expr_qcheck_testing.print print_method prog.e)
+    let print (_ : print_options) : t QCheck.Print.t =
+     fun _ -> "<program>" (* TODO - implement properly *)
 
     let shrink (opts : shrink_options) : t QCheck.Shrink.t =
       let open QCheck.Iter in
       fun prog ->
-        Expr_qcheck_testing.shrink opts prog.e >|= fun e' ->
-        { prog with e = e' }
+        QCheck.Shrink.option (Expr_qcheck_testing.shrink opts) prog.body
+        >|= fun body' -> { prog with body = body' }
 
     let arbitrary (opts : arb_options) : t QCheck.arbitrary =
       QCheck.make ~print:(print opts.print) ~shrink:(shrink opts.shrink)

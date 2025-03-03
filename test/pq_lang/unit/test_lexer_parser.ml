@@ -574,7 +574,11 @@ let test_cases_variant_type_defn : test_case_full_prog list =
         [ INTLIT 1 ],
         Ok
           Program.
-            { custom_types = []; top_level_defns = []; e = IntLit ((), 1) } );
+            {
+              custom_types = [];
+              top_level_defns = [];
+              body = Some (IntLit ((), 1));
+            } );
       ( (* Simple type definition *)
         {|
         type int_or_bool = Int of int | Bool of bool
@@ -606,7 +610,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
                 };
               ];
             top_level_defns = [];
-            e = IntLit ((), 1);
+            body = Some (IntLit ((), 1));
           } );
       ( (* Simple private type definition *)
         {|
@@ -640,7 +644,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
                 };
               ];
             top_level_defns = [];
-            e = IntLit ((), 1);
+            body = Some (IntLit ((), 1));
           } );
       ( (* Simple type definition (with leading pipe) *)
         {|
@@ -674,7 +678,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
                 };
               ];
             top_level_defns = [];
-            e = IntLit ((), 1);
+            body = Some (IntLit ((), 1));
           } );
       ( (* Incorrectly using upper-name for type name *)
         {|
@@ -753,7 +757,7 @@ let test_cases_variant_type_defn : test_case_full_prog list =
                 };
               ];
             top_level_defns = [];
-            e = IntLit ((), 1);
+            body = Some (IntLit ((), 1));
           } );
     ]
 
@@ -828,7 +832,7 @@ qtype int_boxed
               };
             ];
           top_level_defns = [];
-          e = IntLit ((), 1);
+          body = Some (IntLit ((), 1));
         } );
     ( "Multiple variable bindings",
       {|
@@ -944,7 +948,7 @@ qtype int_boxed
               };
             ];
           top_level_defns = [];
-          e = IntLit ((), 1);
+          body = Some (IntLit ((), 1));
         } );
     ( "Multiple eqconss",
       {|
@@ -1074,7 +1078,7 @@ qtype my_qt
               };
             ];
           top_level_defns = [];
-          e = IntLit ((), 1);
+          body = Some (IntLit ((), 1));
         } );
     ( "Incorrectly using upper-name for type name",
       {|
@@ -1111,6 +1115,45 @@ qtype Int_boxed
         INTLIT 1;
       ],
       Error ParsingError );
+  ]
+
+let test_cases_no_program_body : test_case_full_prog list =
+  [
+    ( "Empty",
+      "",
+      [],
+      Ok Program.{ custom_types = []; top_level_defns = []; body = None } );
+    ( "Type definition only",
+      {|
+type int_or_bool = Int of int | Bool of bool
+|},
+      [
+        TYPE;
+        LNAME "int_or_bool";
+        ASSIGN;
+        UNAME "Int";
+        OF;
+        INT;
+        PIPE;
+        UNAME "Bool";
+        OF;
+        BOOL;
+      ],
+      Ok
+        Program.
+          {
+            custom_types =
+              [
+                {
+                  private_flag = Public;
+                  ct =
+                    VariantType
+                      ("int_or_bool", [ ("Int", VTypeInt); ("Bool", VTypeBool) ]);
+                };
+              ];
+            top_level_defns = [];
+            body = None;
+          } );
   ]
 
 let test_cases_variant_type_construction : test_case_no_variant_types list =
@@ -1189,8 +1232,8 @@ let create_precedence_test ((name, inp, exp) : test_case_precedence) :
       let out = Result.(run_frontend_string inp >>| Program.to_plain_t) in
       match out with
       | Ok prog ->
-          Alcotest.(check (plain_std_expr_testable `PrintSource))
-            "Expressions aren't equal" exp prog.e
+          Alcotest.(check (option (plain_std_expr_testable `PrintSource)))
+            "Expressions aren't equal" (Some exp) prog.body
       | Error (LexingError c) -> Alcotest.failf "LexingError %c" c
       | Error ParsingError -> Alcotest.fail "ParsingError" )
 
@@ -1203,8 +1246,9 @@ let tests_no_variant_types
           inp,
           tokens,
           Result.(
-            ast >>| fun e ->
-            Program.{ custom_types = []; top_level_defns = []; e }) ))
+            ast >>| fun body ->
+            Program.
+              { custom_types = []; top_level_defns = []; body = Some body }) ))
   in
   label_tests "Unit Value" (List.map ~f test_cases_unit_value)
   @ label_tests "Arithmetic" (List.map ~f test_cases_arithmetic)
@@ -1226,6 +1270,7 @@ let tests_full_prog
     (List.map ~f test_cases_variant_type_defn)
   @ label_tests "Quotient type definition"
       (List.map ~f test_cases_quotient_type_defn)
+  @ label_tests "No program body" (List.map ~f test_cases_no_program_body)
 
 let suite : unit Alcotest.test_case list =
   label_tests "Lexer"

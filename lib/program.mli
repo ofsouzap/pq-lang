@@ -38,7 +38,7 @@ module type S = sig
   type ('tag_e, 'tag_p) t = {
     custom_types : ('tag_e, 'tag_p) custom_type_decl list;
     top_level_defns : ('tag_e, 'tag_p) top_level_defn list;
-    e : ('tag_e, 'tag_p) Expr.t;
+    body : ('tag_e, 'tag_p) Expr.t option;
   }
   [@@deriving sexp, equal]
 
