@@ -77,7 +77,9 @@ let file_path_arg_to_frontend :
     string option -> unit -> Frontend.run_frontend_res = function
   | None -> fun () -> Frontend.run_frontend_channel In_channel.stdin
   | Some file_path ->
-      fun () -> Frontend.run_frontend_string (In_channel.read_all file_path)
+      fun () ->
+        Frontend.run_frontend_string ~filename:file_path
+          (In_channel.read_all file_path)
 
 let file_path_t : string option Term.t =
   let doc =

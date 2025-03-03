@@ -6,7 +6,9 @@ type frontend_error =
   | ParsingError  (** A parsing error occured on the token stream *)
 [@@deriving sexp, equal]
 
-type source_position = { lnum : int; cnum : int } [@@deriving sexp, equal]
+(** A position in the source code *)
+type source_position = { fname : string option; lnum : int; cnum : int }
+[@@deriving sexp, equal]
 
 (** A result from trying to run the lexer and parser on an input *)
 type run_frontend_res =
@@ -16,7 +18,7 @@ type run_frontend_res =
 [@@deriving sexp, equal]
 
 (** Run the lexer and parser on an input channel *)
-val run_frontend_channel : In_channel.t -> run_frontend_res
+val run_frontend_channel : ?filename:string -> In_channel.t -> run_frontend_res
 
 (** Run the lexer and parser on a string input *)
-val run_frontend_string : string -> run_frontend_res
+val run_frontend_string : ?filename:string -> string -> run_frontend_res

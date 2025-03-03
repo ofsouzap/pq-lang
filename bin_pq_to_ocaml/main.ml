@@ -33,11 +33,13 @@ let read_all_file (filename : string) : (string, error_exit) Result.t =
   try Ok (In_channel.read_all filename)
   with Sys_error msg -> Error (ErrCallingSystemFunctions, msg)
 
-let process_pq_file (filename : string) : (Program.plain_t, error_exit) Result.t
-    =
+let process_pq_file (filename : string) :
+    ( (Frontend.source_position, Frontend.source_position) Program.t,
+      error_exit )
+    Result.t =
   let open Result in
   read_all_file filename >>= fun contents ->
-  Frontend.run_frontend_string contents
+  Frontend.run_frontend_string ~filename contents
   |> Result.map_error ~f:(fun err ->
          ( ErrInternal,
            sprintf "Frontend error:\n%s"
@@ -72,7 +74,7 @@ let process_pq_file (filename : string) : (Program.plain_t, error_exit) Result.t
         ( ErrQuotientTypeChecking,
           sprintf "Quotient type check failed:\n%s"
             (QuotientTypeChecker.QuotientTypeCheckingFailure.print err) )
-  | Ok () -> Ok (prog |> Program.to_plain_t)
+  | Ok () -> Ok prog
 
 let write_outputs (input_path : string) (outputs : OcamlConverter.StdM.output) :
     (unit, error_exit) Result.t =
@@ -95,7 +97,9 @@ let compile_file (input_path : string) : (unit, error_exit) Result.t =
   let open Result in
   let module OcamlConverter = OcamlConverter.StdM in
   process_pq_file input_path >>= fun prog ->
-  let output = OcamlConverter.program_to_ocaml prog in
+  let output =
+    OcamlConverter.program_to_ocaml ~get_source_position:Fn.id prog
+  in
   write_outputs input_path output
 
 let run_main (input_path : string) : int =
