@@ -40,6 +40,7 @@ let rec filter (arg : ((int -> bool) * set)) : set =
   end
 end
 
+# Check if a set contains a value
 let rec contains (arg : (int * set)) : bool =
   match arg -> bool with
   | ((q : int), (xs : set)) ->
@@ -52,6 +53,21 @@ let rec contains (arg : (int * set)) : bool =
         then true
         else contains (q, ts)
         end
+      end
+    end
+  end
+end
+
+# Union of two sets
+let rec union (arg: (set * set)) : set =
+  match arg -> set with
+  | ((xs : set), (ys : set)) ->
+    match xs -> set with
+    | Nil (_ : unit) -> ys
+    | Cons (xv : (int * set)) ->
+      match xv -> set with
+      | ((xh : int), (xts : set)) ->
+        Cons (xh, union (xts, ys))
       end
     end
   end

@@ -9,6 +9,12 @@ qtype set =
   |/ (x : int) -> (y : int) -> (zs : set)
     => Cons ((x : int), Cons ((y : int), (zs : set))) == (Cons (y, Cons (x, zs)))
 
+# Create a set
+let set_of_list (xs : list) : set = xs end
+
+# Add a single element to a set
+let add (arg : (int * set)) : set = Cons arg end
+
 (* Filter a set by the predicate provided.
 
    Input: ((p : int -> bool), (xs : set))
@@ -34,11 +40,12 @@ let rec filter (arg : ((int -> bool) * set)) : set =
   end
 end
 
+# Check if a set contains a value
 let rec contains (arg : (int * set)) : bool =
   match arg -> bool with
   | ((q : int), (xs : set)) ->
     match xs -> bool with
-    | Nil (u : unit) -> false
+    | Nil (_ : unit) -> false
     | Cons (p : int * set) ->
       match p -> bool with
       | ((h : int), (ts : set)) ->
@@ -46,6 +53,21 @@ let rec contains (arg : (int * set)) : bool =
         then true
         else contains (q, ts)
         end
+      end
+    end
+  end
+end
+
+# Union of two sets
+let rec union (arg: (set * set)) : set =
+  match arg -> set with
+  | ((xs : set), (ys : set)) ->
+    match xs -> set with
+    | Nil (_ : unit) -> ys
+    | Cons (xv : (int * set)) ->
+      match xv -> set with
+      | ((xh : int), (xts : set)) ->
+        Cons (xh, union (xts, ys))
       end
     end
   end

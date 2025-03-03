@@ -1,0 +1,13 @@
+(rule
+ (targets listSet.mli listSet.ml)
+ (deps
+  (package pq_lang)
+  listSet.pq)
+ (action
+  (chdir
+   %{workspace_root}
+   (run %{bin:pq_to_ocaml} %{deps}))))
+
+(test
+ (name main)
+ (libraries pq_lang core alcotest))
