@@ -10,7 +10,10 @@ module type S = sig
   so that only quotient type-checked programs can be converted to OCaml *)
 
   (** Convert a PQ program to OCaml source code *)
-  val program_to_ocaml : ('tag_e, 'tag_p) Program.t -> output
+  val program_to_ocaml :
+    ?get_source_position:('tag_e -> Frontend.source_position) ->
+    ('tag_e, 'tag_p) Program.t ->
+    output
 end
 
 module StdM : S with module Program = Program.StdProgram = struct
@@ -24,6 +27,28 @@ module StdM : S with module Program = Program.StdProgram = struct
   type ml_source = Ml of string
   type mli_source = Mli of string
   type output = { ml_source : string; mli_source : string }
+
+  let get_source_pos_writer (source_position : Frontend.source_position) :
+      SourceCodeBuilder.state -> SourceCodeBuilder.state =
+    let open SourceCodeBuilder in
+    Option.(
+      source_position.Frontend.fname >>| fun filename ->
+      sprintf "# %d \"%s\"" source_position.lnum filename)
+    |> function
+    | None ->
+        printf "nothing\n";
+        nothing
+    | Some s ->
+        printf "%s\n" s;
+        write s |.> endline
+
+  let get_source_pos_opt_writer
+      (get_source_position : ('tag_e -> Frontend.source_position) option)
+      (v : 'tag_e) : SourceCodeBuilder.state -> SourceCodeBuilder.state =
+    let open SourceCodeBuilder in
+    match get_source_position with
+    | None -> nothing
+    | Some get_source_position -> get_source_position v |> get_source_pos_writer
 
   let unwrap_ml_source (Ml x) = x
   let unwrap_mli_source (Mli x) = x
@@ -133,11 +158,14 @@ module StdM : S with module Program = Program.StdProgram = struct
     |> SourceCodeBuilder.from_converter ~converter:convert ~use_newlines:true
     |> Mli
 
-  let tld_to_ml : ('tag_e, 'tag_p) Program.top_level_defn -> ml_source =
+  let tld_to_ml
+      ~(get_source_position : ('tag_e -> Frontend.source_position) option) :
+      ('tag_e, 'tag_p) Program.top_level_defn -> ml_source =
     let open SourceCodeBuilder in
     let convert (defn : ('tag_e, 'tag_p) Program.top_level_defn) :
         state -> state =
-      write "let "
+      get_source_pos_opt_writer get_source_position (defn.body |> Expr.node_val)
+      |.> write "let "
       |.> (if defn.recursive then write "rec " else nothing)
       |.> write defn.name |.> write " ("
       |.> write (fst defn.param)
@@ -153,11 +181,14 @@ module StdM : S with module Program = Program.StdProgram = struct
       |> SourceCodeBuilder.from_converter ~converter:convert ~use_newlines:true
       |> Ml
 
-  let tld_to_mli : ('tag_e, 'tag_p) Program.top_level_defn -> mli_source =
+  let tld_to_mli
+      ~(get_source_position : ('tag_e -> Frontend.source_position) option) :
+      ('tag_e, 'tag_p) Program.top_level_defn -> mli_source =
     let open SourceCodeBuilder in
     let convert (defn : ('tag_e, 'tag_p) Program.top_level_defn) :
         state -> state =
-      write "val " |.> write defn.name |.> write " : "
+      get_source_pos_opt_writer get_source_position (defn.body |> Expr.node_val)
+      |.> write "val " |.> write defn.name |.> write " : "
       |.> write (vtype_to_source (snd defn.param))
       |.> write " -> "
       |.> write (vtype_to_source defn.return_t)
@@ -167,18 +198,23 @@ module StdM : S with module Program = Program.StdProgram = struct
       |> SourceCodeBuilder.from_converter ~converter:convert ~use_newlines:true
       |> Mli
 
-  let program_to_ml (prog : ('tag_e, 'tag_p) Program.t) : ml_source =
+  let program_to_ml
+      ~(get_source_position : ('tag_e -> Frontend.source_position) option)
+      (prog : ('tag_e, 'tag_p) Program.t) : ml_source =
     List.map prog.custom_types ~f:(fun ct_decl ->
         match ct_decl.ct with
         | QuotientType qt -> quotient_type_to_ml qt
         | VariantType vt -> variant_type_to_ml vt)
     |> fun vt_srcs ->
-    List.map prog.top_level_defns ~f:tld_to_ml |> fun tld_srcs ->
+    List.map prog.top_level_defns ~f:(tld_to_ml ~get_source_position)
+    |> fun tld_srcs ->
     vt_srcs @ tld_srcs
     |> List.map ~f:unwrap_ml_source
     |> String.concat ~sep:"\n\n" |> Ml
 
-  let program_to_mli (prog : ('tag_e, 'tag_p) Program.t) : mli_source =
+  let program_to_mli
+      ~(get_source_position : ('tag_e -> Frontend.source_position) option)
+      (prog : ('tag_e, 'tag_p) Program.t) : mli_source =
     List.map prog.custom_types ~f:(fun ct_decl ->
         match ct_decl.ct with
         | QuotientType qt -> quotient_type_to_mli qt
@@ -187,16 +223,18 @@ module StdM : S with module Program = Program.StdProgram = struct
     |> fun vt_srcs ->
     List.filter_map prog.top_level_defns ~f:(fun tld ->
         match tld.private_flag with
-        | Public -> tld_to_mli tld |> Some
+        | Public -> tld_to_mli ~get_source_position tld |> Some
         | Private -> None)
     |> fun tld_srcs ->
     vt_srcs @ tld_srcs
     |> List.map ~f:unwrap_mli_source
     |> String.concat ~sep:"\n\n" |> Mli
 
-  let program_to_ocaml (prog : ('tag_e, 'tag_p) Program.t) : output =
+  let program_to_ocaml
+      ?(get_source_position : ('tag_e -> Frontend.source_position) option)
+      (prog : ('tag_e, 'tag_p) Program.t) : output =
     {
-      ml_source = program_to_ml prog |> unwrap_ml_source;
-      mli_source = program_to_mli prog |> unwrap_mli_source;
+      ml_source = program_to_ml ~get_source_position prog |> unwrap_ml_source;
+      mli_source = program_to_mli ~get_source_position prog |> unwrap_mli_source;
     }
 end
