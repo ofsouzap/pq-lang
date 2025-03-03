@@ -1175,12 +1175,16 @@ module MakeStd
     >>= fun tld_fold_final_acc ->
     let var_ctx = tld_fold_final_acc.defns_var_ctx in
     let tlds = tld_fold_final_acc.defns_rev |> List.rev in
-    type_expr ~get_source_position (type_ctx, var_ctx) prog.e >>| fun typed_e ->
+    (match prog.body with
+    | None -> Ok None
+    | Some body ->
+        type_expr ~get_source_position (type_ctx, var_ctx) body >>| Option.some)
+    >>| fun typed_body ->
     ( Program.
         {
           custom_types = custom_types_typed;
           top_level_defns = tlds;
-          e = typed_e;
+          body = typed_body;
         },
       type_ctx )
 end

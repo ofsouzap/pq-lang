@@ -214,7 +214,8 @@ top_level_defn:
 ;
 
 prog:
-  | e = expr EOF { { custom_types = []; top_level_defns=[]; e = e } }
+  | EOF { { custom_types = []; top_level_defns=[]; body = None } }  (* Without a main body *)
+  | body = expr EOF { { custom_types = []; top_level_defns=[]; body = Some body } }  (* With a main body *)
   | ct_decl = custom_type_decl p = prog { add_custom_type_decl_to_program p ct_decl }
   | defn = top_level_defn p = prog { add_top_level_definition_to_program p defn }
 ;

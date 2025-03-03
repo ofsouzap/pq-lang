@@ -26,7 +26,7 @@ let type_expr
       {
         custom_types = Option.value ~default:[] custom_types;
         top_level_defns = Option.value ~default:[] top_level_defns;
-        e;
+        body = Some e;
       }
   with
   | Ok x -> x

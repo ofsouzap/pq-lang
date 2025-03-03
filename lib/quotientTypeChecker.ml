@@ -412,7 +412,9 @@ Falsifying Interpretation
         flat_prog.top_level_defns
     >>= fun (existing_names, state) ->
       (* Check the main body of the program with the accumulated state *)
-      check_expr ~existing_names ~quotient_types state flat_prog.e )
+      match flat_prog.body with
+      | None -> Ok existing_names
+      | Some body -> check_expr ~existing_names ~quotient_types state body )
     |> function
     | Ok _ -> Ok (Ok ())
     | Error (Failure failure) -> Ok (Error failure)

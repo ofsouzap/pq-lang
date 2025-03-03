@@ -80,25 +80,30 @@ let test_cases_to_source_code_inv =
   let open Frontend in
   Test.make ~count:1000 ~name:"Expr to source code"
     unit_program_arbitrary_with_default_options (fun prog ->
-      let e = prog.e in
-      match
-        Result.(
-          run_frontend_string (Expr.to_source_code e) >>| Program.to_plain_t)
-      with
-      | Ok prog ->
-          if Expr.equal_plain_t e prog.e then true
-          else
-            Test.fail_reportf
-              "Got different Expr. Expected:\n\n%s\n\nActual:\n\n%s"
-              (Unit_expr_qcheck_testing.print
-                 (PrintSexp (sexp_of_unit, sexp_of_unit))
-                 e)
-              (Unit_expr_qcheck_testing.print
-                 (PrintSexp (sexp_of_unit, sexp_of_unit))
-                 prog.e)
-      | Error err ->
-          Test.fail_reportf "Got frontend error: %s"
-            (err |> sexp_of_frontend_error |> Sexp.to_string_hum))
+      match prog.body with
+      | None -> true
+      | Some e -> (
+          match
+            Result.(
+              run_frontend_string (Expr.to_source_code e) >>| Program.to_plain_t)
+          with
+          | Ok prog -> (
+              match prog.body with
+              | None -> Test.fail_report "Expected body"
+              | Some prog_body ->
+                  if Expr.equal_plain_t e prog_body then true
+                  else
+                    Test.fail_reportf
+                      "Got different Expr. Expected:\n\n%s\n\nActual:\n\n%s"
+                      (Unit_expr_qcheck_testing.print
+                         (PrintSexp (sexp_of_unit, sexp_of_unit))
+                         e)
+                      (Unit_expr_qcheck_testing.print
+                         (PrintSexp (sexp_of_unit, sexp_of_unit))
+                         prog_body))
+          | Error err ->
+              Test.fail_reportf "Got frontend error: %s"
+                (err |> sexp_of_frontend_error |> Sexp.to_string_hum)))
 
 let create_test_cases_expr_node_val (name : string)
     (type_arb : 'a QCheck.arbitrary) (type_eq : 'a -> 'a -> bool) :
@@ -108,9 +113,11 @@ let create_test_cases_expr_node_val (name : string)
     (Test.make ~count:100 ~name
        (pair type_arb unit_program_arbitrary_with_default_options)
        (fun (x, prog) ->
-         let e_raw = prog.e in
-         let e = fmap ~f:(const x) e_raw in
-         type_eq (Expr.node_val e) x))
+         match prog.body with
+         | None -> true
+         | Some e_raw ->
+             let e = fmap ~f:(const x) e_raw in
+             type_eq (Expr.node_val e) x))
 
 module SingleTagged_tests =
 functor
@@ -150,10 +157,12 @@ functor
                    shrink = { preserve_type = false };
                  }))
            (fun (f_, prog) ->
-             let e = prog.e in
-             let f = QCheck.Fn.apply f_ in
-             let e' = Expr.node_map_val ~f e in
-             Tag.eq (Expr.node_val e') (e |> Expr.node_val |> f)))
+             match prog.body with
+             | None -> true
+             | Some e ->
+                 let f = QCheck.Fn.apply f_ in
+                 let e' = Expr.node_map_val ~f e in
+                 Tag.eq (Expr.node_val e') (e |> Expr.node_val |> f)))
   end
 
 module DoubleTagged_tests =
@@ -199,10 +208,12 @@ functor
                    shrink = { preserve_type = false };
                  }))
            (fun (x, f_, prog) ->
-             let e = prog.e in
-             let f = QCheck.Fn.apply f_ in
-             let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
-             Tag2.eq (Expr.node_val e') (f x)))
+             match prog.body with
+             | None -> true
+             | Some e ->
+                 let f = QCheck.Fn.apply f_ in
+                 let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
+                 Tag2.eq (Expr.node_val e') (f x)))
   end
 
 module Unit_singletagged_tests = SingleTagged_tests (struct

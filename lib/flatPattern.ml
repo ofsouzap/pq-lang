@@ -423,7 +423,12 @@ let of_program ~(existing_names : StringSet.t)
         :: acc_defns_rev ))
     prog.top_level_defns
   >>= fun (existing_names, flat_defns_rev) ->
-  of_expr ~existing_names prog.e >>| fun (existing_names, e') ->
+  (match prog.body with
+  | None -> Ok (existing_names, None)
+  | Some prog_body ->
+      of_expr ~existing_names prog_body >>| fun (existing_names, body') ->
+      (existing_names, Some body'))
+  >>| fun (existing_names, prog_body') ->
   ( existing_names,
     FlatProgram.
       {
@@ -437,5 +442,5 @@ let of_program ~(existing_names : StringSet.t)
                    ct;
                  });
         top_level_defns = List.rev flat_defns_rev;
-        e = e';
+        body = prog_body';
       } )

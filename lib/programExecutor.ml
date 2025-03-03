@@ -453,15 +453,17 @@ module MakeStd
                  }))
         prog.top_level_defns
     in
-    let e = prog.e in
-    eval ~type_ctx store
-      (e
-      |>
-      (* Remove Expr tags except type *)
-      Expr.fmap ~f:(fun (t, _) -> (t, ()))
-      |>
-      (* Remove pattern tags except type *)
-      Expr.fmap_pattern ~f:(fun (t, _) -> (t, ())))
+    match prog.body with
+    | Some e ->
+        eval ~type_ctx store
+          (e
+          |>
+          (* Remove Expr tags except type *)
+          Expr.fmap ~f:(fun (t, _) -> (t, ()))
+          |>
+          (* Remove pattern tags except type *)
+          Expr.fmap_pattern ~f:(fun (t, _) -> (t, ())))
+    | None -> Ok Unit
 end
 
 (** An implementation of the executor using the simple type checker
