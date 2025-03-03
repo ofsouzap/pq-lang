@@ -35,12 +35,8 @@ module StdM : S with module Program = Program.StdProgram = struct
       source_position.Frontend.fname >>| fun filename ->
       sprintf "# %d \"%s\"" source_position.lnum filename)
     |> function
-    | None ->
-        printf "nothing\n";
-        nothing
-    | Some s ->
-        printf "%s\n" s;
-        write s |.> endline
+    | None -> nothing
+    | Some s -> write s |.> endline
 
   let get_source_pos_opt_writer
       (get_source_position : ('tag_e -> Frontend.source_position) option)
