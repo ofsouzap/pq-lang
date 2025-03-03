@@ -59,7 +59,7 @@ rule token = parse
   | "(*" { multi_line_comment lexbuf }
   (* Literals and names *)
   | ['0'-'9']+ as n { INTLIT (int_of_string n) }
-  | ['a'-'z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as name { LNAME name }
+  | ['a'-'z' '_']['a'-'z' 'A'-'Z' '0'-'9' '_']* as name { LNAME name }
   | ['A'-'Z']['a'-'z' 'A'-'Z' '0'-'9' '_']* as name { UNAME name }
   (* Misc *)
   | eof { EOF }
