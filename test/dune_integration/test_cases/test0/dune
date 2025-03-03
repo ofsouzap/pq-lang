@@ -1,0 +1,14 @@
+(rule
+ (targets listSet.mli listSet.ml)
+ (deps
+  (package pq_lang)
+  listSet.pq)
+ (action
+  (chdir
+   %{workspace_root}
+   (run %{bin:pq_to_ocaml} %{deps}))))
+
+(executable
+ (name main)
+ (libraries pq_lang core)
+ (modules main listSet))
