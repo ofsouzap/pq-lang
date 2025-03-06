@@ -72,5 +72,3 @@ let rec union (arg: (set * set)) : set =
     end
   end
 end
-
-1

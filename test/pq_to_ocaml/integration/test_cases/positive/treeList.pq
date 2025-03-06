@@ -46,5 +46,3 @@ let rec incr (xs : list) : list =
     end )
   end
 end
-
-1
