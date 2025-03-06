@@ -35,5 +35,3 @@ let rec empty_count (t : list) : int =
     end
   end
 end
-
-empty_count (Node (Empty (), (Node (Empty (), (Leaf 1)))))

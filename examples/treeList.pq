@@ -74,5 +74,3 @@ let rec head (xs : list) : int_option =
     end
   end
 end
-
-1
