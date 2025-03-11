@@ -81,6 +81,7 @@ module type S = sig
       max_variant_type_constructors : int;
       max_top_level_defns : int;
       allow_fun_types : bool;
+      force_has_body : bool option;
       body_type : Vtype.t option;
       expr_v_gen : TagExpr.t QCheck.Gen.t;
       pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -305,6 +306,7 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
       max_variant_type_constructors : int;
       max_top_level_defns : int;
       allow_fun_types : bool;
+      force_has_body : bool option;
       body_type : Vtype.t option;
       expr_v_gen : TagExpr.t QCheck.Gen.t;
       pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -344,6 +346,7 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
       max_variant_type_constructors : int;
       max_top_level_defns : int;
       allow_fun_types : bool;
+      force_has_body : bool option;
       body_type : Vtype.t option;
       expr_v_gen : TagExpr.t QCheck.Gen.t;
       pat_v_gen : TagPat.t QCheck.Gen.t;
@@ -498,8 +501,8 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
              custom_types)
         ~max_top_level_defns:opts.max_top_level_defns ~mrd:opts.mrd
       >>= fun top_level_defns ->
-      option
-        (Expr_qcheck_testing.gen
+      (let e_gen =
+         Expr_qcheck_testing.gen
            {
              t =
                Option.(
@@ -519,7 +522,12 @@ module Make (Expr : Expr.S) (CustomType : CustomType.S) :
              v_gen = opts.expr_v_gen;
              pat_v_gen = opts.pat_v_gen;
              mrd = opts.mrd;
-           })
+           }
+       in
+       match opts.force_has_body with
+       | None -> option e_gen
+       | Some false -> return None
+       | Some true -> e_gen >|= Option.some)
       >|= fun body -> { custom_types; top_level_defns; body }
 
     let print (_ : print_options) : t QCheck.Print.t =

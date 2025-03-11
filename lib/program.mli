@@ -80,6 +80,7 @@ module type S = sig
       max_variant_type_constructors : int;
       max_top_level_defns : int;
       allow_fun_types : bool;
+      force_has_body : bool option;
       body_type : Vtype.t option;
       expr_v_gen : TagExpr.t QCheck.Gen.t;
       pat_v_gen : TagPat.t QCheck.Gen.t;
