@@ -75,7 +75,7 @@ module StdM : S with module Program = Program.StdProgram = struct
          | Pair (_, e1, e2) ->
              write "(" |.> convert e1 |.> write ", " |.> convert e2
              |.> write ")"
-         | Eq (_, e1, e2) -> convert e1 |.> write " == " |.> convert e2
+         | Eq (_, e1, e2) -> convert e1 |.> write " = " |.> convert e2
          | Gt (_, e1, e2) -> convert e1 |.> write " > " |.> convert e2
          | GtEq (_, e1, e2) -> convert e1 |.> write " >= " |.> convert e2
          | Lt (_, e1, e2) -> convert e1 |.> write " < " |.> convert e2
