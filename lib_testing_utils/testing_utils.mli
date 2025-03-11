@@ -147,12 +147,19 @@ module TestingVarCtx : sig
   end
 end
 
-module TestingTypeChecker :
-  Pq_lang.TypeChecker.S
-    with module Pattern = Pq_lang.Pattern.StdPattern
-     and module Expr = Pq_lang.Expr.StdExpr
-     and module Program = Pq_lang.Program.StdProgram
-     and module TypingError = Pq_lang.TypeChecker.TypingError.StdTypingError
+module TestingTypeChecker : sig
+  module TypeCtx = TestingTypeCtx
+  module VarCtx = TestingVarCtx
+
+  include
+    Pq_lang.TypeChecker.S
+      with module Pattern = Pq_lang.Pattern.StdPattern
+       and module Expr = Pq_lang.Expr.StdExpr
+       and module Program = Pq_lang.Program.StdProgram
+       and module TypingError = Pq_lang.TypeChecker.TypingError.StdTypingError
+       and module TypeCtx := TypeCtx
+       and module VarCtx := VarCtx
+end
 
 module UnitTag : sig
   type t = unit [@@deriving sexp, equal]
@@ -171,4 +178,7 @@ module Unit_program_qcheck_testing : sig
 end
 
 val unit_program_arbitrary_with_default_options :
+  Unit_program_qcheck_testing.t QCheck.arbitrary
+
+val unit_program_arbitrary_with_default_options_force_body :
   Unit_program_qcheck_testing.t QCheck.arbitrary

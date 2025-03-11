@@ -488,13 +488,25 @@ end = struct
   end
 end
 
-module TestingTypeChecker :
-  Pq_lang.TypeChecker.S
-    with module Pattern = Pq_lang.Pattern.StdPattern
-     and module Expr = Pq_lang.Expr.StdExpr
-     and module Program = Pq_lang.Program.StdProgram
-     and module TypingError = Pq_lang.TypeChecker.TypingError.StdTypingError =
-  Pq_lang.TypeChecker.MakeStd (TestingTypeCtx) (TestingVarCtx)
+module TestingTypeChecker : sig
+  module TypeCtx = TestingTypeCtx
+  module VarCtx = TestingVarCtx
+
+  include
+    Pq_lang.TypeChecker.S
+      with module Pattern = Pq_lang.Pattern.StdPattern
+       and module Expr = Pq_lang.Expr.StdExpr
+       and module Program = Pq_lang.Program.StdProgram
+       and module TypingError = Pq_lang.TypeChecker.TypingError.StdTypingError
+       and module TypeCtx := TypeCtx
+       and module VarCtx := VarCtx
+end = struct
+  module TypeCtx_ = TestingTypeCtx
+  module VarCtx_ = TestingVarCtx
+  include Pq_lang.TypeChecker.MakeStd (TestingTypeCtx) (TestingVarCtx)
+  module TypeCtx = TypeCtx_
+  module VarCtx = VarCtx_
+end
 
 module UnitTag = struct
   type t = unit [@@deriving sexp, equal]
@@ -507,7 +519,7 @@ end
 module Unit_expr_qcheck_testing = Expr.QCheck_testing (UnitTag) (UnitTag)
 module Unit_program_qcheck_testing = Program.QCheck_testing (UnitTag) (UnitTag)
 
-let unit_program_arbitrary_with_default_options =
+let _unit_program_arbitrary_with_default_options_aux ~force_has_body =
   Unit_program_qcheck_testing.arbitrary
     {
       gen =
@@ -519,6 +531,7 @@ let unit_program_arbitrary_with_default_options =
           max_top_level_defns = default_max_top_level_defns_count;
           allow_fun_types =
             (* TODO - until function-typed expression works better *) false;
+          force_has_body;
           body_type = None;
           expr_v_gen = QCheck.Gen.unit;
           pat_v_gen = QCheck.Gen.unit;
@@ -526,3 +539,9 @@ let unit_program_arbitrary_with_default_options =
       print = Unit_expr_qcheck_testing.PrintExprSource;
       shrink = { preserve_type = false };
     }
+
+let unit_program_arbitrary_with_default_options =
+  _unit_program_arbitrary_with_default_options_aux ~force_has_body:None
+
+let unit_program_arbitrary_with_default_options_force_body =
+  _unit_program_arbitrary_with_default_options_aux ~force_has_body:(Some true)
