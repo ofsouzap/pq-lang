@@ -179,3 +179,6 @@ end
 
 val unit_program_arbitrary_with_default_options :
   Unit_program_qcheck_testing.t QCheck.arbitrary
+
+val unit_program_arbitrary_with_default_options_force_body :
+  Unit_program_qcheck_testing.t QCheck.arbitrary

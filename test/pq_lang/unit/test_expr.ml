@@ -149,6 +149,7 @@ functor
                          default_max_variant_type_constructor_count;
                        max_top_level_defns = default_max_top_level_defns_count;
                        allow_fun_types = false;
+                       force_has_body = Some true;
                        body_type = None;
                        expr_v_gen = QCheck.get_gen Tag.arb;
                        pat_v_gen = QCheck.Gen.unit;
@@ -158,7 +159,7 @@ functor
                  }))
            (fun (f_, prog) ->
              match prog.body with
-             | None -> true
+             | None -> failwith "Program must have a body"
              | Some e ->
                  let f = QCheck.Fn.apply f_ in
                  let e' = Expr.node_map_val ~f e in
@@ -200,6 +201,7 @@ functor
                          default_max_variant_type_constructor_count;
                        max_top_level_defns = default_max_top_level_defns_count;
                        allow_fun_types = false;
+                       force_has_body = Some true;
                        body_type = None;
                        expr_v_gen = QCheck.get_gen Tag1.arb;
                        pat_v_gen = QCheck.Gen.unit;
@@ -209,7 +211,7 @@ functor
                  }))
            (fun (x, f_, prog) ->
              match prog.body with
-             | None -> true
+             | None -> failwith "Program must have a body"
              | Some e ->
                  let f = QCheck.Fn.apply f_ in
                  let e' = fmap ~f:(Core.Fn.compose f (const x)) e in
