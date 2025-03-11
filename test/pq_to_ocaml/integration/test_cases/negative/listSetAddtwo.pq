@@ -6,6 +6,17 @@ qtype set =
   list
   |/ (x : int) -> (y : int) -> (zs : set)
     => Cons ((x : int), Cons ((y : int), (zs : set))) == (Cons (y, Cons (x, zs)))
+  |/ (h : int) -> (ts : set)
+    => Cons ((h : int), (ts : set)) == (Cons (h, Cons (h, ts)))
+  |/ (h1 : int) -> (h2 : int) -> (ts : set)
+    => Cons ((h1 : int), Cons ((h2 : int), (ts : set))) == (
+      if h1 == h2
+      then
+        Cons (h1, ts)
+      else
+        Cons (h1, Cons (h2, ts))
+      end
+    )
 
 let rec addtwo (arg : (set * set)) : set =
   match arg -> set with
