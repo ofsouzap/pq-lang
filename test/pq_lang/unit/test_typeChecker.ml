@@ -509,7 +509,7 @@ module ListVariableContextTester =
   MakeVariableContextTester (Pq_lang.TypeChecker.VarContext.ListTypingVarContext)
 
 module TestingVariableContextTester = MakeVariableContextTester (TestingVarCtx)
-(* TODO - uncomment and fix
+
 let test_cases_arb_compound_expr_typing : unit Alcotest.test_case list =
   let open QCheck in
   let open QCheck.Gen in
@@ -532,14 +532,15 @@ let test_cases_arb_compound_expr_typing : unit Alcotest.test_case list =
   let create_test
       ( (name : string),
         (type_ctx :
-          (TestingTypeCtx.t, TypeChecker.typing_error) Result.t option),
-        (e_gen : TestingTypeCtx.t -> (Vtype.t * Expr.plain_t) Gen.t) ) : unit Alcotest.test_case =
+          (TestingTypeCtx.t, TypeChecker.TypingError.t) Result.t option),
+        (e_gen : TestingTypeCtx.t -> (Vtype.t * Expr.plain_t) Gen.t) ) :
+      unit Alcotest.test_case =
     let type_ctx : TestingTypeCtx.t =
       Option.value ~default:(Ok TestingTypeCtx.empty) type_ctx |> function
       | Ok type_ctx -> type_ctx
       | Error err ->
           failwith
-            (sprintf "Error creating type context: %s" (print_typing_error err))
+            (sprintf "Error creating type context: %s" (TypingError.print err))
     in
     let e_arb =
       QCheck.make
@@ -553,10 +554,13 @@ let test_cases_arb_compound_expr_typing : unit Alcotest.test_case list =
            match TestingTypeChecker.check_type_ctx type_ctx with
            | Error err ->
                Test.fail_reportf "Failed to check type ctx, with error: %s"
-                 (print_typing_error err)
+                 (TypingError.print err)
            | Ok type_ctx -> (
                match
-                 TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
+                 TestingTypeChecker.type_expr
+                   ~get_source_position:(Core.Fn.const None)
+                   (type_ctx, TestingVarCtx.empty)
+                   e
                with
                | Ok e_typed ->
                    let t = e_typed |> Expr.node_val |> fst in
@@ -741,42 +745,52 @@ let test_cases_arb_compound_expr_typing : unit Alcotest.test_case list =
             (return (Vtype.VTypeCustom "int_box"))
             ( expr_gen ~type_ctx Vtype.VTypeInt >|= fun e1 ->
               Constructor ((), "IntBox", e1) ) );
-    ] *)
-(* TODO - uncomment and fix
+    ]
+
 let test_cases_typing_maintains_structure : unit Alcotest.test_case =
   let open QCheck in
-    QCheck_alcotest.to_alcotest
+  QCheck_alcotest.to_alcotest
     (Test.make ~name:"Typing maintains structure" ~count:100
-       unit_program_arbitrary_with_default_options (fun prog ->
-         let type_ctx = prog.custom_types |> TestingTypeCtx.from_list in
-         let e = prog.e in
+       unit_program_arbitrary_with_default_options_force_body (fun prog ->
+         let type_ctx =
+           prog.custom_types
+           |> List.map ~f:(fun ct_decl -> ct_decl.Program.ct)
+           |> TestingTypeCtx.from_list
+         in
+         let e =
+           match prog.body with
+           | None -> failwith "Program must have body"
+           | Some body -> body
+         in
          match TestingTypeChecker.check_type_ctx type_ctx with
          | Error err ->
              Test.fail_reportf "Failed to check type ctx, with error: %s"
                (TypingError.print err)
          | Ok type_ctx -> (
              match
-               TestingTypeChecker.type_expr (type_ctx, TestingVarCtx.empty) e
+               TestingTypeChecker.type_expr
+                 ~get_source_position:(Core.Fn.const None)
+                 (type_ctx, TestingVarCtx.empty)
+                 e
              with
              | Ok e_typed ->
                  let plain_e = Expr.to_plain_t e in
                  let plain_typed_e = e_typed |> Expr.to_plain_t in
                  Expr.equal_plain_t plain_e plain_typed_e
-             | Error _ -> false))) *)
+             | Error _ -> false)))
 
 let suite : unit Alcotest.test_case list =
   label_tests "Expression typing" test_cases_expr_typing
   @ label_tests "Expression typing full hierarchy"
       test_cases_expr_typing_full_check
   @ label_tests "Expression typing with context" test_cases_typing_with_var_ctx
-  @
-  (* TODO - uncomment and fix
-          label_tests "Arbitrary expression typing" test_cases_arb_compound_expr_typing @ *)
-  (* TODO - uncomment and fix
-          label_tests "Typing maintains structure"
-         [ test_cases_typing_maintains_structure ] @ *)
-  label_tests "Variable contexts"
-    (label_tests "Function context" FunctionVariableContextTester.all_test_cases
-    @ label_tests "List context" ListVariableContextTester.all_test_cases
-    @ label_tests "Testing context" TestingVariableContextTester.all_test_cases
-    )
+  @ label_tests "Arbitrary expression typing"
+      test_cases_arb_compound_expr_typing
+  @ label_tests "Typing maintains structure"
+      [ test_cases_typing_maintains_structure ]
+  @ label_tests "Variable contexts"
+      (label_tests "Function context"
+         FunctionVariableContextTester.all_test_cases
+      @ label_tests "List context" ListVariableContextTester.all_test_cases
+      @ label_tests "Testing context"
+          TestingVariableContextTester.all_test_cases)
