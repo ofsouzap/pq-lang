@@ -203,7 +203,6 @@ let create_test_vtype_gen_constructors_exist (name : string) :
              TestingTypeCtx.type_defn_exists type_ctx vt_name
          | _ -> true))
 
-(* TODO - uncomment and fix
 let create_test_type_ctx_gen_valid (name : string) : unit Alcotest.test_case =
   let open QCheck in
   QCheck_alcotest.to_alcotest
@@ -223,17 +222,11 @@ let create_test_type_ctx_gen_valid (name : string) : unit Alcotest.test_case =
          | Ok _ -> true
          | Error err ->
              Test.fail_reportf "Failed to check type ctx, with error: %s"
-               (TypingError.print err))) *)
+               (TestingTypeChecker.TypingError.print err)))
 
 let create_test_var_ctx (xs : (string * Vtype.t) list) : TestingVarCtx.t =
   List.fold xs ~init:TestingVarCtx.empty ~f:(fun ctx (x, t) ->
       TestingVarCtx.add ctx x t)
-
-(* TODO - uncomment and fix
-let create_list_impl_var_ctx (xs : (string * Vtype.t) list) :
-    ListTypingVarContext.t =
-  List.fold xs ~init:ListTypingVarContext.empty ~f:(fun ctx (x, t) ->
-      ListTypingVarContext.add ctx x t) *)
 
 let var_ctx_list_arb ~(type_ctx : TestingTypeCtx.t) =
   let open QCheck in
@@ -245,18 +238,16 @@ let suite : unit Alcotest.test_case list =
   label_tests "Testing Utilities Tests"
     (label_tests "Value type generator"
        [ create_test_vtype_gen_constructors_exist "Variant types exist" ]
-       (* TODO - uncomment and fix
-          label_tests "Type context generator"
-         [ create_test_type_ctx_gen_valid "Type context is valid" ]; *)
-       (* TODO - uncomment and fix
-          label_tests "Typed expression generator"
-         [
-                create_typed_expr_gen_test_for_fixed_type "unit" VTypeUnit;
-                create_typed_expr_gen_test_for_fixed_type "int" VTypeInt;
-                create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
-                create_typed_expr_gen_test "'a * 'b"
-                  Gen.(
-                    default_testing_type_ctx_gen >>= fun type_ctx ->
-                    pair (vtype_gen_no_fun type_ctx) (vtype_gen_no_fun type_ctx)
-                    >|= fun (t1, t2) -> (type_ctx, Vtype.VTypePair (t1, t2)));
-              ]; *))
+    @ label_tests "Type context generator"
+        [ create_test_type_ctx_gen_valid "Type context is valid" ]
+    @ label_tests "Typed expression generator"
+        [
+          create_typed_expr_gen_test_for_fixed_type "unit" VTypeUnit;
+          create_typed_expr_gen_test_for_fixed_type "int" VTypeInt;
+          create_typed_expr_gen_test_for_fixed_type "bool" VTypeBool;
+          create_typed_expr_gen_test "'a * 'b"
+            QCheck.Gen.(
+              default_testing_type_ctx_gen >>= fun type_ctx ->
+              pair (vtype_gen_no_fun type_ctx) (vtype_gen_no_fun type_ctx)
+              >|= fun (t1, t2) -> (type_ctx, Vtype.VTypePair (t1, t2)));
+        ])
