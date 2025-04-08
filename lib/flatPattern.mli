@@ -3,6 +3,7 @@ module StdExpr = Expr.StdExpr
 module StdProgram = Program.StdProgram
 
 type 'a flat_pattern =
+  | FlatPatName of 'a * string * Vtype.t
   | FlatPatPair of 'a * ('a * string * Vtype.t) * ('a * string * Vtype.t)
   | FlatPatConstructor of 'a * string * ('a * string * Vtype.t)
 [@@deriving sexp, equal]

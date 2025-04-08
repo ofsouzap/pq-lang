@@ -5,6 +5,7 @@ module StdExpr = Expr.StdExpr
 module StdProgram = Program.StdProgram
 
 type 'a flat_pattern =
+  | FlatPatName of 'a * string * Vtype.t
   | FlatPatPair of 'a * ('a * string * Vtype.t) * ('a * string * Vtype.t)
   | FlatPatConstructor of 'a * string * ('a * string * Vtype.t)
 [@@deriving sexp, equal]
@@ -15,22 +16,28 @@ module M : Pattern.S with type 'a t = 'a flat_pattern = struct
   type plain_t = unit t [@@deriving sexp, equal]
 
   let to_plain_t : 'a t -> plain_t = function
+    | FlatPatName (_, name, t) -> FlatPatName ((), name, t)
     | FlatPatPair (_, (_, p1name, p1t), (_, p2name, p2t)) ->
         FlatPatPair ((), ((), p1name, p1t), ((), p2name, p2t))
     | FlatPatConstructor (_, cname, (_, p1name, p1t)) ->
         FlatPatConstructor ((), cname, ((), p1name, p1t))
 
   let node_val = function
+    | FlatPatName (v, _, _) -> v
     | FlatPatPair (v, _, _) -> v
     | FlatPatConstructor (v, _, _) -> v
 
   let fmap ~(f : 'a -> 'b) : 'a t -> 'b t = function
+    | FlatPatName (v, name, t) -> FlatPatName (f v, name, t)
     | FlatPatPair (v, (v1, p1name, p1t), (v2, p2name, p2t)) ->
         FlatPatPair (f v, (f v1, p1name, p1t), (f v2, p2name, p2t))
     | FlatPatConstructor (v, cname, (v1, p1name, p1t)) ->
         FlatPatConstructor (f v, cname, (f v1, p1name, p1t))
 
   let rename_var ~(old_name : Varname.t) ~(new_name : Varname.t) = function
+    | FlatPatName (v, name, t) ->
+        FlatPatName
+          (v, (if equal_string name old_name then new_name else name), t)
     | FlatPatPair (v, (v1, p1name, p1t), (v2, p2name, p2t)) ->
         FlatPatPair
           ( v,
@@ -49,17 +56,21 @@ module M : Pattern.S with type 'a t = 'a flat_pattern = struct
               p1t ) )
 
   let existing_names : 'a t -> StringSet.t = function
+    | FlatPatName (_, name, _) -> StringSet.singleton name
     | FlatPatPair (_, (_, p1name, _), (_, p2name, _)) ->
         StringSet.of_list [ p1name; p2name ]
     | FlatPatConstructor (_, c_name, (_, p1name, _)) ->
         StringSet.of_list [ c_name; p1name ]
 
   let defined_vars : 'a t -> (Varname.t * Vtype.t) list = function
+    | FlatPatName (_, name, t) -> [ (name, t) ]
     | FlatPatPair (_, (_, p1name, p1t), (_, p2name, p2t)) ->
         [ (p1name, p1t); (p2name, p2t) ]
     | FlatPatConstructor (_, _, (_, p1name, p1t)) -> [ (p1name, p1t) ]
 
   let to_source_code : 'a t -> string = function
+    | FlatPatName (_, name, t) ->
+        sprintf "%s : (%s)" name (Vtype.to_source_code t)
     | FlatPatPair (_, (_, p1name, p1t), (_, p2name, p2t)) ->
         sprintf "(%s : (%s)), (%s : (%s))" p1name (Vtype.to_source_code p1t)
           p2name (Vtype.to_source_code p2t)
@@ -114,6 +125,7 @@ type flattening_error =
 [@@deriving sexp, equal]
 
 let to_std_pattern : 'a M.t -> 'a StdPattern.t = function
+  | FlatPatName (v, name, t) -> PatName (v, name, t)
   | FlatPatPair (v, (x1_v, x1_name, x1_t), (x2_v, x2_name, x2_t)) ->
       PatPair (v, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
   | FlatPatConstructor (v, c_name, (x1_v, x1_name, x1_t)) ->
