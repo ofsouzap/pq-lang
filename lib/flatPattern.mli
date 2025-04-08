@@ -17,7 +17,9 @@ module FlatProgram :
      and module QuotientType = QuotientType.StdQuotientType
      and module CustomType = CustomType.StdCustomType
 
-type flattening_error = UnexpectedTrivialMatchCasePatternError
+type flattening_error =
+  | UnexpectedTrivialMatchCasePatternError
+  | CasePatternTypingMismatch
 [@@deriving sexp, equal]
 
 val to_std_pattern : 'a flat_pattern -> 'a StdPattern.t
