@@ -715,6 +715,139 @@ module Z3Intf : S = struct
                        body_node;
                      ] )))
 
+    let build_lifted_eq_fun ~(existing_names : StringSet.t) ~(state : State.t) :
+        tag_custom_type ->
+        ((StringSet.t * Sexp.t list) option, smt_intf_error) Result.t =
+      let open Result in
+      function
+      | VariantType _ -> Ok None
+      | CustomType.QuotientType qt ->
+          let t = Vtype.VTypeCustom qt.name in
+          let eq_fun_name =
+            State.state_get_vtype_special_eq_fun_name state t
+            |> Option.value_exn
+                 ~message:"Quotient type has no special equality function"
+          in
+          build_vtype state t >>= fun t_node ->
+          build_vtype state VTypeBool >>= fun bool_node ->
+          (* Equality function definition node *)
+          sexp_op
+            ( "declare-fun",
+              [ Atom eq_fun_name; List [ t_node; t_node ]; bool_node ] )
+          |> fun decl_node ->
+          (* Basic equality relation assertion nodes *)
+          let assert_node_refl =
+            (* Reflexivity *)
+            let arg_name = custom_special_name (`Var "x") in
+            sexp_op
+              ( "assert",
+                [
+                  sexp_op
+                    ( "forall",
+                      [
+                        List [ List [ Atom arg_name; t_node ] ];
+                        sexp_op (eq_fun_name, [ Atom arg_name; Atom arg_name ]);
+                      ] );
+                ] )
+          in
+          (* Quotient assertion nodes *)
+          let create_assert_node (bindings : (Varname.t * Vtype.t) list)
+              (l : tag_flat_expr) (r : tag_flat_expr) :
+              (Sexp.t, smt_intf_error) Result.t =
+            List.fold_result bindings ~init:([], [])
+              ~f:(fun (qt_names, acc_rev) (xname, xtype) ->
+                (match xtype with
+                | VTypeCustom ct_name ->
+                    List.find_map state.custom_types ~f:(function
+                      | VariantType _ -> None
+                      | CustomType.QuotientType qt ->
+                          if equal_string ct_name qt.name then Some qt else None)
+                | _ -> None)
+                |> fun x_qt ->
+                build_vtype state xtype >>| fun xtype_node ->
+                match x_qt with
+                | Some x_qt ->
+                    let xname_l =
+                      custom_special_name (`QuotientEqBinding (xname, `Pattern))
+                    in
+                    let xname_r =
+                      custom_special_name (`QuotientEqBinding (xname, `Expr))
+                    in
+                    ( (xname, x_qt) :: qt_names,
+                      sexp_op (xname_l, [ xtype_node ])
+                      :: sexp_op (xname_r, [ xtype_node ])
+                      :: acc_rev )
+                | None -> (qt_names, sexp_op (xname, [ xtype_node ]) :: acc_rev))
+            >>=
+            fun ( (qt_binding_names : (string * tag_quotient_type) list),
+                  bindings_nodes_rev )
+            ->
+            let bindings_nodes = List.rev bindings_nodes_rev in
+            let l, r =
+              List.fold qt_binding_names ~init:(l, r)
+                ~f:(fun (l, r) (xname, _) ->
+                  ( FlatPattern.FlatExpr.rename_var ~old_name:xname
+                      ~new_name:
+                        (custom_special_name
+                           (`QuotientEqBinding (xname, `Pattern)))
+                      l,
+                    FlatPattern.FlatExpr.rename_var ~old_name:xname
+                      ~new_name:
+                        (custom_special_name
+                           (`QuotientEqBinding (xname, `Expr)))
+                      r ))
+            in
+            build_expr ~directly_callable_fun_names:StringSet.empty state l
+            >>= fun l_node ->
+            build_expr ~directly_callable_fun_names:StringSet.empty state r
+            >>= fun r_node ->
+            (let eq_node = sexp_op (eq_fun_name, [ l_node; r_node ]) in
+             List.fold qt_binding_names ~init:eq_node
+               ~f:(fun acc_node (xname, x_qt) ->
+                 let xname_l =
+                   custom_special_name (`QuotientEqBinding (xname, `Pattern))
+                 in
+                 let xname_r =
+                   custom_special_name (`QuotientEqBinding (xname, `Expr))
+                 in
+                 sexp_op
+                   ( "=>",
+                     [
+                       sexp_op
+                         ( State.state_get_vtype_special_eq_fun_name state
+                             (VTypeCustom x_qt.name)
+                           |> Option.value_exn
+                                ~message:
+                                  "Quotient type didn't have custom secial \
+                                   equality function name",
+                           [ Atom xname_l; Atom xname_r ] );
+                       acc_node;
+                     ] )))
+            |> fun body_node ->
+            Ok
+              (sexp_op
+                 ( "assert",
+                   [ sexp_op ("forall", [ List bindings_nodes; body_node ]) ] ))
+          in
+          List.fold_result qt.eqconss ~init:(existing_names, [])
+            ~f:(fun (existing_names, acc_rev) eqcons ->
+              fst eqcons.body
+              |> std_expr_of_std_pattern ~convert_tag:pattern_tag_to_expr_tag
+              |> FlatPattern.of_expr ~existing_names
+              |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
+              >>= fun (existing_names, flat_l) ->
+              snd eqcons.body
+              |> FlatPattern.of_expr ~existing_names
+              |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
+              >>= fun (existing_names, flat_r) ->
+              create_assert_node eqcons.bindings flat_l flat_r >>| fun node ->
+              (existing_names, node :: acc_rev))
+          >>= fun (existing_names, assert_nodes_main_rev) ->
+          let assert_nodes_main = List.rev assert_nodes_main_rev in
+          (* Output *)
+          [ decl_node; assert_node_refl ] @ assert_nodes_main |> Ok
+          >>= fun node -> Ok (Some (existing_names, node))
+
     let build_state ~(existing_names : StringSet.t) (state : State.t) :
         (StringSet.t * Sexp.t list, smt_intf_error) Result.t =
       let open Result in
@@ -770,140 +903,14 @@ module Z3Intf : S = struct
       let build_lifted_eq_fun_nodes ~(existing_names : StringSet.t) () :
           (StringSet.t * Sexp.t list, smt_intf_error) Result.t =
         List.fold_result state.custom_types ~init:(existing_names, [])
-          ~f:(fun (existing_names, (acc_rev : Sexp.t list list)) -> function
-          | VariantType _ -> Ok (existing_names, acc_rev)
-          | CustomType.QuotientType qt ->
-              let t = Vtype.VTypeCustom qt.name in
-              let eq_fun_name =
-                State.state_get_vtype_special_eq_fun_name state t
-                |> Option.value_exn
-                     ~message:"Quotient type has no special equality function"
-              in
-              build_vtype state t >>= fun t_node ->
-              build_vtype state VTypeBool >>= fun bool_node ->
-              (* Equality function definition node *)
-              sexp_op
-                ( "declare-fun",
-                  [ Atom eq_fun_name; List [ t_node; t_node ]; bool_node ] )
-              |> fun decl_node ->
-              (* Assertion nodes *)
-              let create_assert_node (bindings : (Varname.t * Vtype.t) list)
-                  (l : tag_flat_expr) (r : tag_flat_expr) :
-                  (Sexp.t, smt_intf_error) Result.t =
-                List.fold_result bindings ~init:([], [])
-                  ~f:(fun (qt_names, acc_rev) (xname, xtype) ->
-                    (match xtype with
-                    | VTypeCustom ct_name ->
-                        List.find_map state.custom_types ~f:(function
-                          | VariantType _ -> None
-                          | CustomType.QuotientType qt ->
-                              if equal_string ct_name qt.name then Some qt
-                              else None)
-                    | _ -> None)
-                    |> fun x_qt ->
-                    build_vtype state xtype >>| fun xtype_node ->
-                    match x_qt with
-                    | Some x_qt ->
-                        let xname_l =
-                          custom_special_name
-                            (`QuotientEqBinding (xname, `Pattern))
-                        in
-                        let xname_r =
-                          custom_special_name
-                            (`QuotientEqBinding (xname, `Expr))
-                        in
-                        ( (xname, x_qt) :: qt_names,
-                          sexp_op (xname_l, [ xtype_node ])
-                          :: sexp_op (xname_r, [ xtype_node ])
-                          :: acc_rev )
-                    | None ->
-                        (qt_names, sexp_op (xname, [ xtype_node ]) :: acc_rev))
-                >>=
-                fun ( (qt_binding_names : (string * tag_quotient_type) list),
-                      bindings_nodes_rev )
-                ->
-                let bindings_nodes = List.rev bindings_nodes_rev in
-                let l, r =
-                  List.fold qt_binding_names ~init:(l, r)
-                    ~f:(fun (l, r) (xname, _) ->
-                      ( FlatPattern.FlatExpr.rename_var ~old_name:xname
-                          ~new_name:
-                            (custom_special_name
-                               (`QuotientEqBinding (xname, `Pattern)))
-                          l,
-                        FlatPattern.FlatExpr.rename_var ~old_name:xname
-                          ~new_name:
-                            (custom_special_name
-                               (`QuotientEqBinding (xname, `Expr)))
-                          r ))
-                in
-                build_expr ~directly_callable_fun_names:StringSet.empty state l
-                >>= fun l_node ->
-                build_expr ~directly_callable_fun_names:StringSet.empty state r
-                >>= fun r_node ->
-                (let eq_node = sexp_op (eq_fun_name, [ l_node; r_node ]) in
-                 List.fold qt_binding_names ~init:eq_node
-                   ~f:(fun acc_node (xname, x_qt) ->
-                     let xname_l =
-                       custom_special_name
-                         (`QuotientEqBinding (xname, `Pattern))
-                     in
-                     let xname_r =
-                       custom_special_name (`QuotientEqBinding (xname, `Expr))
-                     in
-                     sexp_op
-                       ( "=>",
-                         [
-                           sexp_op
-                             ( State.state_get_vtype_special_eq_fun_name state
-                                 (VTypeCustom x_qt.name)
-                               |> Option.value_exn
-                                    ~message:
-                                      "Quotient type didn't have custom secial \
-                                       equality function name",
-                               [ Atom xname_l; Atom xname_r ] );
-                           acc_node;
-                         ] )))
-                |> fun body_node ->
-                Ok
-                  (sexp_op
-                     ( "assert",
-                       [
-                         sexp_op ("forall", [ List bindings_nodes; body_node ]);
-                       ] ))
-              in
-              (let arg_name = custom_special_name (`Var "x") in
-               sexp_op
-                 ( "assert",
-                   [
-                     sexp_op
-                       ( "forall",
-                         [
-                           List [ List [ Atom arg_name; t_node ] ];
-                           sexp_op
-                             (eq_fun_name, [ Atom arg_name; Atom arg_name ]);
-                         ] );
-                   ] ))
-              |> fun assert_node_base ->
-              List.fold_result qt.eqconss ~init:(existing_names, [])
-                ~f:(fun (existing_names, acc_rev) eqcons ->
-                  fst eqcons.body
-                  |> std_expr_of_std_pattern
-                       ~convert_tag:pattern_tag_to_expr_tag
-                  |> FlatPattern.of_expr ~existing_names
-                  |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
-                  >>= fun (existing_names, flat_l) ->
-                  snd eqcons.body
-                  |> FlatPattern.of_expr ~existing_names
-                  |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
-                  >>= fun (existing_names, flat_r) ->
-                  create_assert_node eqcons.bindings flat_l flat_r
-                  >>| fun node -> (existing_names, node :: acc_rev))
-              >>= fun (existing_names, assert_nodes_main_rev) ->
-              let assert_nodes_main = List.rev assert_nodes_main_rev in
-              (* Output *)
-              [ decl_node; assert_node_base ] @ assert_nodes_main |> Ok
-              >>= fun node -> Ok (existing_names, node :: acc_rev))
+          ~f:(fun
+              (existing_names, (acc_rev : Sexp.t list list))
+              (ct : tag_custom_type)
+            ->
+            build_lifted_eq_fun ~existing_names ~state ct >>| fun result ->
+            match result with
+            | None -> (existing_names, acc_rev)
+            | Some (existing_names, vs) -> (existing_names, vs :: acc_rev))
         >>| fun (existing_names, nodes_deep_rev) ->
         (existing_names, nodes_deep_rev |> List.rev |> List.concat)
       in
@@ -1041,6 +1048,7 @@ module Z3Intf : S = struct
         formula
       |> String.concat ~sep:"\n"
     in
+    (* printf "%s\n" smtlib_string; *)
     let ctx = Z3.mk_context [ ("model", "true") ] in
     let ast_vec = Z3.SMT.parse_smtlib2_string ctx smtlib_string [] [] [] [] in
     let solver = Z3.Solver.mk_solver ctx None in
