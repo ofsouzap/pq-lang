@@ -735,18 +735,78 @@ module Z3Intf : S = struct
             ( "declare-fun",
               [ Atom eq_fun_name; List [ t_node; t_node ]; bool_node ] )
           |> fun decl_node ->
-          (* Basic equality relation assertion nodes *)
+          (* Basic equivalence relation assertion nodes *)
           let assert_node_refl =
             (* Reflexivity *)
-            let arg_name = custom_special_name (`Var "x") in
+            (* forall x. x = x *)
+            let x_name = custom_special_name (`Var "x") in
             sexp_op
               ( "assert",
                 [
                   sexp_op
                     ( "forall",
                       [
-                        List [ List [ Atom arg_name; t_node ] ];
-                        sexp_op (eq_fun_name, [ Atom arg_name; Atom arg_name ]);
+                        List [ List [ Atom x_name; t_node ] ];
+                        sexp_op (eq_fun_name, [ Atom x_name; Atom x_name ]);
+                      ] );
+                ] )
+          in
+          let assert_node_symm =
+            (* Symmetry *)
+            (* forall x,y. x = y => y = x *)
+            let x_name = custom_special_name (`Var "x") in
+            let y_name = custom_special_name (`Var "y") in
+            sexp_op
+              ( "assert",
+                [
+                  sexp_op
+                    ( "forall",
+                      [
+                        List
+                          [
+                            List [ Atom x_name; t_node ];
+                            List [ Atom y_name; t_node ];
+                          ];
+                        sexp_op
+                          ( "=>",
+                            [
+                              sexp_op (eq_fun_name, [ Atom x_name; Atom y_name ]);
+                              sexp_op (eq_fun_name, [ Atom y_name; Atom x_name ]);
+                            ] );
+                      ] );
+                ] )
+          in
+          let assert_node_trans =
+            (* Transitivity *)
+            (* forall x,y,z. x = y AND y = z => x = z *)
+            let x_name = custom_special_name (`Var "x") in
+            let y_name = custom_special_name (`Var "y") in
+            let z_name = custom_special_name (`Var "z") in
+            sexp_op
+              ( "assert",
+                [
+                  sexp_op
+                    ( "forall",
+                      [
+                        List
+                          [
+                            List [ Atom x_name; t_node ];
+                            List [ Atom y_name; t_node ];
+                            List [ Atom z_name; t_node ];
+                          ];
+                        sexp_op
+                          ( "=>",
+                            [
+                              sexp_op
+                                ( "and",
+                                  [
+                                    sexp_op
+                                      (eq_fun_name, [ Atom x_name; Atom y_name ]);
+                                    sexp_op
+                                      (eq_fun_name, [ Atom y_name; Atom z_name ]);
+                                  ] );
+                              sexp_op (eq_fun_name, [ Atom x_name; Atom z_name ]);
+                            ] );
                       ] );
                 ] )
           in
@@ -845,7 +905,9 @@ module Z3Intf : S = struct
           >>= fun (existing_names, assert_nodes_main_rev) ->
           let assert_nodes_main = List.rev assert_nodes_main_rev in
           (* Output *)
-          [ decl_node; assert_node_refl ] @ assert_nodes_main |> Ok
+          [ decl_node; assert_node_refl; assert_node_symm; assert_node_trans ]
+          @ assert_nodes_main
+          |> Ok
           >>= fun node -> Ok (Some (existing_names, node))
 
     let build_state ~(existing_names : StringSet.t) (state : State.t) :
