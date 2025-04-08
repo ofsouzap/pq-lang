@@ -652,6 +652,8 @@ module Z3Intf : S = struct
             build_expr ~directly_callable_fun_names state body
             >>= fun body_node ->
             match pat with
+            | FlatPattern.FlatPatName (_, xname, _) ->
+                Ok (sexp_op (xname, [ body_node ]))
             | FlatPattern.FlatPatPair (_, (_, x1name, x1t), (_, x2name, x2t)) ->
                 state_get_pair_type_info (x1t, x2t) state
                 >>| fun pair_type_info ->
