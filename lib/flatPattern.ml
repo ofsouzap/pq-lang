@@ -108,7 +108,9 @@ let std_program_private_flag_to_flat_program_private_flag :
   | StdProgram.Public -> Public
   | Private -> Private
 
-type flattening_error = UnexpectedTrivialMatchCasePatternError
+type flattening_error =
+  | UnexpectedTrivialMatchCasePatternError
+  | CasePatternTypingMismatch
 [@@deriving sexp, equal]
 
 let to_std_pattern : 'a M.t -> 'a StdPattern.t = function
@@ -116,6 +118,111 @@ let to_std_pattern : 'a M.t -> 'a StdPattern.t = function
       PatPair (v, PatName (x1_v, x1_name, x1_t), PatName (x2_v, x2_name, x2_t))
   | FlatPatConstructor (v, c_name, (x1_v, x1_name, x1_t)) ->
       PatConstructor (v, c_name, PatName (x1_v, x1_name, x1_t))
+
+(** Provides a representation a standard match construct that can be compmiled
+    to a flat match construct *)
+module MatchTree : sig
+  type ('tag_e, 'tag_p) t [@@deriving sexp, equal]
+
+  (** Create a match tree from the cases of a standard match construct *)
+  val of_std_cases :
+    ('tag_p StdPattern.t * ('tag_e, 'tag_p) StdExpr.t) Nonempty_list.t ->
+    (('tag_e, 'tag_p) t, flattening_error) Result.t
+
+  (** Compile the match tree into the cases for a flat Match node *)
+  val to_flat_cases :
+    ('tag_e, 'tag_p) t -> ('tag_p M.t * ('tag_e, 'tag_p) t) Nonempty_list.t
+end = struct
+  type ('tag_e, 'tag_p) t =
+    | Leaf of string * ('tag_e, 'tag_p) StdExpr.t
+        (** The leaf node of the tree, where we don't need to perform a match
+            deconstruction *)
+    | Pair of string option * ('tag_e, 'tag_p) t * ('tag_e, 'tag_p) t
+        (** Destructing a pair type into its constituent values *)
+    | Variant of
+        string option
+        * ('tag_e, 'tag_p) StdExpr.t option
+        * ('tag_e, 'tag_p) t StringMap.t
+        (** Destructing a variant type, where we must have a case for each of
+            the constructors of the variant type. Holds a default expression and
+            a mapping from constructors to sub-match trees *)
+  [@@deriving sexp, equal]
+
+  (** Add a case pattern to a match tree, possibly overwriting existing data for
+      overlapping pattern data *)
+  let rec add_case_pattern ~(case_e : ('tag_e, 'tag_p) StdExpr.t)
+      (case_p : 'tag_p StdPattern.t) (orig_tree : ('tag_e, 'tag_p) t option) :
+      (('tag_e, 'tag_p) t, flattening_error) Result.t =
+    let open Result in
+    match (case_p, orig_tree) with
+    | PatName (_, xname, _), _ ->
+        (* A named variable pattern overwrites existing subtrees *)
+        Leaf (xname, case_e) |> Ok
+    | PatPair (_, p1, p2), None ->
+        add_case_pattern ~case_e p1 None >>= fun t1 ->
+        add_case_pattern ~case_e p2 None >>| fun t2 -> Pair (None, t1, t2)
+    | PatPair (_, p1, p2), Some (Leaf (t_name, _)) ->
+        (* A pair pattern can transform a leaf into a pair node *)
+        add_case_pattern ~case_e p1 None >>= fun t1 ->
+        add_case_pattern ~case_e p2 None >>| fun t2 -> Pair (Some t_name, t1, t2)
+    | PatPair (_, p1, p2), Some (Pair (t_name_opt, t1, t2)) ->
+        (* A pir pattern recurses into the two subtrees with the two subpatterns *)
+        add_case_pattern ~case_e p1 (Some t1) >>= fun t1' ->
+        add_case_pattern ~case_e p2 (Some t2) >>| fun t2' ->
+        Pair (t_name_opt, t1', t2')
+    | PatPair _, Some (Variant _) -> Error CasePatternTypingMismatch
+    | PatConstructor (_, c_name, p1), None ->
+        (* A constructor pattern can transform a leaf into a variant node *)
+        add_case_pattern ~case_e p1 None >>| fun t1 ->
+        Variant (None, None, StringMap.singleton c_name t1)
+    | PatConstructor (_, c_name, p1), Some (Leaf (t_name, t_e)) ->
+        (* A constructor pattern can transform a leaf into a variant node *)
+        add_case_pattern ~case_e p1 None >>| fun t1 ->
+        Variant (Some t_name, Some t_e, StringMap.singleton c_name t1)
+    | PatConstructor _, Some (Pair _) -> Error CasePatternTypingMismatch
+    | ( PatConstructor (_, c_name, p1),
+        Some (Variant (t_name_opt, t_e_opt, t_map)) ) ->
+        (* A constructor pattern can add a new case to an existing variant node *)
+        let curr_subtree = Map.find t_map c_name in
+        add_case_pattern ~case_e p1 curr_subtree >>| fun t1 ->
+        Variant (t_name_opt, t_e_opt, Map.set t_map ~key:c_name ~data:t1)
+
+  let of_std_cases (cases : ('tag_p StdPattern.t * 'a) Nonempty_list.t) :
+      (('tag_e, 'tag_p) t, flattening_error) Result.t =
+    let open Result in
+    cases
+    |>
+    (* We reverse the cases so that earlier cases can overwrite later ones *)
+    Nonempty_list.rev
+    |>
+    (* Then we fold to create a match tree *)
+    Nonempty_list.fold_result_consume_init ~init:()
+      ~f:(fun tree_either (case_p, case_e) ->
+        let tree_opt =
+          match tree_either with First () -> None | Second tree -> Some tree
+        in
+        add_case_pattern ~case_e case_p tree_opt)
+
+  let to_flat_cases :
+      ('tag_e, 'tag_p) t -> ('tag_p M.t * ('tag_e, 'tag_p) t) Nonempty_list.t =
+    _
+end
+
+(** Flatten a Match node's cases so that the pattern is a flat pattern,
+    returning a Match node which probably will have introduced new sub-Match
+    nodes *)
+let flatten_match ~(existing_names : StringSet.t)
+    (cases : ('tag_p StdPattern.t * ('tag_e, 'tag_p) StdExpr.t) Nonempty_list.t)
+    :
+    ( StringSet.t
+      * ('tag_e
+        * ('tag_e, 'tag_p) FlatExpr.t
+        * Vtype.t
+        * ('tag_p M.t * ('tag_e, 'tag_p) FlatExpr.t) Nonempty_list.t),
+      flattening_error )
+    Result.t =
+  let open Result in
+  _
 
 (** Flatten a single case of a Match node so that the pattern is a flat pattern,
     and modify the case expression to perform any subsequent matching as needed
