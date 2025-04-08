@@ -415,6 +415,22 @@ let max_angle (arg : (ipolar * ipolar)) : int =
 end
 |},
         `Invalid );
+      ( "Simple name pattern example",
+        {|
+type my_t = A of int | B of int
+
+qtype my_qt
+  = my_t
+  |/ (x : int) => A (x : int) == (B x)
+  |/ (x : int) => B (x : int) == (A x)
+
+let my_id (x : my_qt) : my_qt =
+  match x -> my_qt with
+  | (y : my_qt) -> y
+  end
+end
+|},
+        `Valid );
     ]
 
 let suite : unit Alcotest.test_case list =
