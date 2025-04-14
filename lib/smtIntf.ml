@@ -84,7 +84,10 @@ module type S = sig
       Vtype.t * Vtype.t -> t -> (pair_type_info, smt_intf_error) result
 
     val state_get_vtype_special_eq_fun_name : t -> Vtype.t -> string option
-    val state_add_variant_type : VariantType.t -> t -> t
+
+    val state_add_variant_type :
+      VariantType.t -> t -> (t, smt_intf_error) result
+
     val state_add_var_decl : string * Vtype.t -> t -> t
     val state_add_var_defn : var_defn -> t -> (t, smt_intf_error) result
   end
@@ -359,6 +362,19 @@ module Z3Intf : S = struct
             Map.set state.pair_types_defined ~key:(t1, t2) ~data:info;
         }
 
+    let rec state_add_pair_types_used (state : state) :
+        Vtype.t -> (state, smt_intf_error) Result.t =
+      let open Result in
+      function
+      | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> Ok state
+      | VTypePair (t1, t2) ->
+          state_add_pair_type (t1, t2) state >>= fun state ->
+          state_add_pair_types_used state t1 >>= fun state ->
+          state_add_pair_types_used state t2
+      | VTypeFun (t1, t2) ->
+          state_add_pair_types_used state t1 >>= fun state ->
+          state_add_pair_types_used state t2
+
     let state_get_pair_type_info ((t1 : Vtype.t), (t2 : Vtype.t)) (state : t) :
         (pair_type_info, smt_intf_error) Result.t =
       let open Result in
@@ -383,7 +399,7 @@ module Z3Intf : S = struct
 
     (** Add a variant type definition to the state *)
     let state_add_variant_type ((vt_name, vt_cs) : VariantType.t) (state : t) :
-        t =
+        (t, smt_intf_error) Result.t =
       let constructor_info ((c_name, c_t) : VariantType.constructor) :
           variant_type_constructor_info =
         {
@@ -394,12 +410,19 @@ module Z3Intf : S = struct
           t = c_t;
         }
       in
-      {
-        state with
-        variant_types =
-          { name = vt_name; constructors = List.map ~f:constructor_info vt_cs }
-          :: state.variant_types;
-      }
+      let state =
+        {
+          state with
+          variant_types =
+            {
+              name = vt_name;
+              constructors = List.map ~f:constructor_info vt_cs;
+            }
+            :: state.variant_types;
+        }
+      in
+      List.fold_result vt_cs ~init:state ~f:(fun state (_, c_t) ->
+          state_add_pair_types_used state c_t)
 
     (** Add a variable declaration to the state *)
     let state_add_var_decl ((xname : Varname.t), (xtype : Vtype.t)) (state : t)
@@ -413,98 +436,87 @@ module Z3Intf : S = struct
     let state_add_var_defn (defn : var_defn) (state : t) :
         (t, smt_intf_error) Result.t =
       let open Result in
-      let rec add_pair_types_used (state : state) :
-          Vtype.t -> (state, smt_intf_error) Result.t = function
-        | VTypeUnit | VTypeInt | VTypeBool | VTypeCustom _ -> Ok state
-        | VTypePair (t1, t2) ->
-            state_add_pair_type (t1, t2) state >>= fun state ->
-            add_pair_types_used state t1 >>= fun state ->
-            add_pair_types_used state t2
-        | VTypeFun (t1, t2) ->
-            add_pair_types_used state t1 >>= fun state ->
-            add_pair_types_used state t2
-      in
       let rec search_add_pair_types_used (state : state) :
           tag_flat_expr -> (state, smt_intf_error) Result.t = function
-        | UnitLit v -> add_pair_types_used state v.t
-        | IntLit (v, _) -> add_pair_types_used state v.t
+        | UnitLit v -> state_add_pair_types_used state v.t
+        | IntLit (v, _) -> state_add_pair_types_used state v.t
         | Add (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Neg (v, e1) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1
         | Subtr (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Mult (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
-        | BoolLit (v, _) -> add_pair_types_used state v.t
+        | BoolLit (v, _) -> state_add_pair_types_used state v.t
         | BNot (v, e1) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1
         | BOr (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | BAnd (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Pair (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Eq (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Gt (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | GtEq (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Lt (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | LtEq (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | If (v, e1, e2, e3) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2 >>= fun state ->
             search_add_pair_types_used state e3
-        | Var (v, _) -> add_pair_types_used state v.t
+        | Var (v, _) -> state_add_pair_types_used state v.t
         | Let (v, _, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | App (v, e1, e2) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             search_add_pair_types_used state e2
         | Match (v, e1, t2, cases) ->
-            add_pair_types_used state t2 >>= fun state ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state t2 >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1 >>= fun state ->
             Nonempty_list.fold_result
               ~f:(fun state (pat, e) ->
                 let pat_t = FlatPattern.M.node_val pat in
-                add_pair_types_used state pat_t.t >>= fun state ->
+                state_add_pair_types_used state pat_t.t >>= fun state ->
                 search_add_pair_types_used state e)
               ~init:state cases
         | Constructor (v, _, e1) ->
-            add_pair_types_used state v.t >>= fun state ->
+            state_add_pair_types_used state v.t >>= fun state ->
             search_add_pair_types_used state e1
       in
       (* Add all used pair types to the state *)
