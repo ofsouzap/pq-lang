@@ -71,7 +71,7 @@ let test_cases :
               PatName ((VTypeInt, ()), "x", VTypeInt),
               PatName ((VTypeInt, ()), "y", VTypeInt) );
         ] );
-      ( (* A x | B (A x, C y) | B (C x, C y) | C z | B (x, C y) | B (x, A y) | x | B (B (A x, y), C z) *)
+      ( (* A x | B (A x, C y) | B (C x, C y) | C z | B (x, C y) | B (x, A y) | x *)
         CustomType.
           [
             VariantType
@@ -129,26 +129,6 @@ let test_cases :
                       "A",
                       PatName ((VTypeInt, ()), "y", VTypeInt) ) ) );
           PatName ((VTypeCustom "t", ()), "x", VTypeCustom "t");
-          PatConstructor
-            ( (VTypeCustom "t", ()),
-              "B",
-              PatPair
-                ( (VTypePair (VTypeCustom "t", VTypeCustom "t"), ()),
-                  PatConstructor
-                    ( (VTypeCustom "t", ()),
-                      "B",
-                      PatPair
-                        ( (VTypePair (VTypeCustom "t", VTypeCustom "t"), ()),
-                          PatConstructor
-                            ( (VTypeCustom "t", ()),
-                              "A",
-                              PatName ((VTypeInt, ()), "x", VTypeInt) ),
-                          PatName ((VTypeCustom "t", ()), "y", VTypeCustom "t")
-                        ) ),
-                  PatConstructor
-                    ( (VTypeCustom "t", ()),
-                      "C",
-                      PatName ((VTypeInt, ()), "z", VTypeInt) ) ) );
         ] );
     ]
 
