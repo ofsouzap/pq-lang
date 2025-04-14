@@ -343,6 +343,78 @@ end
 1
 |},
         `Valid );
+      ( "Int Polar",
+        {|
+# Integer-valued polar coordinates in degrees
+type ipolar_base = IPolar of (int * int)
+
+qtype ipolar
+  = ipolar_base
+  |/ (r : int) -> (a : int) => IPolar ((r : int), (a : int)) == (IPolar (r, a + 360))
+  |/ (r : int) -> (a : int) => IPolar ((r : int), (a : int)) == (IPolar (r, a - 360))
+
+# Rotate a polar coordinate
+let rotate (arg : (int * ipolar)) : ipolar =
+  match arg -> ipolar with
+  | ((x : int), (pol : ipolar)) ->
+    match pol -> ipolar with
+    | IPolar (p : int * int) ->
+      match p -> ipolar with
+      | ((r : int), (a : int)) ->
+        IPolar (r, (a + x))
+      end
+    end
+  end
+end
+
+# Scale the magnitude component of a polar coordinate
+let scale (arg : (int * ipolar)) : ipolar =
+  match arg -> ipolar with
+  | ((x : int), (pol : ipolar)) ->
+    match pol -> ipolar with
+    | IPolar (p : int * int) ->
+      match p -> ipolar with
+      | ((r : int), (a : int)) ->
+        IPolar (r * x, a)
+      end
+    end
+  end
+end
+|},
+        `Valid );
+      ( "Int Polar - compare angle",
+        {|
+# Integer-valued polar coordinates in degrees
+type ipolar_base = IPolar of (int * int)
+
+qtype ipolar
+  = ipolar_base
+  |/ (r : int) -> (a : int) => IPolar ((r : int), (a : int)) == (IPolar (r, a + 360))
+  |/ (r : int) -> (a : int) => IPolar ((r : int), (a : int)) == (IPolar (r, a - 360))
+
+let max_angle (arg : (ipolar * ipolar)) : int =
+  match arg -> int with
+  | ((pol1 : ipolar), (pol2 : ipolar)) ->
+    match pol1 -> int with
+    | IPolar (p1 : int * int) ->
+      match p1 -> int with
+      | ((_1 : int), (a1 : int)) ->
+        match pol2 -> int with
+        | IPolar (p2 : int * int) ->
+          match p2 -> int with
+          | ((_2 : int), (a2 : int)) ->
+            if a1 > a2
+            then a1
+            else a2
+            end
+          end
+        end
+      end
+    end
+  end
+end
+|},
+        `Invalid );
     ]
 
 let suite : unit Alcotest.test_case list =

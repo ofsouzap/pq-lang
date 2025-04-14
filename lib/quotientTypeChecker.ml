@@ -366,15 +366,15 @@ Falsifying Interpretation
                |> CustomType.fmap_expr ~f:node_tag_to_smt_expr_tag
                |> CustomType.fmap_pattern ~f:node_tag_to_smt_pattern_tag))
     in
-    let state =
-      (* Add the variant type definitions to the state *)
-      List.fold ~init:state
-        ~f:(fun state { private_flag = _; ct } ->
-          match ct with
-          | VariantType vt -> state_add_variant_type vt state
-          | CustomType.QuotientType _ -> state)
-        flat_prog.custom_types
-    in
+    (* Add the variant type definitions to the state *)
+    List.fold_result ~init:state
+      ~f:(fun state { private_flag = _; ct } ->
+        match ct with
+        | VariantType vt -> state_add_variant_type vt state
+        | CustomType.QuotientType _ -> Ok state)
+      flat_prog.custom_types
+    |> Result.map_error ~f:(fun err -> SmtIntfError err)
+    >>= fun state ->
     (* Check the top-level definitions and add them to the state *)
     ( List.fold_result ~init:(existing_names, state)
         ~f:(fun (existing_names, state) defn ->

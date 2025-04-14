@@ -80,7 +80,10 @@ module type S = sig
       Vtype.t * Vtype.t -> t -> (pair_type_info, smt_intf_error) result
 
     val state_get_vtype_special_eq_fun_name : t -> Vtype.t -> string option
-    val state_add_variant_type : VariantType.t -> t -> t
+
+    val state_add_variant_type :
+      VariantType.t -> t -> (t, smt_intf_error) result
+
     val state_add_var_decl : string * Vtype.t -> t -> t
     val state_add_var_defn : var_defn -> t -> (t, smt_intf_error) result
   end
