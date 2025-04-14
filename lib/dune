@@ -14,8 +14,8 @@
   quotientType
   customType
   program
-  ocamlConverter
   flatPattern
+  ocamlConverter
   smtIntf
   typeChecker
   quotientTypeChecker
