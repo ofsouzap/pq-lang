@@ -96,6 +96,13 @@ module type S = sig
     ('tag_e, 'tag_p) t ->
     ('tag_e, 'tag_p) t
 
+  (** Perform a variable substitution in an expression *)
+  val subst :
+    varname:Varname.t ->
+    sub:('tag_e -> ('tag_e, 'tag_p) t) ->
+    ('tag_e, 'tag_p) t ->
+    ('tag_e, 'tag_p) t
+
   exception ExprConverionFixError
 
   (** Convert an Expr expression into source code that corresponds to the Expr
@@ -397,101 +404,62 @@ module Make (Pattern : Pattern.S) : S with module Pattern = Pattern = struct
               cs )
     | Constructor (_, cname, e) -> Constructor ((), cname, to_plain_t e)
 
-  let rec rename_var ~(old_name : Varname.t) ~(new_name : Varname.t) = function
+  let rec subst ~(varname : Varname.t) ~(sub : 'tag_e -> ('tag_e, 'tag_p) t) :
+      ('tag_e, 'tag_p) t -> ('tag_e, 'tag_p) t = function
     | UnitLit _ as e -> e
     | IntLit _ as e -> e
     | BoolLit _ as e -> e
-    | Add (v, e1, e2) ->
-        Add
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
-    | Neg (v, e) -> Neg (v, rename_var ~old_name ~new_name e)
+    | Add (v, e1, e2) -> Add (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
+    | Neg (v, e) -> Neg (v, subst ~varname ~sub e)
     | Subtr (v, e1, e2) ->
-        Subtr
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
+        Subtr (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
     | Mult (v, e1, e2) ->
-        Mult
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
-    | BNot (v, e) -> BNot (v, rename_var ~old_name ~new_name e)
-    | BOr (v, e1, e2) ->
-        BOr
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
+        Mult (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
+    | BNot (v, e) -> BNot (v, subst ~varname ~sub e)
+    | BOr (v, e1, e2) -> BOr (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
     | BAnd (v, e1, e2) ->
-        BAnd
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
+        BAnd (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
     | Pair (v, e1, e2) ->
-        Pair
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
-    | Eq (v, e1, e2) ->
-        Eq
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
-    | Gt (v, e1, e2) ->
-        Gt
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
+        Pair (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
+    | Eq (v, e1, e2) -> Eq (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
+    | Gt (v, e1, e2) -> Gt (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
     | GtEq (v, e1, e2) ->
-        GtEq
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
-    | Lt (v, e1, e2) ->
-        Lt
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
+        GtEq (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
+    | Lt (v, e1, e2) -> Lt (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
     | LtEq (v, e1, e2) ->
-        LtEq
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
+        LtEq (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
     | If (v, e1, e2, e3) ->
         If
           ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2,
-            rename_var ~old_name ~new_name e3 )
+            subst ~varname ~sub e1,
+            subst ~varname ~sub e2,
+            subst ~varname ~sub e3 )
     | Var (v, xname) ->
-        if equal_string old_name xname then Var (v, new_name) else Var (v, xname)
+        if equal_string varname xname then sub v else Var (v, xname)
     | Let (v, xname, e1, e2) ->
         Let
           ( v,
             xname,
-            rename_var ~old_name ~new_name e1,
-            if equal_string xname old_name then e2
-            else rename_var ~old_name ~new_name e2 )
-    | App (v, e1, e2) ->
-        App
-          ( v,
-            rename_var ~old_name ~new_name e1,
-            rename_var ~old_name ~new_name e2 )
+            subst ~varname ~sub e1,
+            if equal_string xname varname then e2 else subst ~varname ~sub e2 )
+    | App (v, e1, e2) -> App (v, subst ~varname ~sub e1, subst ~varname ~sub e2)
     | Match (v, e, t2, cases) ->
         Match
           ( v,
-            rename_var ~old_name ~new_name e,
+            subst ~varname ~sub e,
             t2,
             Nonempty_list.map cases ~f:(fun (case_p, case_e) ->
                 ( case_p,
                   if
-                    List.exists ~f:(equal_string old_name)
+                    List.exists ~f:(equal_string varname)
                       (Pattern.defined_vars case_p |> List.map ~f:fst)
                   then case_e
-                  else rename_var ~old_name ~new_name case_e )) )
-    | Constructor (v, name, e) ->
-        Constructor (v, name, rename_var ~old_name ~new_name e)
+                  else subst ~varname ~sub case_e )) )
+    | Constructor (v, name, e) -> Constructor (v, name, subst ~varname ~sub e)
+
+  let rename_var ~(old_name : Varname.t) ~(new_name : Varname.t) :
+      ('tag_e, 'tag_p) t -> ('tag_e, 'tag_p) t =
+    subst ~varname:old_name ~sub:(fun v -> Var (v, new_name))
 
   exception ExprConverionFixError
 
