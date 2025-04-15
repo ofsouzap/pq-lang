@@ -14,10 +14,10 @@
   quotientType
   customType
   program
-  flatPattern
   ocamlConverter
   smtIntf
   typeChecker
+  flatPattern
   quotientTypeChecker
   parsing_errors
   parser
