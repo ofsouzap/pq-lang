@@ -103,13 +103,23 @@ module type Nonempty_list_sig = sig
   val cons : 'a -> 'a t -> 'a t
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
+
+  val fold_consume_init :
+    'a t -> init:'init -> f:(('init, 'acc) Either.t -> 'a -> 'acc) -> 'acc
+
   val rev : 'a t -> 'a t
+
+  (** Zip two non-empty lists together, returning None if they have unequal
+      lengths *)
   val zip : 'a t -> 'b t -> ('a * 'b) t option
+
   val result_all : ('a, 'err) Result.t t -> ('a t, 'err) Result.t
 
   val fold_result :
     'a t -> init:'b -> f:('b -> 'a -> ('b, 'c) Result.t) -> ('b, 'c) Result.t
 
+  (** A variant of fold_result that is known not to return the initial value, as
+      the list is non-empty *)
   val fold_result_consume_init :
     'a t ->
     init:'init ->
@@ -151,6 +161,10 @@ module Nonempty_list : Nonempty_list_sig = struct
   let map ~(f : 'a -> 'b) ((h, ts) : 'a t) : 'b t = (f h, List.map ~f ts)
   let fold (xs : 'a t) = List.fold (to_list xs)
 
+  let fold_consume_init ((h, ts) : 'a t) ~init ~f =
+    let init = f (First init) h in
+    List.fold ts ~init ~f:(fun acc -> f (Second acc))
+
   let rev (xs : 'a t) =
     match tail xs with
     | [] -> head xs |> singleton
@@ -175,7 +189,7 @@ module Nonempty_list : Nonempty_list_sig = struct
       ~(f : ('init, 'acc) Either.t -> 'a -> ('acc, 'err) Result.t) :
       ('acc, 'err) Result.t =
     match f (First init) h with
-    | Ok h_y -> List.fold_result ts ~init:h_y ~f:(fun x -> f (Second x))
+    | Ok h_y -> List.fold_result ts ~init:h_y ~f:(fun acc -> f (Second acc))
     | Error err -> Error err
 
   module QCheck_testing (V : sig
