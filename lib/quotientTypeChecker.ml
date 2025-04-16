@@ -2,13 +2,14 @@ open Core
 open Utils
 
 module type S = sig
+  module TypeChecker = TypeChecker.StdSimpleTypeChecker
   module Smt : SmtIntf.S
 
   type node_tag = { source_pos : Frontend.source_position; t : Vtype.t }
 
   type quotient_typing_error =
     | SmtUnknownResult
-    | PatternFlatteningError of FlatPattern.flattening_error
+    | PatternFlatteningError of Flattener.flattening_error
     | SmtIntfError of Smt.smt_intf_error
   [@@deriving sexp, equal]
 
@@ -26,7 +27,9 @@ module type S = sig
       the Ok constructor containing another result describing the actual result
       of the checking *)
   val check_program :
-    (node_tag, node_tag) Program.StdProgram.t ->
+    get_expr_node_tag:(Vtype.t * 'tag_e -> node_tag) ->
+    get_pattern_node_tag:(Vtype.t * 'tag_p -> node_tag) ->
+    ('tag_e, 'tag_p) TypeChecker.typed_program ->
     ( (unit, QuotientTypeCheckingFailure.t) Result.t,
       quotient_typing_error )
     Result.t
@@ -43,14 +46,25 @@ module MakeZ3 : S = struct
   module QuotientType = QuotientType.StdQuotientType
   module CustomType = CustomType.StdCustomType
   module Program = Program.StdProgram
+  module TypeChecker = TypeChecker.StdSimpleTypeChecker
+  module TypeCtx = TypeChecker.TypeCtx
+  module FlattenerBase = Flattener
+  module Flattener = Flattener.Make (TypeChecker)
 
   type node_tag = { source_pos : Frontend.source_position; t : Vtype.t }
   [@@deriving sexp, equal]
+
+  let node_tag_to_typed_tag { source_pos; t } : Vtype.t * 'a = (t, source_pos)
+
+  let typed_tag_to_node_tag ((t : Vtype.t), source_pos) : node_tag =
+    { source_pos; t }
 
   let node_tag_to_smt_pattern_tag { source_pos = _; t } : Smt.pattern_tag =
     { t }
 
   let node_tag_to_smt_expr_tag { source_pos = _; t } : Smt.expr_tag = { t }
+  let typed_tag_to_smt_pattern_tag (t, _) : Smt.pattern_tag = { t }
+  let typed_tag_to_smt_expr_tag (t, _) : Smt.expr_tag = { t }
 
   type tag_pattern = node_tag Pattern.t [@@deriving sexp, equal]
   type tag_expr = (node_tag, node_tag) Expr.t [@@deriving sexp, equal]
@@ -75,7 +89,7 @@ module MakeZ3 : S = struct
 
   type quotient_typing_error =
     | SmtUnknownResult
-    | PatternFlatteningError of FlatPattern.flattening_error
+    | PatternFlatteningError of FlattenerBase.flattening_error
     | SmtIntfError of Smt.smt_intf_error
   [@@deriving sexp, equal]
 
@@ -181,8 +195,8 @@ Falsifying Interpretation
   [@@deriving sexp, equal]
 
   let perform_quotient_match_check ~(existing_names : StringSet.t)
-      ~(quotient_type : tag_quotient_type) ~(match_node_v : node_tag)
-      ~(match_t_out : Vtype.t)
+      ~(type_ctx : TypeCtx.t) ~(quotient_type : tag_quotient_type)
+      ~(match_node_v : node_tag) ~(match_t_out : Vtype.t)
       ~(cases : (tag_pattern * tag_expr) Nonempty_list.t) (state : Smt.State.t)
       : (StringSet.t, check_result) Result.t =
     let open Result in
@@ -224,26 +238,39 @@ Falsifying Interpretation
                   Smt.State.state_add_var_decl (xname, xtype) state)
                 eqcons.bindings
             in
+            (* Create L and R *)
             let l =
               Unifier.apply_to_expr ~unifier:expr_to_eqcons_unifier case_e
             in
             let r = reform_match_with_arg (snd eqcons.body) in
-            FlatPattern.of_expr ~existing_names l
+            (* Flatten L *)
+            Flattener.flatten_expr ~existing_names ~type_ctx
+              (l
+              |> Expr.fmap ~f:node_tag_to_typed_tag
+              |> Expr.fmap_pattern ~f:node_tag_to_typed_tag)
             |> Result.map_error ~f:(fun err -> Err (PatternFlatteningError err))
-            >>= fun (existing_names, l_flat) ->
-            FlatPattern.of_expr ~existing_names r
+            >>= fun (existing_names, e) ->
+            e
+            |> FlatPattern.FlatExpr.fmap ~f:typed_tag_to_smt_expr_tag
+            |> FlatPattern.FlatExpr.fmap_pattern ~f:typed_tag_to_smt_pattern_tag
+            |> fun l_flat_smt ->
+            (* Flatten R *)
+            Flattener.flatten_expr ~existing_names ~type_ctx
+              (r
+              |> Expr.fmap ~f:node_tag_to_typed_tag
+              |> Expr.fmap_pattern ~f:node_tag_to_typed_tag)
             |> Result.map_error ~f:(fun err -> Err (PatternFlatteningError err))
-            >>= fun (existing_names, r_flat) ->
+            >>= fun (existing_names, e) ->
+            e
+            |> FlatPattern.FlatExpr.fmap ~f:typed_tag_to_smt_expr_tag
+            |> FlatPattern.FlatExpr.fmap_pattern ~f:typed_tag_to_smt_pattern_tag
+            |> fun r_flat_smt ->
             (* Form the main assertion of the SMT check *)
             let assertion : Smt.Assertion.t =
               let open Smt.Assertion in
               (* Note that I use the negation as we are looking or validity, not satisifability:
                 the condition must be necessarily true, so we check that the negation is unsatisfiable *)
-              Not
-                (Eq
-                   ( Some match_t_out,
-                     tag_flat_expr_to_smt_flat_expr l_flat,
-                     tag_flat_expr_to_smt_flat_expr r_flat ))
+              Not (Eq (Some match_t_out, l_flat_smt, r_flat_smt))
             in
             Smt.create_formula ~existing_names state [ assertion ]
             |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
@@ -255,15 +282,16 @@ Falsifying Interpretation
                 Error (Failure { eqcons; case_p; l; r; model_mapping })
             | `Unknown -> Error (Err SmtUnknownResult)))
 
-  let rec check_expr ~(existing_names : StringSet.t)
+  let rec check_expr ~(existing_names : StringSet.t) ~(type_ctx : TypeCtx.t)
       ~(quotient_types : tag_quotient_type list) (state : Smt.State.t)
       (orig_e : tag_flat_expr) : (StringSet.t, check_result) Result.t =
     let open Result in
     let open Smt.State in
     match orig_e with
     | UnitLit _ | IntLit _ | BoolLit _ | Var _ -> Ok existing_names
-    | Neg (_, e) -> check_expr ~existing_names ~quotient_types state e
-    | BNot (_, e) -> check_expr ~existing_names ~quotient_types state e
+    | Neg (_, e) -> check_expr ~existing_names ~type_ctx ~quotient_types state e
+    | BNot (_, e) ->
+        check_expr ~existing_names ~type_ctx ~quotient_types state e
     | Add (_, e1, e2)
     | Subtr (_, e1, e2)
     | Mult (_, e1, e2)
@@ -275,17 +303,17 @@ Falsifying Interpretation
     | GtEq (_, e1, e2)
     | Lt (_, e1, e2)
     | LtEq (_, e1, e2) ->
-        check_expr ~existing_names ~quotient_types state e1
+        check_expr ~existing_names ~type_ctx ~quotient_types state e1
         >>= fun existing_names ->
-        check_expr ~existing_names ~quotient_types state e2
+        check_expr ~existing_names ~type_ctx ~quotient_types state e2
     | If (_, e1, e2, e3) ->
-        check_expr ~existing_names ~quotient_types state e1
+        check_expr ~existing_names ~type_ctx ~quotient_types state e1
         >>= fun existing_names ->
-        check_expr ~existing_names ~quotient_types state e2
+        check_expr ~existing_names ~type_ctx ~quotient_types state e2
         >>= fun existing_names ->
-        check_expr ~existing_names ~quotient_types state e3
+        check_expr ~existing_names ~type_ctx ~quotient_types state e3
     | Let (_, xname, e1, e2) ->
-        check_expr ~existing_names ~quotient_types state e1
+        check_expr ~existing_names ~type_ctx ~quotient_types state e1
         >>= fun existing_names ->
         let e1_type = (FlatPattern.FlatExpr.node_val e1).t in
 
@@ -298,13 +326,14 @@ Falsifying Interpretation
           }
           state
         |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
-        >>= fun state -> check_expr ~existing_names ~quotient_types state e2
+        >>= fun state ->
+        check_expr ~existing_names ~type_ctx ~quotient_types state e2
     | App (_, e1, e2) ->
-        check_expr ~existing_names ~quotient_types state e1
+        check_expr ~existing_names ~type_ctx ~quotient_types state e1
         >>= fun existing_names ->
-        check_expr ~existing_names ~quotient_types state e2
+        check_expr ~existing_names ~type_ctx ~quotient_types state e2
     | Match (v, e1, t_out, cases) ->
-        check_expr ~existing_names ~quotient_types state e1
+        check_expr ~existing_names ~type_ctx ~quotient_types state e1
         >>= fun existing_names ->
         let e1_t = (FlatPattern.FlatExpr.node_val e1).t in
         (match e1_t with
@@ -320,8 +349,9 @@ Falsifying Interpretation
                       FlatPattern.(to_std_pattern flat_p, to_std_expr flat_e))
                     cases
                 in
-                perform_quotient_match_check ~existing_names ~quotient_type:qt
-                  ~match_node_v:v ~match_t_out:t_out ~cases:non_flat_cases state
+                perform_quotient_match_check ~existing_names ~type_ctx
+                  ~quotient_type:qt ~match_node_v:v ~match_t_out:t_out
+                  ~cases:non_flat_cases state
             | None -> Ok existing_names)
         | _ -> Ok existing_names)
         >>= fun existing_names ->
@@ -336,22 +366,39 @@ Falsifying Interpretation
                 (FlatPattern.M.defined_vars p)
             in
             (* Check the case expression, with the updated state *)
-            check_expr ~existing_names ~quotient_types state' e)
+            check_expr ~existing_names ~type_ctx ~quotient_types state' e)
           cases
     | Constructor (_, _, e) ->
-        check_expr ~existing_names ~quotient_types state e
+        check_expr ~existing_names ~type_ctx ~quotient_types state e
 
-  let check_program (prog : tag_program) :
+  let check_program (type tag_e tag_p)
+      ~(get_expr_node_tag : Vtype.t * tag_e -> node_tag)
+      ~(get_pattern_node_tag : Vtype.t * tag_p -> node_tag)
+      (prog_typed : (tag_e, tag_p) TypeChecker.typed_program) :
       ( (unit, QuotientTypeCheckingFailure.t) Result.t,
         quotient_typing_error )
       Result.t =
     (* TODO - make this take a checked program (from the Typing module's TypeChecker functor) as parameter instead of just a program *)
     let open Result in
     let open Smt.State in
+    let type_ctx = TypeChecker.typed_program_get_type_ctx prog_typed in
+    let prog =
+      TypeChecker.typed_program_get_program prog_typed
+      |> Program.fmap_expr ~f:get_expr_node_tag
+      |> Program.fmap_pattern ~f:get_pattern_node_tag
+    in
     let existing_names = Program.existing_names prog in
-    FlatPattern.of_program ~existing_names prog
+    Flattener.flatten_program ~existing_names ~type_ctx
+      (prog
+      |> Program.fmap_expr ~f:node_tag_to_typed_tag
+      |> Program.fmap_pattern ~f:node_tag_to_typed_tag)
     |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
     >>= fun (existing_names, flat_prog) ->
+    let flat_prog =
+      flat_prog
+      |> FlatPattern.FlatProgram.fmap_expr ~f:typed_tag_to_node_tag
+      |> FlatPattern.FlatProgram.fmap_pattern ~f:typed_tag_to_node_tag
+    in
     let quotient_types : tag_quotient_type list =
       List.filter_map
         ~f:(function
@@ -359,7 +406,7 @@ Falsifying Interpretation
         flat_prog.custom_types
     in
     let state =
-      Smt.State.state_init
+      Smt.State.state_init type_ctx
         (prog.custom_types
         |> List.map ~f:(fun { private_flag = _; ct } ->
                ct
@@ -393,8 +440,8 @@ Falsifying Interpretation
           |> Result.map_error ~f:(fun err -> Err (SmtIntfError err))
           >>= fun defn_checking_state ->
           (* Check the body of the TLD *)
-          check_expr ~existing_names ~quotient_types defn_checking_state
-            defn.body
+          check_expr ~existing_names ~type_ctx ~quotient_types
+            defn_checking_state defn.body
           >>= fun existing_names ->
           (* Return the resulting state after defining the TLD *)
           state_add_var_defn
@@ -414,7 +461,8 @@ Falsifying Interpretation
       (* Check the main body of the program with the accumulated state *)
       match flat_prog.body with
       | None -> Ok existing_names
-      | Some body -> check_expr ~existing_names ~quotient_types state body )
+      | Some body ->
+          check_expr ~existing_names ~type_ctx ~quotient_types state body )
     |> function
     | Ok _ -> Ok (Ok ())
     | Error (Failure failure) -> Ok (Error failure)

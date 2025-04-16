@@ -1,13 +1,14 @@
 open Core
 
 module type S = sig
+  module TypeChecker = TypeChecker.StdSimpleTypeChecker
   module Smt : SmtIntf.S
 
   type node_tag = { source_pos : Frontend.source_position; t : Vtype.t }
 
   type quotient_typing_error =
     | SmtUnknownResult
-    | PatternFlatteningError of FlatPattern.flattening_error
+    | PatternFlatteningError of Flattener.flattening_error
     | SmtIntfError of Smt.smt_intf_error
   [@@deriving sexp, equal]
 
@@ -25,7 +26,9 @@ module type S = sig
       the Ok constructor containing another result describing the actual result
       of the checking *)
   val check_program :
-    (node_tag, node_tag) Program.StdProgram.t ->
+    get_expr_node_tag:(Vtype.t * 'tag_e -> node_tag) ->
+    get_pattern_node_tag:(Vtype.t * 'tag_p -> node_tag) ->
+    ('tag_e, 'tag_p) TypeChecker.typed_program ->
     ( (unit, QuotientTypeCheckingFailure.t) Result.t,
       quotient_typing_error )
     Result.t
