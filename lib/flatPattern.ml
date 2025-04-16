@@ -278,130 +278,71 @@ end = struct
     flatten_expr
 end
 
-(** Convert an Expr expression to a flat expression *)
-let rec of_expr ~(existing_names : StringSet.t) :
-    ('tag_e, 'tag_p) StdExpr.t ->
-    (StringSet.t * ('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
+let tmp_of_expr ~(existing_names : StringSet.t) =
   let open Result in
-  let unop
-      (recomb :
-        StringSet.t ->
-        ('tag_e, 'tag_p) FlatExpr.t ->
-        StringSet.t * ('tag_e, 'tag_p) FlatExpr.t)
-      ~(existing_names : StringSet.t) (e1 : ('tag_e, 'tag_p) StdExpr.t) :
-      (StringSet.t * ('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
-    of_expr ~existing_names e1 >>= fun (existing_names, e1') ->
-    Ok (recomb existing_names e1')
-  in
-  let binop
-      (recomb :
-        StringSet.t ->
-        ('tag_e, 'tag_p) FlatExpr.t ->
-        ('tag_e, 'tag_p) FlatExpr.t ->
-        StringSet.t * ('tag_e, 'tag_p) FlatExpr.t)
-      ~(existing_names : StringSet.t) (e1 : ('tag_e, 'tag_p) StdExpr.t)
-      (e2 : ('tag_e, 'tag_p) StdExpr.t) :
-      (StringSet.t * ('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
-    of_expr ~existing_names e1 >>= fun (existing_names, e1') ->
-    of_expr ~existing_names e2 >>= fun (existing_names, e2') ->
-    Ok (recomb existing_names e1' e2')
-  in
-  function
-  | UnitLit v -> Ok (existing_names, UnitLit v)
-  | IntLit (v, x) -> Ok (existing_names, IntLit (v, x))
-  | Add (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, Add (v, e1', e2')))
-        ~existing_names e1 e2
-  | Neg (v, e) ->
-      unop
-        (fun existing_names e' -> (existing_names, Neg (v, e')))
-        ~existing_names e
-  | Subtr (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, Subtr (v, e1', e2')))
-        ~existing_names e1 e2
-  | Mult (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, Mult (v, e1', e2')))
-        ~existing_names e1 e2
-  | BoolLit (v, b) -> Ok (existing_names, BoolLit (v, b))
-  | BNot (v, e) ->
-      unop
-        (fun existing_names e' -> (existing_names, BNot (v, e')))
-        ~existing_names e
-  | BOr (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, BOr (v, e1', e2')))
-        ~existing_names e1 e2
-  | BAnd (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, BAnd (v, e1', e2')))
-        ~existing_names e1 e2
-  | Pair (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, Pair (v, e1', e2')))
-        ~existing_names e1 e2
-  | Eq (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, Eq (v, e1', e2')))
-        ~existing_names e1 e2
-  | Gt (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, Gt (v, e1', e2')))
-        ~existing_names e1 e2
-  | GtEq (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, GtEq (v, e1', e2')))
-        ~existing_names e1 e2
-  | Lt (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, Lt (v, e1', e2')))
-        ~existing_names e1 e2
-  | LtEq (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, LtEq (v, e1', e2')))
-        ~existing_names e1 e2
-  | If (v, e1, e2, e3) ->
-      of_expr ~existing_names e1 >>= fun (existing_names, e1') ->
-      of_expr ~existing_names e2 >>= fun (existing_names, e2') ->
-      of_expr ~existing_names e3 >>| fun (existing_names, e3') ->
-      (existing_names, FlatExpr.If (v, e1', e2', e3'))
-  | Var (v, name) -> Ok (existing_names, Var (v, name))
-  | Let (v, xname, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' ->
-          (existing_names, Let (v, xname, e1', e2')))
-        ~existing_names e1 e2
-  | App (v, e1, e2) ->
-      binop
-        (fun existing_names e1' e2' -> (existing_names, App (v, e1', e2')))
-        ~existing_names e1 e2
-  | Match (v, e, t2, cases) ->
-      of_expr ~existing_names e >>= fun (existing_names, e') ->
-      Nonempty_list.fold_result_consume_init cases ~init:existing_names
-        ~f:(fun acc (p, e) ->
-          let existing_names =
+  let existing_names = ref existing_names in
+  let fresh_varname () : Varname.t = _ in
+  let rec of_expr :
+      ('tag_e, 'tag_p) StdExpr.t ->
+      (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
+    let unop
+        (recomb : ('tag_e, 'tag_p) FlatExpr.t -> ('tag_e, 'tag_p) FlatExpr.t)
+        (e1 : ('tag_e, 'tag_p) StdExpr.t) :
+        (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
+      of_expr e1 >>= fun e1' -> Ok (recomb e1')
+    in
+    let binop
+        (recomb :
+          ('tag_e, 'tag_p) FlatExpr.t ->
+          ('tag_e, 'tag_p) FlatExpr.t ->
+          ('tag_e, 'tag_p) FlatExpr.t) (e1 : ('tag_e, 'tag_p) StdExpr.t)
+        (e2 : ('tag_e, 'tag_p) StdExpr.t) :
+        (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
+      of_expr e1 >>= fun e1' ->
+      of_expr e2 >>= fun e2' -> Ok (recomb e1' e2')
+    in
+    function
+    | UnitLit v -> Ok (UnitLit v)
+    | IntLit (v, x) -> Ok (IntLit (v, x))
+    | Add (v, e1, e2) -> binop (fun e1' e2' -> Add (v, e1', e2')) e1 e2
+    | Neg (v, e) -> unop (fun e' -> Neg (v, e')) e
+    | Subtr (v, e1, e2) -> binop (fun e1' e2' -> Subtr (v, e1', e2')) e1 e2
+    | Mult (v, e1, e2) -> binop (fun e1' e2' -> Mult (v, e1', e2')) e1 e2
+    | BoolLit (v, b) -> Ok (BoolLit (v, b))
+    | BNot (v, e) -> unop (fun e' -> BNot (v, e')) e
+    | BOr (v, e1, e2) -> binop (fun e1' e2' -> BOr (v, e1', e2')) e1 e2
+    | BAnd (v, e1, e2) -> binop (fun e1' e2' -> BAnd (v, e1', e2')) e1 e2
+    | Pair (v, e1, e2) -> binop (fun e1' e2' -> Pair (v, e1', e2')) e1 e2
+    | Eq (v, e1, e2) -> binop (fun e1' e2' -> Eq (v, e1', e2')) e1 e2
+    | Gt (v, e1, e2) -> binop (fun e1' e2' -> Gt (v, e1', e2')) e1 e2
+    | GtEq (v, e1, e2) -> binop (fun e1' e2' -> GtEq (v, e1', e2')) e1 e2
+    | Lt (v, e1, e2) -> binop (fun e1' e2' -> Lt (v, e1', e2')) e1 e2
+    | LtEq (v, e1, e2) -> binop (fun e1' e2' -> LtEq (v, e1', e2')) e1 e2
+    | If (v, e1, e2, e3) ->
+        of_expr e1 >>= fun e1' ->
+        of_expr e2 >>= fun e2' ->
+        of_expr e3 >>| fun e3' -> FlatExpr.If (v, e1', e2', e3')
+    | Var (v, name) -> Ok (Var (v, name))
+    | Let (v, xname, e1, e2) ->
+        binop (fun e1' e2' -> Let (v, xname, e1', e2')) e1 e2
+    | App (v, e1, e2) -> binop (fun e1' e2' -> App (v, e1', e2')) e1 e2
+    | Match (v, e, t2, cases) ->
+        of_expr e >>= fun e' ->
+        Nonempty_list.fold_result_consume_init cases ~init:()
+          ~f:(fun acc (p, e) ->
+            of_expr e >>= fun e' ->
             match acc with
-            | First existing_names -> existing_names
-            | Second (existing_names, _) -> existing_names
-          in
-          of_expr ~existing_names e >>= fun (existing_names, e') ->
-          match acc with
-          | First _ -> Ok (existing_names, Nonempty_list.singleton (p, e'))
-          | Second (_, acc_rev) ->
-              Ok (existing_names, Nonempty_list.cons (p, e') acc_rev))
-      >>= fun (existing_names, flat_expr_cases_rev) ->
-      (fun _ -> failwith "TODO") (Nonempty_list.rev flat_expr_cases_rev)
-      |> Result.map_error ~f:(failwith "TODO")
-      >>= fun match_tree ->
-      (fun _ -> failwith "TODO") match_tree >>| fun flat_cases_rev ->
-      ( existing_names,
-        FlatExpr.Match (v, e', t2, Nonempty_list.rev flat_cases_rev) )
-  | Constructor (v, name, e) ->
-      unop
-        (fun existing_names e' -> (existing_names, Constructor (v, name, e')))
-        ~existing_names e
+            | First () -> Ok (Nonempty_list.singleton (p, e'))
+            | Second acc_rev -> Ok (Nonempty_list.cons (p, e') acc_rev))
+        >>= fun flat_expr_cases_rev ->
+        (fun _ -> failwith "TODO") (Nonempty_list.rev flat_expr_cases_rev)
+        |> Result.map_error ~f:(failwith "TODO")
+        >>= fun match_tree ->
+        (fun _ -> failwith "TODO") match_tree >>| fun flat_cases_rev ->
+        FlatExpr.Match (v, e', t2, Nonempty_list.rev flat_cases_rev)
+    | Constructor (v, name, e) -> unop (fun e' -> Constructor (v, name, e')) e
+  in
+  fun orig_e -> of_expr orig_e >>| fun res -> (!existing_names, res)
 
 (** Convert a flat Expr expression to a non-flat Expr expression *)
 let rec to_std_expr : ('tag_e, 'tag_p) FlatExpr.t -> ('tag_e, 'tag_p) StdExpr.t
