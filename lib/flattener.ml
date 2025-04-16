@@ -23,7 +23,23 @@ module type S = sig
        and module Expr = Expr.StdExpr
        and module Program = Program.StdProgram
 
+  val flatten_expr :
+    existing_names:StringSet.t ->
+    type_ctx:TypeChecker.TypeCtx.t ->
+    Expr.StdExpr.plain_typed_t ->
+    ( StringSet.t * (unit, unit) FlatPattern.FlatExpr.typed_t,
+      flattening_error )
+    Result.t
+
   val flatten_program :
+    existing_names:StringSet.t ->
+    type_ctx:TypeChecker.TypeCtx.t ->
+    (unit, unit) Program.StdProgram.typed_t ->
+    ( StringSet.t * (unit, unit) FlatPattern.FlatProgram.typed_t,
+      flattening_error )
+    Result.t
+
+  val flatten_typed_program :
     existing_names:StringSet.t ->
     (Vtype.t * 'tag_e, Vtype.t * 'tag_p) TypeChecker.typed_program ->
     ( StringSet.t * (unit, unit) FlatPattern.FlatProgram.typed_t,
@@ -315,7 +331,7 @@ module Make
     fun orig_e ->
       Result.(flatten_expr orig_e >>| fun res -> (!existing_names, res))
 
-  let flatten_program_aux (type tag_e tag_p) ~(existing_names : StringSet.t)
+  let flatten_program (type tag_e tag_p) ~(existing_names : StringSet.t)
       ~(type_ctx : TypeCtx.t) (prog : (tag_e, tag_p) StdProgram.typed_t) :
       ( StringSet.t * (unit, unit) FlatProgram.typed_t,
         flattening_error )
@@ -370,12 +386,12 @@ module Make
           body = prog_body';
         } )
 
-  let flatten_program (type tag_e tag_p) ~(existing_names : StringSet.t)
+  let flatten_typed_program (type tag_e tag_p) ~(existing_names : StringSet.t)
       (prog : (tag_e, tag_p) TypeChecker.typed_program) :
       ( StringSet.t * (unit, unit) FlatPattern.FlatProgram.typed_t,
         flattening_error )
       Result.t =
-    flatten_program_aux ~existing_names
+    flatten_program ~existing_names
       ~type_ctx:
         (TypeChecker.typed_program_get_type_ctx_checked prog
         |> TypeChecker.checked_type_ctx_get_type_ctx)
