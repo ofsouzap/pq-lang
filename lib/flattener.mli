@@ -6,6 +6,8 @@ type flattening_error =
   | NoDefaultCaseForMatchBranch of string option
 [@@deriving sexp, equal]
 
+val print_flattening_error : flattening_error -> string
+
 module type S = sig
   module TypeChecker :
     TypeChecker.S

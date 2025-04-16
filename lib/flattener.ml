@@ -16,6 +16,13 @@ type flattening_error =
   | NoDefaultCaseForMatchBranch of string option
 [@@deriving sexp, equal]
 
+let print_flattening_error : flattening_error -> string = function
+  | UnknownVariantConstructor cname ->
+      Printf.sprintf "Unknown variant constructor: %s" cname
+  | NoDefaultCaseForMatchBranch None -> "No default case for match branch"
+  | NoDefaultCaseForMatchBranch (Some str) ->
+      Printf.sprintf "No default case for match branch: %s" str
+
 module type S = sig
   module TypeChecker :
     TypeChecker.S
