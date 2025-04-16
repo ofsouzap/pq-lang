@@ -16,23 +16,23 @@ module type S = sig
   val flatten_expr :
     existing_names:StringSet.t ->
     type_ctx:TypeChecker.TypeCtx.t ->
-    Expr.StdExpr.plain_typed_t ->
-    ( StringSet.t * (unit, unit) FlatPattern.FlatExpr.typed_t,
+    ('tag, 'tag) Expr.StdExpr.typed_t ->
+    ( StringSet.t * ('tag, 'tag) FlatPattern.FlatExpr.typed_t,
       flattening_error )
     Result.t
 
   val flatten_program :
     existing_names:StringSet.t ->
     type_ctx:TypeChecker.TypeCtx.t ->
-    (unit, unit) Program.StdProgram.typed_t ->
-    ( StringSet.t * (unit, unit) FlatPattern.FlatProgram.typed_t,
+    ('tag, 'tag) Program.StdProgram.typed_t ->
+    ( StringSet.t * ('tag, 'tag) FlatPattern.FlatProgram.typed_t,
       flattening_error )
     Result.t
 
   val flatten_typed_program :
     existing_names:StringSet.t ->
-    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) TypeChecker.typed_program ->
-    ( StringSet.t * (unit, unit) FlatPattern.FlatProgram.typed_t,
+    ('tag, 'tag) TypeChecker.typed_program ->
+    ( StringSet.t * ('tag, 'tag) FlatPattern.FlatProgram.typed_t,
       flattening_error )
     Result.t
 end

@@ -26,23 +26,23 @@ module type S = sig
   val flatten_expr :
     existing_names:StringSet.t ->
     type_ctx:TypeChecker.TypeCtx.t ->
-    Expr.StdExpr.plain_typed_t ->
-    ( StringSet.t * (unit, unit) FlatPattern.FlatExpr.typed_t,
+    ('tag, 'tag) Expr.StdExpr.typed_t ->
+    ( StringSet.t * ('tag, 'tag) FlatPattern.FlatExpr.typed_t,
       flattening_error )
     Result.t
 
   val flatten_program :
     existing_names:StringSet.t ->
     type_ctx:TypeChecker.TypeCtx.t ->
-    (unit, unit) Program.StdProgram.typed_t ->
-    ( StringSet.t * (unit, unit) FlatPattern.FlatProgram.typed_t,
+    ('tag, 'tag) Program.StdProgram.typed_t ->
+    ( StringSet.t * ('tag, 'tag) FlatPattern.FlatProgram.typed_t,
       flattening_error )
     Result.t
 
   val flatten_typed_program :
     existing_names:StringSet.t ->
-    (Vtype.t * 'tag_e, Vtype.t * 'tag_p) TypeChecker.typed_program ->
-    ( StringSet.t * (unit, unit) FlatPattern.FlatProgram.typed_t,
+    ('tag, 'tag) TypeChecker.typed_program ->
+    ( StringSet.t * ('tag, 'tag) FlatPattern.FlatProgram.typed_t,
       flattening_error )
     Result.t
 end
@@ -72,9 +72,9 @@ module Make
         * ('tag_e, 'tag_p) StdExpr.t)
         Nonempty_list.t
 
-  let partition_cases_rev (type tag_e tag_p)
-      (case_queues : (tag_p StdPattern.t list * (tag_e, tag_p) StdExpr.t) list)
-      : (tag_e, tag_p) cases list =
+  let partition_cases_rev (type tag)
+      (case_queues : (tag StdPattern.t list * (tag, tag) StdExpr.t) list) :
+      (tag, tag) cases list =
     (* This corresponds to the `partition` function in the book, but returns a reversed output as I am using the opposite-direction fold operation *)
     List.fold case_queues ~init:[] ~f:(fun acc (ps, e) ->
         let add_new = function
@@ -104,7 +104,8 @@ module Make
             failwith "Erroneous empty case queue"
         | p_h :: ps_ts, _ -> add_new ((p_h, ps_ts), e))
 
-  let flatten_expr ~(existing_names : StringSet.t) ~(type_ctx : TypeCtx.t) =
+  let flatten_expr (type tag) ~(existing_names : StringSet.t)
+      ~(type_ctx : TypeCtx.t) =
     let existing_names = ref existing_names in
     let generate_fresh_varname ?(seed_name : string option) () : Varname.t =
       let name_base = Option.value seed_name ~default:"x" in
@@ -117,11 +118,11 @@ module Make
       new_name
     in
     let rec compile_match ~(return_t : Vtype.t)
-        (args : StdExpr.plain_typed_t list)
+        (args : (tag, tag) StdExpr.typed_t list)
         (case_queues :
-          (unit StdPattern.typed_t list * StdExpr.plain_typed_t) list)
-        (def : FlatExpr.plain_typed_t option) :
-        (FlatExpr.plain_typed_t, flattening_error) Result.t =
+          (tag StdPattern.typed_t list * (tag, tag) StdExpr.typed_t) list)
+        (def : (tag, tag) FlatExpr.typed_t option) :
+        ((tag, tag) FlatExpr.typed_t, flattening_error) Result.t =
       (* This corresponds to the `match` function in the book *)
       match args with
       | [] -> (
@@ -169,90 +170,93 @@ module Make
       (* This is inspired by the `matchVar` and `matchCon` functions in the book,
         but is adapted for my language where pair values are used instead of constructors of higher arities. *)
       let open Result in
-      let t1, t2 =
-        case_queues |> Nonempty_list.head |> fst |> fun (((t, ()), _, _), _) ->
-        match t with
-        | Vtype.VTypePair (t1, t2) -> (t1, t2)
-        | _ -> failwith "Expected a pair type"
+      let tag, (t1, t2) =
+        case_queues |> Nonempty_list.head |> fst |> fun (((t, tag), _, _), _) ->
+        ( tag,
+          match t with
+          | Vtype.VTypePair (t1, t2) -> (t1, t2)
+          | _ -> failwith "Expected a pair type" )
       in
       let pair_t = Vtype.VTypePair (t1, t2) in
       (* Create the case matching on the pair *)
-      let create_case
+      let create_case ~(tag : tag)
           ~(case_queues :
-             (((unit StdPattern.typed_t * unit StdPattern.typed_t)
-              * unit StdPattern.typed_t list)
-             * StdExpr.plain_typed_t)
+             ((((Vtype.t * tag)
+               * tag StdPattern.typed_t
+               * tag StdPattern.typed_t)
+              * tag StdPattern.typed_t list)
+             * (tag, tag) StdExpr.typed_t)
              list) :
-          ( unit FlatPattern.M.typed_t * FlatExpr.plain_typed_t,
+          ( tag FlatPattern.M.typed_t * (tag, tag) FlatExpr.typed_t,
             flattening_error )
           Result.t =
         let fresh_arg_names : Varname.t * Varname.t =
           ( generate_fresh_varname ~seed_name:"l" (),
             generate_fresh_varname ~seed_name:"r" () )
         in
-        let new_arg_std_nodes : StdExpr.plain_typed_t * StdExpr.plain_typed_t =
-          ( StdExpr.Var ((t1, ()), fst fresh_arg_names),
-            StdExpr.Var ((t2, ()), snd fresh_arg_names) )
+        let new_arg_std_nodes :
+            (tag, tag) StdExpr.typed_t * (tag, tag) StdExpr.typed_t =
+          ( StdExpr.Var ((t1, tag), fst fresh_arg_names),
+            StdExpr.Var ((t2, tag), snd fresh_arg_names) )
         in
         compile_match ~return_t
           (fst new_arg_std_nodes :: snd new_arg_std_nodes :: arg_ts)
-          (List.map case_queues ~f:(fun (((p1, p2), ps_ts), case_e) ->
+          (List.map case_queues ~f:(fun (((_, p1, p2), ps_ts), case_e) ->
                (p1 :: p2 :: ps_ts, case_e)))
           def
         >>= fun flat_case_e ->
         ( FlatPattern.FlatPatPair
-            ( (pair_t, ()),
-              ((t1, ()), fst fresh_arg_names, t1),
-              ((t2, ()), snd fresh_arg_names, t2) ),
+            ( (pair_t, tag),
+              ((t1, tag), fst fresh_arg_names, t1),
+              ((t2, tag), snd fresh_arg_names, t2) ),
           flat_case_e )
         |> Ok
       in
-      create_case
-        ~case_queues:
-          (case_queues |> Nonempty_list.to_list
-          |> List.map ~f:(fun (((_, p1, p2), ps_ts), case_e) ->
-                 (((p1, p2), ps_ts), case_e)))
+      create_case ~tag ~case_queues:(Nonempty_list.to_list case_queues)
       >>= fun flat_case ->
       flat_case |> Nonempty_list.singleton |> fun flat_cases ->
       (* Flatten the argument *)
       flatten_expr curr_arg >>= fun flat_arg ->
       (* Create the output flat match expression *)
-      FlatExpr.Match ((return_t, ()), flat_arg, return_t, flat_cases) |> Ok
+      FlatExpr.Match ((return_t, tag), flat_arg, return_t, flat_cases) |> Ok
     and compile_constructors ~(return_t : Vtype.t) (curr_arg, arg_ts)
         case_queues def =
       (* This corresponds to the `matchCon` function in the book *)
       let open Result in
       (* Find which variant type we are looking at *)
-      case_queues |> Nonempty_list.head |> fst |> fun ((_, cname, _), _) ->
+      case_queues |> Nonempty_list.head |> fst
+      |> fun (((_, tag), cname, _), _) ->
       TypeCtx.find_variant_type_with_constructor type_ctx cname
       |> Result.of_option ~error:(UnknownVariantConstructor cname)
       >>= fun ((vt_name, vt_cs), _) ->
       (* For each possible constructor of the variant type, create a case for the match *)
       let create_case_for_constructor ~variant_vtype ~cname ~ct
           ~(case_queues :
-             ((unit StdPattern.typed_t * unit StdPattern.typed_t list)
-             * StdExpr.plain_typed_t)
+             (((Vtype.t * tag)
+              * tag StdPattern.typed_t
+              * tag StdPattern.typed_t list)
+             * (tag, tag) StdExpr.typed_t)
              list) :
-          ( unit FlatPattern.M.typed_t * FlatExpr.plain_typed_t,
+          ( tag FlatPattern.M.typed_t * (tag, tag) FlatExpr.typed_t,
             flattening_error )
           Result.t =
         (* Create the fresh name for the argument, and the corresponding expr nodes *)
         let fresh_arg_name : Varname.t =
           generate_fresh_varname ~seed_name:(sprintf "%s_arg" vt_name) ()
         in
-        let new_arg_std_node : StdExpr.plain_typed_t =
-          StdExpr.Var ((ct, ()), fresh_arg_name)
+        let new_arg_std_node : (tag, tag) StdExpr.typed_t =
+          StdExpr.Var ((ct, tag), fresh_arg_name)
         in
         (* Create the case expression for this case *)
         compile_match ~return_t
           (new_arg_std_node :: arg_ts)
-          (List.map case_queues ~f:(fun ((p', ps_ts), case_e) ->
+          (List.map case_queues ~f:(fun ((_, p', ps_ts), case_e) ->
                (p' :: ps_ts, case_e)))
           def
         >>= fun flat_case_e ->
         (* Create the output case, consisting of the flat pattern and flat expression *)
         ( FlatPattern.FlatPatConstructor
-            ((variant_vtype, ()), cname, ((ct, ()), fresh_arg_name, ct)),
+            ((variant_vtype, tag), cname, ((ct, tag), fresh_arg_name, ct)),
           flat_case_e )
         |> Ok
       in
@@ -265,32 +269,32 @@ module Make
             ~cname ~ct
             ~case_queues:
               (case_queues |> Nonempty_list.to_list
-              |> List.filter_map ~f:(fun (((_, cname2, p1), ps_ts), case_e) ->
+              |> List.filter_map ~f:(fun (((v, cname2, p1), ps_ts), case_e) ->
                      if not (equal_string cname cname2) then None
-                     else Some ((p1, ps_ts), case_e))))
+                     else Some ((v, p1, ps_ts), case_e))))
       |> Nonempty_list.result_all
       >>= fun flat_cases ->
       (* Flatten the argument *)
       flatten_expr curr_arg >>= fun flat_arg ->
       (* Create the output flat match expression *)
-      FlatExpr.Match ((return_t, ()), flat_arg, return_t, flat_cases) |> Ok
+      FlatExpr.Match ((return_t, tag), flat_arg, return_t, flat_cases) |> Ok
     and flatten_expr :
-        StdExpr.plain_typed_t ->
-        (FlatExpr.plain_typed_t, flattening_error) Result.t =
+        (tag, tag) StdExpr.typed_t ->
+        ((tag, tag) FlatExpr.typed_t, flattening_error) Result.t =
       let open Result in
       let unop
-          (recomb : ('tag_e, 'tag_p) FlatExpr.t -> ('tag_e, 'tag_p) FlatExpr.t)
-          (e1 : ('tag_e, 'tag_p) StdExpr.t) :
-          (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
+          (recomb : (tag, tag) FlatExpr.typed_t -> (tag, tag) FlatExpr.typed_t)
+          (e1 : (tag, tag) StdExpr.typed_t) :
+          ((tag, tag) FlatExpr.typed_t, flattening_error) Result.t =
         flatten_expr e1 >>= fun e1' -> Ok (recomb e1')
       in
       let binop
           (recomb :
-            ('tag_e, 'tag_p) FlatExpr.t ->
-            ('tag_e, 'tag_p) FlatExpr.t ->
-            ('tag_e, 'tag_p) FlatExpr.t) (e1 : ('tag_e, 'tag_p) StdExpr.t)
-          (e2 : ('tag_e, 'tag_p) StdExpr.t) :
-          (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
+            (tag, tag) FlatExpr.typed_t ->
+            (tag, tag) FlatExpr.typed_t ->
+            (tag, tag) FlatExpr.typed_t) (e1 : (tag, tag) StdExpr.typed_t)
+          (e2 : (tag, tag) StdExpr.typed_t) :
+          ((tag, tag) FlatExpr.typed_t, flattening_error) Result.t =
         flatten_expr e1 >>= fun e1' ->
         flatten_expr e2 >>= fun e2' -> Ok (recomb e1' e2')
       in
@@ -331,21 +335,15 @@ module Make
     fun orig_e ->
       Result.(flatten_expr orig_e >>| fun res -> (!existing_names, res))
 
-  let flatten_program (type tag_e tag_p) ~(existing_names : StringSet.t)
-      ~(type_ctx : TypeCtx.t) (prog : (tag_e, tag_p) StdProgram.typed_t) :
-      ( StringSet.t * (unit, unit) FlatProgram.typed_t,
-        flattening_error )
-      Result.t =
+  let flatten_program (type tag) ~(existing_names : StringSet.t)
+      ~(type_ctx : TypeCtx.t) (prog : (tag, tag) StdProgram.typed_t) :
+      (StringSet.t * (tag, tag) FlatProgram.typed_t, flattening_error) Result.t
+      =
     let open Result in
-    let prog : (unit, unit) StdProgram.typed_t =
-      prog
-      |> StdProgram.fmap_expr ~f:(fun (t, _) -> (t, ()))
-      |> StdProgram.fmap_pattern ~f:(fun (t, _) -> (t, ()))
-    in
     List.fold_result ~init:(existing_names, [])
       ~f:(fun
           (existing_names, acc_defns_rev)
-          (defn : ('tag_e, 'tag_p) StdProgram.top_level_defn)
+          (defn : (Vtype.t * tag, Vtype.t * tag) StdProgram.top_level_defn)
         ->
         flatten_expr ~existing_names ~type_ctx defn.body
         >>| fun (existing_names, body') ->
@@ -386,9 +384,9 @@ module Make
           body = prog_body';
         } )
 
-  let flatten_typed_program (type tag_e tag_p) ~(existing_names : StringSet.t)
-      (prog : (tag_e, tag_p) TypeChecker.typed_program) :
-      ( StringSet.t * (unit, unit) FlatPattern.FlatProgram.typed_t,
+  let flatten_typed_program (type tag) ~(existing_names : StringSet.t)
+      (prog : (tag, tag) TypeChecker.typed_program) :
+      ( StringSet.t * (tag, tag) FlatPattern.FlatProgram.typed_t,
         flattening_error )
       Result.t =
     flatten_program ~existing_names
