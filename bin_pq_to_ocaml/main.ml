@@ -55,14 +55,12 @@ let process_pq_file (filename : string) :
          ( ErrInternal,
            sprintf "Typing error:\n%s" (TypeChecker.TypingError.print err) ))
   >>= fun tp ->
-  let prog_for_quotient_type_checking =
-    TypeChecker.typed_program_get_program tp
-    |> Program.fmap_pattern ~f:(fun (t, source_pos) ->
-           ({ t; source_pos } : QuotientTypeChecker.node_tag))
-    |> Program.fmap_expr ~f:(fun (t, source_pos) ->
-           ({ t; source_pos } : QuotientTypeChecker.node_tag))
-  in
-  QuotientTypeChecker.check_program prog_for_quotient_type_checking
+  QuotientTypeChecker.check_program
+    ~get_expr_node_tag:(fun (t, source_pos) ->
+      ({ t; source_pos } : QuotientTypeChecker.node_tag))
+    ~get_pattern_node_tag:(fun (t, source_pos) ->
+      ({ t; source_pos } : QuotientTypeChecker.node_tag))
+    tp
   |> Result.map_error ~f:(fun err ->
          ( ErrInternal,
            sprintf "Quotient type checking error:\n%s"
