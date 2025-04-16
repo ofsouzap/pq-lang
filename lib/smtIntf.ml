@@ -7,6 +7,7 @@ module Unifier = Unifier.StdUnifier
 module QuotientType = QuotientType.StdQuotientType
 module CustomType = CustomType.StdCustomType
 module Program = Program.StdProgram
+module TypeCtx = TypeChecker.TypeContext.StdSetTypeContext
 open FlatPattern
 
 let sexp_op ((op : string), (args : Sexp.t list)) : Sexp.t =
@@ -15,8 +16,6 @@ let sexp_op ((op : string), (args : Sexp.t list)) : Sexp.t =
 (** Provides an interface to an SMT solver for quotient type checking purposes
 *)
 module type S = sig
-  module TypeCtx : TypeChecker.TypeContext.S
-
   type smt_intf_error [@@deriving sexp, equal]
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
@@ -137,7 +136,6 @@ module type S = sig
 end
 
 module Z3Intf : S = struct
-  module TypeCtx = TypeChecker.TypeContext.StdSetTypeContext
   module FlattenerBase = Flattener
   module Flattener = Flattener.Make (TypeChecker.StdSimpleTypeChecker)
 

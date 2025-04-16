@@ -6,13 +6,12 @@ module Unifier = Unifier.StdUnifier
 module QuotientType = QuotientType.StdQuotientType
 module CustomType = CustomType.StdCustomType
 module Program = Program.StdProgram
+module TypeCtx = TypeChecker.TypeContext.StdSetTypeContext
 open FlatPattern
 
 (** Provides an interface to an SMT solver for quotient type checking purposes
 *)
 module type S = sig
-  module TypeCtx : TypeChecker.TypeContext.S
-
   type smt_intf_error [@@deriving sexp, equal]
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
