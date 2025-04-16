@@ -133,10 +133,11 @@ let to_std_pattern : 'a M.t -> 'a StdPattern.t = function
 (*** Provides functionality for flattening standard expressions to flat expressions *)
 module ExprFlattener : sig
   val flatten_expr :
+    existing_names:StringSet.t ->
     type_ctx:StdTypeCtx.t ->
     create_var_node:(Varname.t -> StdExpr.plain_typed_t) ->
     StdExpr.plain_typed_t ->
-    (FlatExpr.plain_typed_t, flattening_error) Result.t
+    (StringSet.t * FlatExpr.plain_typed_t, flattening_error) Result.t
 end = struct
   (* The algorithm used is based on that described in Chapter 5 of Simon Peyton Jones' "The implementation of functional programming languages".
   Annotations are sometimes provided in the code for how each part relates the the algorithm described in the book *)
@@ -188,8 +189,10 @@ end = struct
             failwith "Erroneous empty case queue"
         | p_h :: ps_ts, _ -> add_new ((p_h, ps_ts), e))
 
-  let flatten_expr ~(type_ctx : StdTypeCtx.t)
+  let flatten_expr ~(existing_names : StringSet.t) ~(type_ctx : StdTypeCtx.t)
       ~(create_var_node : Varname.t -> StdExpr.plain_typed_t) =
+    let existing_names = ref existing_names in
+    let fresh_varname () : Varname.t = _ in
     let rec compile_match ~(return_t : Vtype.t)
         (args : StdExpr.plain_typed_t list)
         (case_queues :
@@ -273,76 +276,67 @@ end = struct
     and flatten_expr :
         StdExpr.plain_typed_t ->
         (FlatExpr.plain_typed_t, flattening_error) Result.t =
-      _
+      let open Result in
+      let unop
+          (recomb : ('tag_e, 'tag_p) FlatExpr.t -> ('tag_e, 'tag_p) FlatExpr.t)
+          (e1 : ('tag_e, 'tag_p) StdExpr.t) :
+          (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
+        flatten_expr e1 >>= fun e1' -> Ok (recomb e1')
+      in
+      let binop
+          (recomb :
+            ('tag_e, 'tag_p) FlatExpr.t ->
+            ('tag_e, 'tag_p) FlatExpr.t ->
+            ('tag_e, 'tag_p) FlatExpr.t) (e1 : ('tag_e, 'tag_p) StdExpr.t)
+          (e2 : ('tag_e, 'tag_p) StdExpr.t) :
+          (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
+        flatten_expr e1 >>= fun e1' ->
+        flatten_expr e2 >>= fun e2' -> Ok (recomb e1' e2')
+      in
+      function
+      | UnitLit v -> Ok (UnitLit v)
+      | IntLit (v, x) -> Ok (IntLit (v, x))
+      | Add (v, e1, e2) -> binop (fun e1' e2' -> Add (v, e1', e2')) e1 e2
+      | Neg (v, e) -> unop (fun e' -> Neg (v, e')) e
+      | Subtr (v, e1, e2) -> binop (fun e1' e2' -> Subtr (v, e1', e2')) e1 e2
+      | Mult (v, e1, e2) -> binop (fun e1' e2' -> Mult (v, e1', e2')) e1 e2
+      | BoolLit (v, b) -> Ok (BoolLit (v, b))
+      | BNot (v, e) -> unop (fun e' -> BNot (v, e')) e
+      | BOr (v, e1, e2) -> binop (fun e1' e2' -> BOr (v, e1', e2')) e1 e2
+      | BAnd (v, e1, e2) -> binop (fun e1' e2' -> BAnd (v, e1', e2')) e1 e2
+      | Pair (v, e1, e2) -> binop (fun e1' e2' -> Pair (v, e1', e2')) e1 e2
+      | Eq (v, e1, e2) -> binop (fun e1' e2' -> Eq (v, e1', e2')) e1 e2
+      | Gt (v, e1, e2) -> binop (fun e1' e2' -> Gt (v, e1', e2')) e1 e2
+      | GtEq (v, e1, e2) -> binop (fun e1' e2' -> GtEq (v, e1', e2')) e1 e2
+      | Lt (v, e1, e2) -> binop (fun e1' e2' -> Lt (v, e1', e2')) e1 e2
+      | LtEq (v, e1, e2) -> binop (fun e1' e2' -> LtEq (v, e1', e2')) e1 e2
+      | If (v, e1, e2, e3) ->
+          flatten_expr e1 >>= fun e1' ->
+          flatten_expr e2 >>= fun e2' ->
+          flatten_expr e3 >>| fun e3' -> FlatExpr.If (v, e1', e2', e3')
+      | Var (v, name) -> Ok (Var (v, name))
+      | Let (v, xname, e1, e2) ->
+          binop (fun e1' e2' -> Let (v, xname, e1', e2')) e1 e2
+      | App (v, e1, e2) -> binop (fun e1' e2' -> App (v, e1', e2')) e1 e2
+      | Match (v, e, t2, cases) ->
+          flatten_expr e >>= fun e' ->
+          Nonempty_list.fold_result_consume_init cases ~init:()
+            ~f:(fun acc (p, e) ->
+              flatten_expr e >>= fun e' ->
+              match acc with
+              | First () -> Ok (Nonempty_list.singleton (p, e'))
+              | Second acc_rev -> Ok (Nonempty_list.cons (p, e') acc_rev))
+          >>= fun flat_expr_cases_rev ->
+          (fun _ -> failwith "TODO") (Nonempty_list.rev flat_expr_cases_rev)
+          |> Result.map_error ~f:(failwith "TODO")
+          >>= fun match_tree ->
+          (fun _ -> failwith "TODO") match_tree >>| fun flat_cases_rev ->
+          FlatExpr.Match (v, e', t2, Nonempty_list.rev flat_cases_rev)
+      | Constructor (v, name, e) -> unop (fun e' -> Constructor (v, name, e')) e
     in
-    flatten_expr
+    fun orig_e ->
+      Result.(flatten_expr orig_e >>| fun res -> (!existing_names, res))
 end
-
-let tmp_of_expr ~(existing_names : StringSet.t) =
-  let open Result in
-  let existing_names = ref existing_names in
-  let fresh_varname () : Varname.t = _ in
-  let rec of_expr :
-      ('tag_e, 'tag_p) StdExpr.t ->
-      (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
-    let unop
-        (recomb : ('tag_e, 'tag_p) FlatExpr.t -> ('tag_e, 'tag_p) FlatExpr.t)
-        (e1 : ('tag_e, 'tag_p) StdExpr.t) :
-        (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
-      of_expr e1 >>= fun e1' -> Ok (recomb e1')
-    in
-    let binop
-        (recomb :
-          ('tag_e, 'tag_p) FlatExpr.t ->
-          ('tag_e, 'tag_p) FlatExpr.t ->
-          ('tag_e, 'tag_p) FlatExpr.t) (e1 : ('tag_e, 'tag_p) StdExpr.t)
-        (e2 : ('tag_e, 'tag_p) StdExpr.t) :
-        (('tag_e, 'tag_p) FlatExpr.t, flattening_error) Result.t =
-      of_expr e1 >>= fun e1' ->
-      of_expr e2 >>= fun e2' -> Ok (recomb e1' e2')
-    in
-    function
-    | UnitLit v -> Ok (UnitLit v)
-    | IntLit (v, x) -> Ok (IntLit (v, x))
-    | Add (v, e1, e2) -> binop (fun e1' e2' -> Add (v, e1', e2')) e1 e2
-    | Neg (v, e) -> unop (fun e' -> Neg (v, e')) e
-    | Subtr (v, e1, e2) -> binop (fun e1' e2' -> Subtr (v, e1', e2')) e1 e2
-    | Mult (v, e1, e2) -> binop (fun e1' e2' -> Mult (v, e1', e2')) e1 e2
-    | BoolLit (v, b) -> Ok (BoolLit (v, b))
-    | BNot (v, e) -> unop (fun e' -> BNot (v, e')) e
-    | BOr (v, e1, e2) -> binop (fun e1' e2' -> BOr (v, e1', e2')) e1 e2
-    | BAnd (v, e1, e2) -> binop (fun e1' e2' -> BAnd (v, e1', e2')) e1 e2
-    | Pair (v, e1, e2) -> binop (fun e1' e2' -> Pair (v, e1', e2')) e1 e2
-    | Eq (v, e1, e2) -> binop (fun e1' e2' -> Eq (v, e1', e2')) e1 e2
-    | Gt (v, e1, e2) -> binop (fun e1' e2' -> Gt (v, e1', e2')) e1 e2
-    | GtEq (v, e1, e2) -> binop (fun e1' e2' -> GtEq (v, e1', e2')) e1 e2
-    | Lt (v, e1, e2) -> binop (fun e1' e2' -> Lt (v, e1', e2')) e1 e2
-    | LtEq (v, e1, e2) -> binop (fun e1' e2' -> LtEq (v, e1', e2')) e1 e2
-    | If (v, e1, e2, e3) ->
-        of_expr e1 >>= fun e1' ->
-        of_expr e2 >>= fun e2' ->
-        of_expr e3 >>| fun e3' -> FlatExpr.If (v, e1', e2', e3')
-    | Var (v, name) -> Ok (Var (v, name))
-    | Let (v, xname, e1, e2) ->
-        binop (fun e1' e2' -> Let (v, xname, e1', e2')) e1 e2
-    | App (v, e1, e2) -> binop (fun e1' e2' -> App (v, e1', e2')) e1 e2
-    | Match (v, e, t2, cases) ->
-        of_expr e >>= fun e' ->
-        Nonempty_list.fold_result_consume_init cases ~init:()
-          ~f:(fun acc (p, e) ->
-            of_expr e >>= fun e' ->
-            match acc with
-            | First () -> Ok (Nonempty_list.singleton (p, e'))
-            | Second acc_rev -> Ok (Nonempty_list.cons (p, e') acc_rev))
-        >>= fun flat_expr_cases_rev ->
-        (fun _ -> failwith "TODO") (Nonempty_list.rev flat_expr_cases_rev)
-        |> Result.map_error ~f:(failwith "TODO")
-        >>= fun match_tree ->
-        (fun _ -> failwith "TODO") match_tree >>| fun flat_cases_rev ->
-        FlatExpr.Match (v, e', t2, Nonempty_list.rev flat_cases_rev)
-    | Constructor (v, name, e) -> unop (fun e' -> Constructor (v, name, e')) e
-  in
-  fun orig_e -> of_expr orig_e >>| fun res -> (!existing_names, res)
 
 (** Convert a flat Expr expression to a non-flat Expr expression *)
 let rec to_std_expr : ('tag_e, 'tag_p) FlatExpr.t -> ('tag_e, 'tag_p) StdExpr.t
