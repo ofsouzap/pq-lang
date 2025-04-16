@@ -251,11 +251,59 @@ end = struct
                  ~sub:(fun _ -> Nonempty_list.head args)
                  case_e )))
         def
-    and compile_pairs ~(return_t : Vtype.t) args case_queues def =
+    and compile_pairs ~(return_t : Vtype.t) (curr_arg, arg_ts) case_queues def =
       (* This is inspired by the `matchVar` and `matchCon` functions in the book,
         but is adapted for my language where pair values are used instead of constructors of higher arities. *)
-      _
-    and compile_constructors ~(return_t : Vtype.t) args case_queues def =
+      let open Result in
+      let t1, t2 =
+        case_queues |> Nonempty_list.head |> fst |> fun (((t, ()), _, _), _) ->
+        match t with
+        | Vtype.VTypePair (t1, t2) -> (t1, t2)
+        | _ -> failwith "Expected a pair type"
+      in
+      let pair_t = Vtype.VTypePair (t1, t2) in
+      (* Create the case matching on the pair *)
+      let create_case
+          ~(case_queues :
+             (((unit StdPattern.typed_t * unit StdPattern.typed_t)
+              * unit StdPattern.typed_t list)
+             * StdExpr.plain_typed_t)
+             list) :
+          (unit M.typed_t * FlatExpr.plain_typed_t, flattening_error) Result.t =
+        let fresh_arg_names : Varname.t * Varname.t =
+          ( generate_fresh_varname ~seed_name:"l" (),
+            generate_fresh_varname ~seed_name:"r" () )
+        in
+        let new_arg_std_nodes : StdExpr.plain_typed_t * StdExpr.plain_typed_t =
+          ( StdExpr.Var ((t1, ()), fst fresh_arg_names),
+            StdExpr.Var ((t2, ()), snd fresh_arg_names) )
+        in
+        compile_match ~return_t
+          (fst new_arg_std_nodes :: snd new_arg_std_nodes :: arg_ts)
+          (List.map case_queues ~f:(fun (((p1, p2), ps_ts), case_e) ->
+               (p1 :: p2 :: ps_ts, case_e)))
+          def
+        >>= fun flat_case_e ->
+        ( FlatPatPair
+            ( (pair_t, ()),
+              ((t1, ()), fst fresh_arg_names, t1),
+              ((t2, ()), snd fresh_arg_names, t2) ),
+          flat_case_e )
+        |> Ok
+      in
+      create_case
+        ~case_queues:
+          (case_queues |> Nonempty_list.to_list
+          |> List.map ~f:(fun (((_, p1, p2), ps_ts), case_e) ->
+                 (((p1, p2), ps_ts), case_e)))
+      >>= fun flat_case ->
+      flat_case |> Nonempty_list.singleton |> fun flat_cases ->
+      (* Flatten the argument *)
+      flatten_expr curr_arg >>= fun flat_arg ->
+      (* Create the output flat match expression *)
+      FlatExpr.Match ((return_t, ()), flat_arg, return_t, flat_cases) |> Ok
+    and compile_constructors ~(return_t : Vtype.t) (curr_arg, arg_ts)
+        case_queues def =
       (* This corresponds to the `matchCon` function in the book *)
       let open Result in
       (* Find which variant type we are looking at *)
@@ -279,15 +327,16 @@ end = struct
         in
         (* Create the case expression for this case *)
         compile_match ~return_t
-          (new_arg_std_node :: Nonempty_list.tail args)
+          (new_arg_std_node :: arg_ts)
           (List.map case_queues ~f:(fun ((p', ps_ts), case_e) ->
                (p' :: ps_ts, case_e)))
           def
-        >>| fun flat_case_e ->
+        >>= fun flat_case_e ->
         (* Create the output case, consisting of the flat pattern and flat expression *)
         ( FlatPatConstructor
             ((variant_vtype, ()), cname, ((ct, ()), fresh_arg_name, ct)),
           flat_case_e )
+        |> Ok
       in
       Nonempty_list.map
         (vt_cs
@@ -298,13 +347,13 @@ end = struct
             ~cname ~ct
             ~case_queues:
               (case_queues |> Nonempty_list.to_list
-              |> List.filter_map ~f:(fun (((_, cname2, p1), ps), case_e) ->
+              |> List.filter_map ~f:(fun (((_, cname2, p1), ps_ts), case_e) ->
                      if not (equal_string cname cname2) then None
-                     else Some ((p1, ps), case_e))))
+                     else Some ((p1, ps_ts), case_e))))
       |> Nonempty_list.result_all
       >>= fun flat_cases ->
       (* Flatten the argument *)
-      flatten_expr (Nonempty_list.head args) >>= fun flat_arg ->
+      flatten_expr curr_arg >>= fun flat_arg ->
       (* Create the output flat match expression *)
       FlatExpr.Match ((return_t, ()), flat_arg, return_t, flat_cases) |> Ok
     and flatten_expr :
