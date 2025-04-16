@@ -18,6 +18,7 @@
   smtIntf
   typeChecker
   flatPattern
+  flattener
   quotientTypeChecker
   parsing_errors
   parser

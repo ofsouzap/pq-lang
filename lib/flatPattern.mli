@@ -18,21 +18,5 @@ module FlatProgram :
      and module QuotientType = QuotientType.StdQuotientType
      and module CustomType = CustomType.StdCustomType
 
-type flattening_error =
-  | UnknownVariantConstructor of string
-  | NoDefaultCaseForMatchBranch of string option
-[@@deriving sexp, equal]
-
 val to_std_pattern : 'a flat_pattern -> 'a StdPattern.t
-
-val of_expr :
-  existing_names:Utils.StringSet.t ->
-  ('tag_e, 'tag_p) StdExpr.t ->
-  (Utils.StringSet.t * ('tag_e, 'tag_p) FlatExpr.t, flattening_error) result
-
 val to_std_expr : ('tag_e, 'tag_p) FlatExpr.t -> ('tag_e, 'tag_p) StdExpr.t
-
-val of_program :
-  existing_names:Utils.StringSet.t ->
-  ('tag_e, 'tag_p) StdProgram.t ->
-  (Utils.StringSet.t * ('tag_e, 'tag_p) FlatProgram.t, flattening_error) result
