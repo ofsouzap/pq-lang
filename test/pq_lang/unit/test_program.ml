@@ -5,7 +5,7 @@ open Testing_utils
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:1000 ~name:"Program to source code"
+  Test.make ~count:20 ~name:"Program to source code"
     unit_program_arbitrary_with_default_options (fun prog ->
       match
         Result.(

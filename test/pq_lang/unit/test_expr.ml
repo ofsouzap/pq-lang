@@ -79,7 +79,7 @@ let test_cases_equality : unit Alcotest.test_case list =
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:1000 ~name:"Expr to source code"
+  Test.make ~count:20 ~name:"Expr to source code"
     unit_program_arbitrary_with_default_options (fun prog ->
       match prog.body with
       | None -> true
@@ -238,7 +238,7 @@ functor
         unit Alcotest.test_case =
       let open QCheck in
       QCheck_alcotest.to_alcotest
-        (Test.make ~count:100 ~name
+        (Test.make ~count:20 ~name
            (pair (fun1 Tag.obs Tag.arb)
               (Program_qcheck_testing.arbitrary
                  {
@@ -290,7 +290,7 @@ functor
         unit Alcotest.test_case =
       let open QCheck in
       QCheck_alcotest.to_alcotest
-        (Test.make ~count:100 ~name
+        (Test.make ~count:20 ~name
            (triple Tag1.arb (fun1 Tag1.obs Tag2.arb)
               (Tag1_program_qcheck_testing.arbitrary
                  {

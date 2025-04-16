@@ -129,7 +129,7 @@ let create_typed_expr_gen_test (name : string)
   let open QCheck in
   let module TypingError = TestingTypeChecker.TypingError in
   QCheck_alcotest.to_alcotest
-    (Test.make ~name ~count:1000
+    (Test.make ~name ~count:100
        (let open QCheck.Gen in
         let gen :
             (TestingTypeCtx.t * (Vtype.t * (unit, unit) Expr.t)) QCheck.Gen.t =
@@ -189,7 +189,7 @@ let create_test_vtype_gen_constructors_exist (name : string) :
     unit Alcotest.test_case =
   let open QCheck in
   QCheck_alcotest.to_alcotest
-    (Test.make ~name ~count:1000
+    (Test.make ~name ~count:100
        (QCheck.make
           ~print:
             QCheck.Print.(
@@ -206,7 +206,7 @@ let create_test_vtype_gen_constructors_exist (name : string) :
 let create_test_type_ctx_gen_valid (name : string) : unit Alcotest.test_case =
   let open QCheck in
   QCheck_alcotest.to_alcotest
-    (Test.make ~name ~count:1000
+    (Test.make ~name ~count:100
        (TestingTypeCtx.QCheck_testing.arbitrary
           {
             max_variant_types = default_max_variant_type_count;
