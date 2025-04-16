@@ -1,7 +1,9 @@
 open Core
 open Pq_lang
-module QuotientTypeChecker = Pq_lang.QuotientTypeChecker.MakeZ3
 open Testing_utils
+
+module QuotientTypeChecker =
+  Pq_lang.QuotientTypeChecker.MakeZ3 (TestingTypeChecker)
 
 let manual_tests : unit Alcotest.test_case list =
   let create_test
@@ -24,14 +26,13 @@ let manual_tests : unit Alcotest.test_case list =
                  sprintf "Typing error: %s\n"
                    (TypeChecker.TypingError.print err))
           >>= fun inp_typed_program ->
-          inp_typed_program |> TestingTypeChecker.typed_program_get_program
-          |> Program.fmap_pattern ~f:(fun (t, source_pos) ->
-                 ({ t; source_pos } : QuotientTypeChecker.node_tag))
-          |> Program.fmap_expr ~f:(fun (t, source_pos) ->
-                 ({ t; source_pos } : QuotientTypeChecker.node_tag))
-          |> fun inp_for_quotient_type_checking ->
           match
-            ( QuotientTypeChecker.check_program inp_for_quotient_type_checking,
+            ( QuotientTypeChecker.check_program
+                ~get_expr_node_tag:(fun (t, source_pos) ->
+                  ({ t; source_pos } : QuotientTypeChecker.node_tag))
+                ~get_pattern_node_tag:(fun (t, source_pos) ->
+                  ({ t; source_pos } : QuotientTypeChecker.node_tag))
+                inp_typed_program,
               exp )
           with
           | Ok (Ok ()), `Valid -> Ok ()
