@@ -169,6 +169,9 @@ module type S = sig
   (** The type of a type context that has been checked to be valid *)
   type checked_type_ctx
 
+  (* Extract the underlying type context for a checked type context *)
+  val checked_type_ctx_get_type_ctx : checked_type_ctx -> TypeCtx.t
+
   (** A checked version of the empty type context *)
   val checked_empty_type_ctx : checked_type_ctx
 
