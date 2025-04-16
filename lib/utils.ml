@@ -102,6 +102,7 @@ module type Nonempty_list_sig = sig
   val singleton : 'a -> 'a t
   val cons : 'a -> 'a t -> 'a t
   val map : f:('a -> 'b) -> 'a t -> 'b t
+  val mapi : f:(int -> 'a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
 
   val fold_consume_init :
@@ -159,6 +160,10 @@ module Nonempty_list : Nonempty_list_sig = struct
   let singleton (h : 'a) = (h, [])
   let cons (h : 'a) (ts : 'a t) = (h, to_list ts)
   let map ~(f : 'a -> 'b) ((h, ts) : 'a t) : 'b t = (f h, List.map ~f ts)
+
+  let mapi ~(f : int -> 'a -> 'b) ((h, ts) : 'a t) : 'b t =
+    (f 0 h, List.mapi ~f:(fun i x -> f (i + 1) x) ts)
+
   let fold (xs : 'a t) = List.fold (to_list xs)
 
   let fold_consume_init ((h, ts) : 'a t) ~init ~f =

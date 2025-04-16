@@ -74,6 +74,7 @@ module type Nonempty_list_sig = sig
   val singleton : 'a -> 'a t
   val cons : 'a -> 'a t -> 'a t
   val map : f:('a -> 'b) -> 'a t -> 'b t
+  val mapi : f:(int -> 'a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
 
   val fold_consume_init :
