@@ -15,6 +15,8 @@ let sexp_op ((op : string), (args : Sexp.t list)) : Sexp.t =
 (** Provides an interface to an SMT solver for quotient type checking purposes
 *)
 module type S = sig
+  module TypeCtx : TypeChecker.TypeContext.S
+
   type smt_intf_error [@@deriving sexp, equal]
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
@@ -75,9 +77,9 @@ module type S = sig
     }
     [@@deriving sexp, equal]
 
-    type t [@@deriving sexp, equal]
+    type t
 
-    val state_init : tag_custom_type list -> t
+    val state_init : TypeCtx.t -> tag_custom_type list -> t
     val find_root_base_type : t -> Vtype.t -> (Vtype.t, smt_intf_error) result
 
     val state_get_pair_type_info :
@@ -135,10 +137,14 @@ module type S = sig
 end
 
 module Z3Intf : S = struct
+  module TypeCtx = TypeChecker.TypeContext.StdSetTypeContext
+  module FlattenerBase = Flattener
+  module Flattener = Flattener.Make (TypeChecker.StdSimpleTypeChecker)
+
   type smt_intf_error =
     | PairTypeNotDefinedInState of Vtype.t * Vtype.t
     | UndefinedCustomTypeName of string
-    | PatternFlatteningError of FlatPattern.flattening_error
+    | PatternFlatteningError of FlattenerBase.flattening_error
   [@@deriving sexp, equal]
 
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
@@ -249,6 +255,7 @@ module Z3Intf : S = struct
     [@@deriving sexp, equal]
 
     type t = {
+      type_ctx : TypeCtx.t;
       custom_types : tag_custom_type list;
           (** A list of the custom types defined. This isn't used for building
               the SMT formula, but is used for e.g. mapping quotient types to
@@ -270,7 +277,6 @@ module Z3Intf : S = struct
           (** The reversed list of top-level definitions of the program. Added
               by module user *)
     }
-    [@@deriving sexp, equal]
 
     type state = t
 
@@ -281,8 +287,10 @@ module Z3Intf : S = struct
 
     let vt_unit_val : string = custom_special_name (`Var "unit")
 
-    let state_init (custom_types : tag_custom_type list) : t =
+    let state_init (type_ctx : TypeCtx.t) (custom_types : tag_custom_type list)
+        : t =
       {
+        type_ctx;
         custom_types;
         pair_types_defined =
           (VtypePairMap.empty : pair_type_info VtypePairMap.t);
@@ -893,15 +901,30 @@ module Z3Intf : S = struct
           in
           List.fold_result qt.eqconss ~init:(existing_names, [])
             ~f:(fun (existing_names, acc_rev) eqcons ->
+              (* Get a flattened LHS expression *)
               fst eqcons.body
               |> std_expr_of_std_pattern ~convert_tag:pattern_tag_to_expr_tag
-              |> FlatPattern.of_expr ~existing_names
+              |> Expr.fmap ~f:(fun (x : expr_tag) -> (x.t, ()))
+              |> Expr.fmap_pattern ~f:(fun (x : pattern_tag) -> (x.t, ()))
+              |> Flattener.flatten_expr ~existing_names ~type_ctx:state.type_ctx
               |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
-              >>= fun (existing_names, flat_l) ->
+              >>= fun (existing_names, e) ->
+              e
+              |> FlatExpr.fmap ~f:(fun (t, ()) -> ({ t } : expr_tag))
+              |> FlatExpr.fmap_pattern ~f:(fun (t, ()) -> ({ t } : pattern_tag))
+              |> fun flat_l ->
+              (* Get a flattened RHS expression *)
               snd eqcons.body
-              |> FlatPattern.of_expr ~existing_names
+              |> Expr.fmap ~f:(fun (x : expr_tag) -> (x.t, ()))
+              |> Expr.fmap_pattern ~f:(fun (x : pattern_tag) -> (x.t, ()))
+              |> Flattener.flatten_expr ~existing_names ~type_ctx:state.type_ctx
               |> Result.map_error ~f:(fun err -> PatternFlatteningError err)
-              >>= fun (existing_names, flat_r) ->
+              >>= fun (existing_names, e) ->
+              e
+              |> FlatExpr.fmap ~f:(fun (t, ()) -> ({ t } : expr_tag))
+              |> FlatExpr.fmap_pattern ~f:(fun (t, ()) -> ({ t } : pattern_tag))
+              |> fun flat_r ->
+              (* Create the equality assertion node *)
               create_assert_node eqcons.bindings flat_l flat_r >>| fun node ->
               (existing_names, node :: acc_rev))
           >>= fun (existing_names, assert_nodes_main_rev) ->

@@ -11,6 +11,8 @@ open FlatPattern
 (** Provides an interface to an SMT solver for quotient type checking purposes
 *)
 module type S = sig
+  module TypeCtx : TypeChecker.TypeContext.S
+
   type smt_intf_error [@@deriving sexp, equal]
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
@@ -71,9 +73,9 @@ module type S = sig
     }
     [@@deriving sexp, equal]
 
-    type t [@@deriving sexp, equal]
+    type t
 
-    val state_init : tag_custom_type list -> t
+    val state_init : TypeCtx.t -> tag_custom_type list -> t
     val find_root_base_type : t -> Vtype.t -> (Vtype.t, smt_intf_error) result
 
     val state_get_pair_type_info :
