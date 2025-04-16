@@ -135,7 +135,6 @@ module ExprFlattener : sig
   val flatten_expr :
     existing_names:StringSet.t ->
     type_ctx:StdTypeCtx.t ->
-    create_var_node:(Varname.t -> StdExpr.plain_typed_t) ->
     StdExpr.plain_typed_t ->
     (StringSet.t * FlatExpr.plain_typed_t, flattening_error) Result.t
 end = struct
@@ -189,10 +188,18 @@ end = struct
             failwith "Erroneous empty case queue"
         | p_h :: ps_ts, _ -> add_new ((p_h, ps_ts), e))
 
-  let flatten_expr ~(existing_names : StringSet.t) ~(type_ctx : StdTypeCtx.t)
-      ~(create_var_node : Varname.t -> StdExpr.plain_typed_t) =
+  let flatten_expr ~(existing_names : StringSet.t) ~(type_ctx : StdTypeCtx.t) =
     let existing_names = ref existing_names in
-    let fresh_varname () : Varname.t = _ in
+    let generate_fresh_varname ?(seed_name : string option) () : Varname.t =
+      let name_base = Option.value seed_name ~default:"x" in
+      let rec loop (i : int) : Varname.t =
+        let candidate = sprintf "%s%d" name_base i in
+        if Set.mem !existing_names candidate then loop (i + 1) else candidate
+      in
+      let new_name = loop 0 in
+      existing_names := Set.add !existing_names new_name;
+      new_name
+    in
     let rec compile_match ~(return_t : Vtype.t)
         (args : StdExpr.plain_typed_t list)
         (case_queues :
@@ -232,31 +239,37 @@ end = struct
     and compile_constructors ~(return_t : Vtype.t) args case_queues def =
       (* This corresponds to the `matchCon` function in the book *)
       let open Result in
-      let fresh_arg_name : Varname.t = failwith "TODO - fresh argument name" in
-      let new_arg_std_node : StdExpr.plain_typed_t =
-        create_var_node fresh_arg_name
-      in
-      flatten_expr new_arg_std_node >>= fun new_arg_flat_node ->
+      (* Find which variant type we are looking at *)
+      case_queues |> Nonempty_list.head |> fst |> fun ((_, cname, _), _) ->
+      StdTypeCtx.find_variant_type_with_constructor type_ctx cname
+      |> Result.of_option ~error:(UnknownVariantConstructor cname)
+      >>= fun ((vt_name, vt_cs), _) ->
+      (* For each possible constructor of the variant type, create a case for the match *)
       let create_case_for_constructor ~variant_vtype ~cname ~ct
           ~(case_queues :
              ((unit StdPattern.typed_t * unit StdPattern.typed_t list)
              * StdExpr.plain_typed_t)
              list) :
           (unit M.typed_t * FlatExpr.plain_typed_t, flattening_error) Result.t =
+        (* Create the fresh name for the argument, and the corresponding expr nodes *)
+        let fresh_arg_name : Varname.t =
+          generate_fresh_varname ~seed_name:(sprintf "%s_arg" vt_name) ()
+        in
+        let new_arg_std_node : StdExpr.plain_typed_t =
+          StdExpr.Var ((ct, ()), fresh_arg_name)
+        in
+        (* Create the case expression for this case *)
         compile_match ~return_t
-          (new_arg_std_node :: Nonempty_list.to_list args)
+          (new_arg_std_node :: Nonempty_list.tail args)
           (List.map case_queues ~f:(fun ((p', ps_ts), case_e) ->
                (p' :: ps_ts, case_e)))
           def
         >>| fun flat_case_e ->
+        (* Create the output case, consisting of the flat pattern and flat expression *)
         ( FlatPatConstructor
             ((variant_vtype, ()), cname, ((ct, ()), fresh_arg_name, ct)),
           flat_case_e )
       in
-      case_queues |> Nonempty_list.head |> fst |> fun ((_, cname, _), _) ->
-      StdTypeCtx.find_variant_type_with_constructor type_ctx cname
-      |> Result.of_option ~error:(UnknownVariantConstructor cname)
-      >>= fun ((vt_name, vt_cs), _) ->
       Nonempty_list.map
         (vt_cs
        |>
@@ -271,8 +284,10 @@ end = struct
                      else Some ((p1, ps), case_e))))
       |> Nonempty_list.result_all
       >>= fun flat_cases ->
-      FlatExpr.Match ((return_t, ()), new_arg_flat_node, return_t, flat_cases)
-      |> Ok
+      (* Flatten the argument *)
+      flatten_expr (Nonempty_list.head args) >>= fun flat_arg ->
+      (* Create the output flat match expression *)
+      FlatExpr.Match ((return_t, ()), flat_arg, return_t, flat_cases) |> Ok
     and flatten_expr :
         StdExpr.plain_typed_t ->
         (FlatExpr.plain_typed_t, flattening_error) Result.t =
@@ -381,7 +396,8 @@ let of_program ~(existing_names : StringSet.t)
         (existing_names, acc_defns_rev)
         (defn : ('tag_e, 'tag_p) StdProgram.top_level_defn)
       ->
-      of_expr ~existing_names defn.body >>| fun (existing_names, body') ->
+      ExprFlattener.flatten_expr ~existing_names ~type_ctx:_ defn.body
+      >>| fun (existing_names, body') ->
       ( existing_names,
         FlatProgram.
           {
@@ -400,8 +416,8 @@ let of_program ~(existing_names : StringSet.t)
   (match prog.body with
   | None -> Ok (existing_names, None)
   | Some prog_body ->
-      of_expr ~existing_names prog_body >>| fun (existing_names, body') ->
-      (existing_names, Some body'))
+      ExprFlattener.flatten_expr ~existing_names ~type_ctx:_ prog_body
+      >>| fun (existing_names, body') -> (existing_names, Some body'))
   >>| fun (existing_names, prog_body') ->
   ( existing_names,
     FlatProgram.
