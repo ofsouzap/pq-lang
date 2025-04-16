@@ -2,9 +2,9 @@ open Core
 open Cmdliner
 open Pq_lang
 module Program = Program.StdProgram
-module QuotientTypeChecker = QuotientTypeChecker.MakeZ3
 module ProgramExecutor = ProgramExecutor.SimpleExecutor
 module TypeChecker = ProgramExecutor.TypeChecker
+module QuotientTypeChecker = QuotientTypeChecker.MakeZ3 (TypeChecker)
 
 type exit = ErrCallingSystemFunctions | ErrQuotientTypeChecking | ErrInternal
 

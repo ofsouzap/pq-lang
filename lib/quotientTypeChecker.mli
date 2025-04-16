@@ -1,7 +1,12 @@
 open Core
 
 module type S = sig
-  module TypeChecker = TypeChecker.StdSimpleTypeChecker
+  module TypeChecker :
+    TypeChecker.S
+      with module Pattern = Pattern.StdPattern
+       and module Expr = Expr.StdExpr
+       and module Program = Program.StdProgram
+
   module Smt : SmtIntf.S
 
   type node_tag = { source_pos : Frontend.source_position; t : Vtype.t }
@@ -34,4 +39,13 @@ module type S = sig
     Result.t
 end
 
-module MakeZ3 : S
+module MakeZ3
+    (TypeChecker :
+      TypeChecker.S
+        with module Pattern = Pattern.StdPattern
+         and module Expr = Expr.StdExpr
+         and module Program = Program.StdProgram
+         and module TypingError = TypeChecker.TypingError.StdTypingError
+         and module TypeCtx.CustomType = CustomType.StdCustomType
+         and module TypeCtx.TypingError = TypeChecker.TypingError.StdTypingError) :
+  S with module TypeChecker = TypeChecker

@@ -2,7 +2,12 @@ open Core
 open Utils
 
 module type S = sig
-  module TypeChecker = TypeChecker.StdSimpleTypeChecker
+  module TypeChecker :
+    TypeChecker.S
+      with module Pattern = Pattern.StdPattern
+       and module Expr = Expr.StdExpr
+       and module Program = Program.StdProgram
+
   module Smt : SmtIntf.S
 
   type node_tag = { source_pos : Frontend.source_position; t : Vtype.t }
@@ -35,8 +40,18 @@ module type S = sig
     Result.t
 end
 
-module MakeZ3 : S = struct
-  module Smt = SmtIntf.Z3Intf
+module MakeZ3
+    (TypeChecker :
+      TypeChecker.S
+        with module Pattern = Pattern.StdPattern
+         and module Expr = Expr.StdExpr
+         and module Program = Program.StdProgram
+         and module TypingError = TypeChecker.TypingError.StdTypingError
+         and module TypeCtx.CustomType = CustomType.StdCustomType
+         and module TypeCtx.TypingError = TypeChecker.TypingError.StdTypingError) :
+  S with module TypeChecker = TypeChecker = struct
+  module TypeChecker = TypeChecker
+  module Smt = SmtIntf.Z3Intf (TypeChecker)
 
   (* Required for exposing Expr.std_expr_of_std_pattern *)
   open Expr
@@ -46,7 +61,6 @@ module MakeZ3 : S = struct
   module QuotientType = QuotientType.StdQuotientType
   module CustomType = CustomType.StdCustomType
   module Program = Program.StdProgram
-  module TypeChecker = TypeChecker.StdSimpleTypeChecker
   module TypeCtx = TypeChecker.TypeCtx
   module FlattenerBase = Flattener
   module Flattener = Flattener.Make (TypeChecker)

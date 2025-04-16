@@ -1,13 +1,6 @@
 open Core
 open Utils
 open Expr
-module Pattern = Pattern.StdPattern
-module Expr = Expr.StdExpr
-module Unifier = Unifier.StdUnifier
-module QuotientType = QuotientType.StdQuotientType
-module CustomType = CustomType.StdCustomType
-module Program = Program.StdProgram
-module TypeCtx = TypeChecker.TypeContext.StdSetTypeContext
 open FlatPattern
 
 let sexp_op ((op : string), (args : Sexp.t list)) : Sexp.t =
@@ -16,6 +9,20 @@ let sexp_op ((op : string), (args : Sexp.t list)) : Sexp.t =
 (** Provides an interface to an SMT solver for quotient type checking purposes
 *)
 module type S = sig
+  module TypeChecker :
+    TypeChecker.S
+      with module Pattern = Pattern.StdPattern
+       and module Expr = Expr.StdExpr
+       and module Program = Program.StdProgram
+
+  module TypeCtx = TypeChecker.TypeCtx
+  module Pattern = Pattern.StdPattern
+  module Expr = Expr.StdExpr
+  module Unifier = Unifier.StdUnifier
+  module QuotientType = QuotientType.StdQuotientType
+  module CustomType = CustomType.StdCustomType
+  module Program = Program.StdProgram
+
   type smt_intf_error [@@deriving sexp, equal]
   type expr_tag = { t : Vtype.t } [@@deriving sexp, equal]
   type pattern_tag = { t : Vtype.t } [@@deriving sexp, equal]
@@ -135,9 +142,26 @@ module type S = sig
     formula -> [ `Sat of model option | `Unknown | `Unsat ]
 end
 
-module Z3Intf : S = struct
+module Z3Intf
+    (TypeChecker :
+      TypeChecker.S
+        with module Pattern = Pattern.StdPattern
+         and module Expr = Expr.StdExpr
+         and module Program = Program.StdProgram
+         and module TypingError = TypeChecker.TypingError.StdTypingError
+         and module TypeCtx.CustomType = CustomType.StdCustomType
+         and module TypeCtx.TypingError = TypeChecker.TypingError.StdTypingError) :
+  S with module TypeChecker = TypeChecker = struct
+  module Pattern = Pattern.StdPattern
+  module Expr = Expr.StdExpr
+  module Unifier = Unifier.StdUnifier
+  module QuotientType = QuotientType.StdQuotientType
+  module CustomType = CustomType.StdCustomType
+  module Program = Program.StdProgram
+  module TypeChecker = TypeChecker
+  module TypeCtx = TypeChecker.TypeCtx
   module FlattenerBase = Flattener
-  module Flattener = Flattener.Make (TypeChecker.StdSimpleTypeChecker)
+  module Flattener = Flattener.Make (TypeChecker)
 
   type smt_intf_error =
     | PairTypeNotDefinedInState of Vtype.t * Vtype.t
