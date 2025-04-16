@@ -3,6 +3,7 @@ open Utils
 module StdPattern = Pattern.StdPattern
 module StdExpr = Expr.StdExpr
 module StdProgram = Program.StdProgram
+module StdTypeCtx = TypeChecker.TypeContext.StdSetTypeContext
 
 type 'a flat_pattern =
   | FlatPatName of 'a * string * Vtype.t
@@ -119,9 +120,7 @@ let std_program_private_flag_to_flat_program_private_flag :
   | StdProgram.Public -> Public
   | Private -> Private
 
-type flattening_error =
-  | UnexpectedTrivialMatchCasePatternError
-  | CasePatternTypingMismatch
+type flattening_error = UnknownVariantConstructor of string
 [@@deriving sexp, equal]
 
 let to_std_pattern : 'a M.t -> 'a StdPattern.t = function
@@ -131,7 +130,153 @@ let to_std_pattern : 'a M.t -> 'a StdPattern.t = function
   | FlatPatConstructor (v, c_name, (x1_v, x1_name, x1_t)) ->
       PatConstructor (v, c_name, PatName (x1_v, x1_name, x1_t))
 
-let compile_match ~(type_ctx : 'a) = _
+(*** Provides functionality for flattening standard expressions to flat expressions *)
+module ExprFlattener : sig
+  val flatten_expr :
+    type_ctx:StdTypeCtx.t ->
+    create_var_node:(Varname.t -> StdExpr.plain_typed_t) ->
+    StdExpr.plain_typed_t ->
+    (FlatExpr.plain_typed_t, flattening_error) Result.t
+end = struct
+  (* The algorithm used is based on that described in Chapter 5 of Simon Peyton Jones' "The implementation of functional programming languages".
+  Annotations are sometimes provided in the code for how each part relates the the algorithm described in the book *)
+
+  type ('tag_e, 'tag_p) cases =
+    | Names of
+        ((('tag_p * Varname.t * Vtype.t) * 'tag_p StdPattern.t list)
+        * ('tag_e, 'tag_p) StdExpr.t)
+        Nonempty_list.t
+    | Pairs of
+        ((('tag_p * 'tag_p StdPattern.t * 'tag_p StdPattern.t)
+         * 'tag_p StdPattern.t list)
+        * ('tag_e, 'tag_p) StdExpr.t)
+        Nonempty_list.t
+    | Constructors of
+        ((('tag_p * string * 'tag_p StdPattern.t) * 'tag_p StdPattern.t list)
+        * ('tag_e, 'tag_p) StdExpr.t)
+        Nonempty_list.t
+
+  let partition_cases_rev (type tag_e tag_p)
+      (case_queues : (tag_p StdPattern.t list * (tag_e, tag_p) StdExpr.t) list)
+      : (tag_e, tag_p) cases list =
+    (* This corresponds to the `partition` function in the book, but returns a reversed output as I am using the opposite-direction fold operation *)
+    List.fold case_queues ~init:[] ~f:(fun acc (ps, e) ->
+        let add_new = function
+          | (Pattern.PatName (v, xname, xt), ps_ts), e ->
+              Names (Nonempty_list.singleton (((v, xname, xt), ps_ts), e))
+              :: acc
+          | (Pattern.PatPair (v, p1, p2), ps_ts), e ->
+              Pairs (Nonempty_list.singleton (((v, p1, p2), ps_ts), e)) :: acc
+          | (Pattern.PatConstructor (v, cname, p1), ps_ts), e ->
+              Constructors
+                (Nonempty_list.singleton (((v, cname, p1), ps_ts), e))
+              :: acc
+        in
+        match (ps, acc) with
+        | Pattern.PatName (v, xname, xt) :: ps_ts, Names acc_h :: acc_ts ->
+            Names (Nonempty_list.cons (((v, xname, xt), ps_ts), e) acc_h)
+            :: acc_ts
+        | Pattern.PatPair (v, p1, p2) :: ps_ts, Pairs acc_h :: acc_ts ->
+            Pairs (Nonempty_list.cons (((v, p1, p2), ps_ts), e) acc_h) :: acc_ts
+        | ( Pattern.PatConstructor (v, cname, p1) :: ps_ts,
+            Constructors acc_h :: acc_ts ) ->
+            Constructors (Nonempty_list.cons (((v, cname, p1), ps_ts), e) acc_h)
+            :: acc_ts
+        | [], _ ->
+            (* This case shouldn't occur as this function should only be called with remaining arguments,
+        and if there are remaining arguments then all case queues must be non-empty *)
+            failwith "Erroneous empty case queue"
+        | p_h :: ps_ts, _ -> add_new ((p_h, ps_ts), e))
+
+  let flatten_expr ~(type_ctx : StdTypeCtx.t)
+      ~(create_var_node : Varname.t -> StdExpr.plain_typed_t) =
+    let rec compile_match ~(return_t : Vtype.t)
+        (args : StdExpr.plain_typed_t list)
+        (case_queues :
+          (unit StdPattern.typed_t list * StdExpr.plain_typed_t) list)
+        (def : FlatExpr.plain_typed_t) :
+        (FlatExpr.plain_typed_t, flattening_error) Result.t =
+      (* This corresponds to the `match` function in the book *)
+      match args with
+      | [] -> (
+          match case_queues with
+          | [] -> Ok def
+          | (_, case_e) :: _ -> flatten_expr case_e)
+      | args_h :: args_ts ->
+          let args_nonempty = Nonempty_list.make (args_h, args_ts) in
+          partition_cases_rev case_queues
+          |> List.fold_result ~init:def ~f:(fun def -> function
+               | Names case_queues ->
+                   compile_names ~return_t args_nonempty case_queues def
+               | Pairs case_queues ->
+                   compile_pairs ~return_t args_nonempty case_queues def
+               | Constructors case_queues ->
+                   compile_constructors ~return_t args_nonempty case_queues def)
+    and compile_names ~(return_t : Vtype.t) args case_queues def =
+      (* This corresponds to the `matchVar` function in the book *)
+      compile_match ~return_t (Nonempty_list.tail args)
+        (List.map (Nonempty_list.to_list case_queues)
+           ~f:(fun (((_, xname, _), case_queues_ts), case_e) ->
+             ( case_queues_ts,
+               StdExpr.subst ~varname:xname
+                 ~sub:(fun _ -> Nonempty_list.head args)
+                 case_e )))
+        def
+    and compile_pairs ~(return_t : Vtype.t) args case_queues def =
+      (* This is inspired by the `matchVar` and `matchCon` functions in the book,
+        but is adapted for my language where pair values are used instead of constructors of higher arities. *)
+      _
+    and compile_constructors ~(return_t : Vtype.t) args case_queues def =
+      (* This corresponds to the `matchCon` function in the book *)
+      let open Result in
+      let fresh_arg_name : Varname.t = failwith "TODO - fresh argument name" in
+      let new_arg_std_node : StdExpr.plain_typed_t =
+        create_var_node fresh_arg_name
+      in
+      flatten_expr new_arg_std_node >>= fun new_arg_flat_node ->
+      let create_case_for_constructor ~variant_vtype ~cname ~ct
+          ~(case_queues :
+             ((unit StdPattern.typed_t * unit StdPattern.typed_t list)
+             * StdExpr.plain_typed_t)
+             list) :
+          (unit M.typed_t * FlatExpr.plain_typed_t, flattening_error) Result.t =
+        compile_match ~return_t
+          (new_arg_std_node :: Nonempty_list.to_list args)
+          (List.map case_queues ~f:(fun ((p', ps_ts), case_e) ->
+               (p' :: ps_ts, case_e)))
+          def
+        >>| fun flat_case_e ->
+        ( FlatPatConstructor
+            ((variant_vtype, ()), cname, ((ct, ()), fresh_arg_name, ct)),
+          flat_case_e )
+      in
+      case_queues |> Nonempty_list.head |> fst |> fun ((_, cname, _), _) ->
+      StdTypeCtx.find_variant_type_with_constructor type_ctx cname
+      |> Result.of_option ~error:(UnknownVariantConstructor cname)
+      >>= fun ((vt_name, vt_cs), _) ->
+      Nonempty_list.map
+        (vt_cs
+       |>
+       (* TODO - a variant type must have constructors. Maybe I should change in VariantType.t to disallow no constructors so this isn't necessary *)
+       Nonempty_list.from_list_unsafe) ~f:(fun (cname, ct) ->
+          create_case_for_constructor ~variant_vtype:(VTypeCustom vt_name)
+            ~cname ~ct
+            ~case_queues:
+              (case_queues |> Nonempty_list.to_list
+              |> List.filter_map ~f:(fun (((_, cname2, p1), ps), case_e) ->
+                     if not (equal_string cname cname2) then None
+                     else Some ((p1, ps), case_e))))
+      |> Nonempty_list.result_all
+      >>= fun flat_cases ->
+      FlatExpr.Match ((return_t, ()), new_arg_flat_node, return_t, flat_cases)
+      |> Ok
+    and flatten_expr :
+        StdExpr.plain_typed_t ->
+        (FlatExpr.plain_typed_t, flattening_error) Result.t =
+      _
+    in
+    flatten_expr
+end
 
 (** Convert an Expr expression to a flat expression *)
 let rec of_expr ~(existing_names : StringSet.t) :
@@ -247,10 +392,10 @@ let rec of_expr ~(existing_names : StringSet.t) :
           | Second (_, acc_rev) ->
               Ok (existing_names, Nonempty_list.cons (p, e') acc_rev))
       >>= fun (existing_names, flat_expr_cases_rev) ->
-      MatchTree.of_cases (Nonempty_list.rev flat_expr_cases_rev)
-      |> Result.map_error ~f:_
+      (fun _ -> failwith "TODO") (Nonempty_list.rev flat_expr_cases_rev)
+      |> Result.map_error ~f:(failwith "TODO")
       >>= fun match_tree ->
-      MatchTree.to_flat_cases match_tree >>| fun flat_cases_rev ->
+      (fun _ -> failwith "TODO") match_tree >>| fun flat_cases_rev ->
       ( existing_names,
         FlatExpr.Match (v, e', t2, Nonempty_list.rev flat_cases_rev) )
   | Constructor (v, name, e) ->
