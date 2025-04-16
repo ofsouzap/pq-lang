@@ -18,7 +18,9 @@ module FlatProgram :
      and module QuotientType = QuotientType.StdQuotientType
      and module CustomType = CustomType.StdCustomType
 
-type flattening_error = UnknownVariantConstructor of string
+type flattening_error =
+  | UnknownVariantConstructor of string
+  | NoDefaultCaseForMatchBranch of string option
 [@@deriving sexp, equal]
 
 val to_std_pattern : 'a flat_pattern -> 'a StdPattern.t

@@ -120,7 +120,9 @@ let std_program_private_flag_to_flat_program_private_flag :
   | StdProgram.Public -> Public
   | Private -> Private
 
-type flattening_error = UnknownVariantConstructor of string
+type flattening_error =
+  | UnknownVariantConstructor of string
+  | NoDefaultCaseForMatchBranch of string option
 [@@deriving sexp, equal]
 
 let to_std_pattern : 'a M.t -> 'a StdPattern.t = function
@@ -204,24 +206,41 @@ end = struct
         (args : StdExpr.plain_typed_t list)
         (case_queues :
           (unit StdPattern.typed_t list * StdExpr.plain_typed_t) list)
-        (def : FlatExpr.plain_typed_t) :
+        (def : FlatExpr.plain_typed_t option) :
         (FlatExpr.plain_typed_t, flattening_error) Result.t =
       (* This corresponds to the `match` function in the book *)
       match args with
       | [] -> (
-          match case_queues with
-          | [] -> Ok def
-          | (_, case_e) :: _ -> flatten_expr case_e)
-      | args_h :: args_ts ->
+          match (case_queues, def) with
+          | (_, case_e) :: _, _ -> flatten_expr case_e
+          | [], None -> Error (NoDefaultCaseForMatchBranch None)
+          | [], Some def -> Ok def)
+      | args_h :: args_ts -> (
           let args_nonempty = Nonempty_list.make (args_h, args_ts) in
-          partition_cases_rev case_queues
-          |> List.fold_result ~init:def ~f:(fun def -> function
-               | Names case_queues ->
-                   compile_names ~return_t args_nonempty case_queues def
-               | Pairs case_queues ->
-                   compile_pairs ~return_t args_nonempty case_queues def
-               | Constructors case_queues ->
-                   compile_constructors ~return_t args_nonempty case_queues def)
+          match (partition_cases_rev case_queues, def) with
+          | [], Some def -> Ok def
+          | [], None ->
+              Error
+                (NoDefaultCaseForMatchBranch
+                   (Some (args_h |> StdExpr.to_source_code ~use_newlines:false)))
+          | partitions_h :: partitions_ts, _ ->
+              Nonempty_list.fold_result_consume_init
+                (Nonempty_list.make (partitions_h, partitions_ts))
+                ~init:def
+                ~f:(fun def ->
+                  let def =
+                    match def with
+                    | First def_opt -> def_opt
+                    | Second def -> Some def
+                  in
+                  function
+                  | Names case_queues ->
+                      compile_names ~return_t args_nonempty case_queues def
+                  | Pairs case_queues ->
+                      compile_pairs ~return_t args_nonempty case_queues def
+                  | Constructors case_queues ->
+                      compile_constructors ~return_t args_nonempty case_queues
+                        def))
     and compile_names ~(return_t : Vtype.t) args case_queues def =
       (* This corresponds to the `matchVar` function in the book *)
       compile_match ~return_t (Nonempty_list.tail args)
@@ -333,20 +352,13 @@ end = struct
       | Let (v, xname, e1, e2) ->
           binop (fun e1' e2' -> Let (v, xname, e1', e2')) e1 e2
       | App (v, e1, e2) -> binop (fun e1' e2' -> App (v, e1', e2')) e1 e2
-      | Match (v, e, t2, cases) ->
-          flatten_expr e >>= fun e' ->
-          Nonempty_list.fold_result_consume_init cases ~init:()
-            ~f:(fun acc (p, e) ->
-              flatten_expr e >>= fun e' ->
-              match acc with
-              | First () -> Ok (Nonempty_list.singleton (p, e'))
-              | Second acc_rev -> Ok (Nonempty_list.cons (p, e') acc_rev))
-          >>= fun flat_expr_cases_rev ->
-          (fun _ -> failwith "TODO") (Nonempty_list.rev flat_expr_cases_rev)
-          |> Result.map_error ~f:(failwith "TODO")
-          >>= fun match_tree ->
-          (fun _ -> failwith "TODO") match_tree >>| fun flat_cases_rev ->
-          FlatExpr.Match (v, e', t2, Nonempty_list.rev flat_cases_rev)
+      | Match (_, e, return_t, cases) ->
+          let prepared_cases =
+            Nonempty_list.map cases ~f:(fun (case_p, case_e) ->
+                (List.singleton case_p, case_e))
+            |> Nonempty_list.to_list
+          in
+          compile_match ~return_t (List.singleton e) prepared_cases None
       | Constructor (v, name, e) -> unop (fun e' -> Constructor (v, name, e')) e
     in
     fun orig_e ->
