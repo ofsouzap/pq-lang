@@ -90,6 +90,7 @@ let sample_test_cases : (unit, unit) test_case list =
               PatName ((VTypeInt, ()), "x", VTypeInt),
               PatName ((VTypeInt, ()), "y", VTypeInt) );
         ] );
+      ("x", [], VTypeInt, [ PatName ((VTypeInt, ()), "x", VTypeInt) ]);
       ( "A x | B (A x, C y) | B (C x, C y) | C z | B (x, C y) | B (x, A y) | x",
         CustomType.
           [
