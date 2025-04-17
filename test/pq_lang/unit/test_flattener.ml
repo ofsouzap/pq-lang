@@ -223,15 +223,9 @@ let create_test_expr_eval
   in
 
   (* The arbitrary generator for the input program pairs *)
-  let arb_inp :
-      ((unit, unit) TestingTypeChecker.typed_program
-      * (unit, unit) TestingTypeChecker.typed_program)
-      QCheck.arbitrary =
+  let arb_inp : StdExpr.plain_typed_t QCheck.arbitrary =
     (* The generator *)
-    let gen_progs :
-        ((unit, unit) TestingTypeChecker.typed_program
-        * (unit, unit) TestingTypeChecker.typed_program)
-        QCheck.Gen.t =
+    let gen : (unit, unit) StdExpr.typed_t QCheck.Gen.t =
       let open QCheck.Gen in
       arg_expr_gen >>= fun arg ->
       let match_return_t = Vtype.VTypeInt in
@@ -239,9 +233,18 @@ let create_test_expr_eval
         Nonempty_list.mapi cases ~f:(fun i case_p ->
             (case_p, StdExpr.IntLit ((Vtype.VTypeInt, ()), i)))
       in
-      let orig_match_expr : (unit, unit) StdExpr.typed_t =
-        Match ((match_return_t, ()), arg, match_return_t, cases)
-      in
+      return (StdExpr.Match ((match_return_t, ()), arg, match_return_t, cases))
+    in
+    QCheck.make
+      ~print:(Plain_typed_expr_qcheck_testing.print PrintExprSource)
+      ~shrink:(Plain_typed_expr_qcheck_testing.shrink { preserve_type = true })
+      gen
+  in
+  QCheck_alcotest.to_alcotest
+    (QCheck.Test.make
+       ~count:(* TODO - increase this count once debugging done *) 10 ~name
+       arb_inp (fun orig_match_expr ->
+         let module Executor = Pq_lang.ProgramExecutor.MakeStd (TypeChecker) in
       let existing_names = StdExpr.existing_names orig_match_expr in
       let existing_names, flattened_match_expr_std =
         ( orig_match_expr |> Flattener.flatten_expr ~existing_names ~type_ctx
@@ -269,19 +272,13 @@ let create_test_expr_eval
       let orig_typed_prog : (unit, unit) TestingTypeChecker.typed_program =
         get_typed_prog ~name:"original" orig_match_expr
       in
-      let flattened_typed_prog : (unit, unit) TestingTypeChecker.typed_program =
+         let flattened_typed_prog :
+             (unit, unit) TestingTypeChecker.typed_program =
         get_typed_prog ~name:"flattened" flattened_match_expr_std
       in
       let _ = existing_names in
-      (orig_typed_prog, flattened_typed_prog) |> return
-    in
-    QCheck.make gen_progs
-  in
-  QCheck_alcotest.to_alcotest
-    (QCheck.Test.make ~count:100 ~name arb_inp (fun (orig, flattened) ->
-         let module Executor = Pq_lang.ProgramExecutor.MakeStd (TypeChecker) in
-         let orig_res = Executor.execute_program orig in
-         let flattened_res = Executor.execute_program flattened in
+         let orig_res = Executor.execute_program orig_typed_prog in
+         let flattened_res = Executor.execute_program flattened_typed_prog in
 
          if Executor.equal_exec_res orig_res flattened_res then true
          else
