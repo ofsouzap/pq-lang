@@ -50,6 +50,9 @@ module type S = sig
          and type print_options = unit
          and type shrink_options = unit
          and type arb_options = gen_options
+
+    val gen_pat_name :
+      Vtype.t -> Tag.t QCheck.Gen.t -> (t * Varname.t) QCheck.Gen.t
   end
 end
 

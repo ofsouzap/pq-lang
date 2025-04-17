@@ -99,6 +99,7 @@ module M : Pattern.S with type 'a t = 'a flat_pattern = struct
       type arb_options = gen_options
 
       let gen = failwith "Not implemented"
+      let gen_pat_name = failwith "Not implemented"
       let print = failwith "Not implemented"
       let shrink = failwith "Not implemented"
       let arbitrary = failwith "Not implemented"

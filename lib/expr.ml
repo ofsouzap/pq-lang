@@ -764,7 +764,8 @@ module Make (Pattern : Pattern.S) : S with module Pattern = Pattern = struct
               v_gen = pat_v_gen;
             }
         in
-        let case_and_pat_gen =
+        let case_and_pat_gen :
+            (TagPat.t Pattern.t * (TagExpr.t, TagPat.t) expr) QCheck.Gen.t =
           pat_gen >>= fun (p, p_ctx_list) ->
           let case_ctx : (string * Vtype.t) list =
             List.fold ~init:ctx
@@ -775,7 +776,18 @@ module Make (Pattern : Pattern.S) : S with module Pattern = Pattern = struct
         in
         list_size (int_range 1 4) case_and_pat_gen
         >|= Nonempty_list.from_list_unsafe
-        >|= fun cs -> Match (v, e1, self_t, cs)
+        >>= fun cs_no_base ->
+        (* Have a base case, so that a generated match is always complete *)
+        ( TagPatternQCheckTesting.gen_pat_name e1_t pat_v_gen
+        >>= fun ((p, _), xname) ->
+          let case_ctx : (string * Vtype.t) list =
+            List.Assoc.add ~equal:equal_string ctx xname e1_t
+          in
+          self (d - 1, case_ctx) >|= fun e -> (p, e) )
+        >>= fun base_case ->
+        (* Create the final output *)
+        Match (v, e1, self_t, Nonempty_list.append_one cs_no_base base_case)
+        |> return
       and standard_rec_gen_cases
           ( (self :
               int * (string * Vtype.t) list -> (TagExpr.t, TagPat.t) expr Gen.t),

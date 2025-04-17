@@ -51,6 +51,9 @@ module type S = sig
          and type print_options = unit
          and type shrink_options = unit
          and type arb_options = gen_options
+
+    val gen_pat_name :
+      Vtype.t -> Tag.t QCheck.Gen.t -> (t * Varname.t) QCheck.Gen.t
   end
 end
 
@@ -129,6 +132,9 @@ module StdPattern : S with type 'a t = 'a std_pattern = struct
          and type print_options = unit
          and type shrink_options = unit
          and type arb_options = gen_options
+
+    val gen_pat_name :
+      Vtype.t -> Tag.t QCheck.Gen.t -> (t * Varname.t) QCheck.Gen.t
   end =
   functor
     (Tag : sig
@@ -208,6 +214,13 @@ module StdPattern : S with type 'a t = 'a std_pattern = struct
               gen_variant (opts.get_variant_type_constructors vt_name)
         in
         gen opts.t []
+
+      let gen_pat_name (t : Vtype.t) (tag_gen : Tag.t QCheck.Gen.t) :
+          (this_t * Varname.t) QCheck.Gen.t =
+        let open QCheck.Gen in
+        Varname.QCheck_testing.gen () >>= fun xname ->
+        tag_gen >>= fun v ->
+        ((PatName (v, xname, t), [ (xname, t) ]), xname) |> return
 
       let print () : this_t QCheck.Print.t =
         QCheck.Print.(
