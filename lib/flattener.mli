@@ -3,7 +3,7 @@ open Utils
 
 type flattening_error =
   | UnknownVariantConstructor of string
-  | NoDefaultCaseForMatchBranch of string option
+  | NoDefaultCaseForMatchBranch of (Varname.t * Vtype.t) option
 [@@deriving sexp, equal]
 
 val print_flattening_error : flattening_error -> string

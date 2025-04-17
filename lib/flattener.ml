@@ -13,15 +13,16 @@ let std_program_private_flag_to_flat_program_private_flag :
 
 type flattening_error =
   | UnknownVariantConstructor of string
-  | NoDefaultCaseForMatchBranch of string option
+  | NoDefaultCaseForMatchBranch of (Varname.t * Vtype.t) option
 [@@deriving sexp, equal]
 
 let print_flattening_error : flattening_error -> string = function
   | UnknownVariantConstructor cname ->
       Printf.sprintf "Unknown variant constructor: %s" cname
   | NoDefaultCaseForMatchBranch None -> "No default case for match branch"
-  | NoDefaultCaseForMatchBranch (Some str) ->
-      Printf.sprintf "No default case for match branch: %s" str
+  | NoDefaultCaseForMatchBranch (Some (xname, xt)) ->
+      Printf.sprintf "No default case for match branch for %s : %s" xname
+        (Vtype.to_source_code xt)
 
 module type S = sig
   module TypeChecker :
@@ -126,8 +127,16 @@ module Make
       existing_names := Set.add !existing_names new_name;
       new_name
     in
+    let create_std_arg_node ~tag ((xname : Varname.t), (xt : Vtype.t)) :
+        (tag, tag) StdExpr.typed_t =
+      StdExpr.Var ((xt, tag), xname)
+    in
+    let create_flat_arg_node ~tag ((xname : Varname.t), (xt : Vtype.t)) :
+        (tag, tag) FlatExpr.typed_t =
+      FlatExpr.Var ((xt, tag), xname)
+    in
     let rec compile_match ~(return_t : Vtype.t)
-        (args : (tag, tag) StdExpr.typed_t list)
+        (args : (Varname.t * Vtype.t) list)
         (case_queues :
           (tag StdPattern.typed_t list * (tag, tag) StdExpr.typed_t) list)
         (def : (tag, tag) FlatExpr.typed_t option) :
@@ -143,10 +152,7 @@ module Make
           let args_nonempty = Nonempty_list.make (args_h, args_ts) in
           match (partition_cases_rev case_queues, def) with
           | [], Some def -> Ok def
-          | [], None ->
-              Error
-                (NoDefaultCaseForMatchBranch
-                   (Some (args_h |> StdExpr.to_source_code ~use_newlines:false)))
+          | [], None -> Error (NoDefaultCaseForMatchBranch (Some args_h))
           | partitions_rev_h :: partitions_rev_ts, _ ->
               Nonempty_list.fold_result_consume_init
                 (Nonempty_list.make (partitions_rev_h, partitions_rev_ts))
@@ -169,10 +175,11 @@ module Make
       (* This corresponds to the `matchVar` function in the book *)
       compile_match ~return_t (Nonempty_list.tail args)
         (List.map (Nonempty_list.to_list case_queues)
-           ~f:(fun (((_, xname, _), case_queues_ts), case_e) ->
+           ~f:(fun ((((_, tag), xname, _), case_queues_ts), case_e) ->
              ( case_queues_ts,
                StdExpr.subst ~varname:xname
-                 ~sub:(fun _ -> Nonempty_list.head args)
+                 ~sub:(fun _ ->
+                   Nonempty_list.head args |> create_std_arg_node ~tag)
                  case_e )))
         def
     and compile_pairs ~(return_t : Vtype.t) (curr_arg, arg_ts) case_queues def =
@@ -203,13 +210,8 @@ module Make
           ( generate_fresh_varname ~seed_name:"l" (),
             generate_fresh_varname ~seed_name:"r" () )
         in
-        let new_arg_std_nodes :
-            (tag, tag) StdExpr.typed_t * (tag, tag) StdExpr.typed_t =
-          ( StdExpr.Var ((t1, tag), fst fresh_arg_names),
-            StdExpr.Var ((t2, tag), snd fresh_arg_names) )
-        in
         compile_match ~return_t
-          (fst new_arg_std_nodes :: snd new_arg_std_nodes :: arg_ts)
+          ((fst fresh_arg_names, t1) :: (snd fresh_arg_names, t2) :: arg_ts)
           (List.map case_queues ~f:(fun (((_, p1, p2), ps_ts), case_e) ->
                (p1 :: p2 :: ps_ts, case_e)))
           def
@@ -225,9 +227,10 @@ module Make
       >>= fun flat_case ->
       flat_case |> Nonempty_list.singleton |> fun flat_cases ->
       (* Flatten the argument *)
-      flatten_expr curr_arg >>= fun flat_arg ->
+      let flat_arg_node = create_flat_arg_node ~tag curr_arg in
       (* Create the output flat match expression *)
-      FlatExpr.Match ((return_t, tag), flat_arg, return_t, flat_cases) |> Ok
+      FlatExpr.Match ((return_t, tag), flat_arg_node, return_t, flat_cases)
+      |> Ok
     and compile_constructors ~(return_t : Vtype.t) (curr_arg, arg_ts)
         case_queues def =
       (* This corresponds to the `matchCon` function in the book *)
@@ -252,12 +255,9 @@ module Make
         let fresh_arg_name : Varname.t =
           generate_fresh_varname ~seed_name:(sprintf "%s_arg" vt_name) ()
         in
-        let new_arg_std_node : (tag, tag) StdExpr.typed_t =
-          StdExpr.Var ((ct, tag), fresh_arg_name)
-        in
         (* Create the case expression for this case *)
         compile_match ~return_t
-          (new_arg_std_node :: arg_ts)
+          ((fresh_arg_name, ct) :: arg_ts)
           (List.map case_queues ~f:(fun (((_, p'), ps_ts), case_e) ->
                (p' :: ps_ts, case_e)))
           def
@@ -283,9 +283,10 @@ module Make
       |> Nonempty_list.result_all
       >>= fun flat_cases ->
       (* Flatten the argument *)
-      flatten_expr curr_arg >>= fun flat_arg ->
+      let flat_arg_node = create_flat_arg_node ~tag curr_arg in
       (* Create the output flat match expression *)
-      FlatExpr.Match ((return_t, tag), flat_arg, return_t, flat_cases) |> Ok
+      FlatExpr.Match ((return_t, tag), flat_arg_node, return_t, flat_cases)
+      |> Ok
     and flatten_expr :
         (tag, tag) StdExpr.typed_t ->
         ((tag, tag) FlatExpr.typed_t, flattening_error) Result.t =
@@ -331,13 +332,22 @@ module Make
       | Let (v, xname, e1, e2) ->
           binop (fun e1' e2' -> Let (v, xname, e1', e2')) e1 e2
       | App (v, e1, e2) -> binop (fun e1' e2' -> App (v, e1', e2')) e1 e2
-      | Match (_, e, return_t, cases) ->
+      | Match ((v_t, v_val), e, return_t, cases) ->
+          let arg_t = e |> StdExpr.node_val |> fst in
+          let new_arg_name = generate_fresh_varname ~seed_name:"arg" () in
+          flatten_expr e >>= fun flattened_arg ->
           let prepared_cases =
             Nonempty_list.map cases ~f:(fun (case_p, case_e) ->
                 (List.singleton case_p, case_e))
             |> Nonempty_list.to_list
           in
-          compile_match ~return_t (List.singleton e) prepared_cases None
+          compile_match ~return_t
+            (List.singleton (new_arg_name, arg_t))
+            prepared_cases None
+          >>= fun generated_match_expr ->
+          FlatExpr.Let
+            ((v_t, v_val), new_arg_name, flattened_arg, generated_match_expr)
+          |> Ok
       | Constructor (v, name, e) -> unop (fun e' -> Constructor (v, name, e')) e
     in
     fun orig_e ->
