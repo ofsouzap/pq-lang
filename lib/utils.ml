@@ -101,6 +101,8 @@ module type Nonempty_list_sig = sig
   val tail : 'a t -> 'a list
   val singleton : 'a -> 'a t
   val cons : 'a -> 'a t -> 'a t
+  val append : 'a t -> 'a t -> 'a t
+  val append_one : 'a t -> 'a -> 'a t
   val map : f:('a -> 'b) -> 'a t -> 'b t
   val mapi : f:(int -> 'a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
@@ -159,6 +161,11 @@ module Nonempty_list : Nonempty_list_sig = struct
   let tail (_, ts) = ts
   let singleton (h : 'a) = (h, [])
   let cons (h : 'a) (ts : 'a t) = (h, to_list ts)
+
+  let append ((h1, ts1) : 'a t) ((h2, ts2) : 'a t) : 'a t =
+    (h1, List.append ts1 (h2 :: ts2))
+
+  let append_one ((h, ts) : 'a t) (x : 'a) : 'a t = append (h, ts) (singleton x)
   let map ~(f : 'a -> 'b) ((h, ts) : 'a t) : 'b t = (f h, List.map ~f ts)
 
   let mapi ~(f : int -> 'a -> 'b) ((h, ts) : 'a t) : 'b t =
