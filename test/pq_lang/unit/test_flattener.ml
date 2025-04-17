@@ -224,27 +224,24 @@ let create_test_expr_eval
 
   (* The arbitrary generator for the input program pairs *)
   let arb_inp : StdExpr.plain_typed_t QCheck.arbitrary =
-    (* The generator *)
-    let gen : (unit, unit) StdExpr.typed_t QCheck.Gen.t =
-      let open QCheck.Gen in
-      arg_expr_gen >>= fun arg ->
-      let match_return_t = Vtype.VTypeInt in
-      let cases =
-        Nonempty_list.mapi cases ~f:(fun i case_p ->
-            (case_p, StdExpr.IntLit ((Vtype.VTypeInt, ()), i)))
-      in
-      return (StdExpr.Match ((match_return_t, ()), arg, match_return_t, cases))
-    in
     QCheck.make
       ~print:(Plain_typed_expr_qcheck_testing.print PrintExprSource)
       ~shrink:(Plain_typed_expr_qcheck_testing.shrink { preserve_type = true })
-      gen
+      arg_expr_gen
   in
   QCheck_alcotest.to_alcotest
     (QCheck.Test.make
        ~count:(* TODO - increase this count once debugging done *) 10 ~name
-       arb_inp (fun orig_match_expr ->
+       arb_inp (fun match_arg ->
          let module Executor = Pq_lang.ProgramExecutor.MakeStd (TypeChecker) in
+         let match_return_t = Vtype.VTypeInt in
+         let cases =
+           Nonempty_list.mapi cases ~f:(fun i case_p ->
+               (case_p, StdExpr.IntLit ((Vtype.VTypeInt, ()), i)))
+         in
+         let orig_match_expr =
+           StdExpr.Match ((match_return_t, ()), match_arg, match_return_t, cases)
+         in
       let existing_names = StdExpr.existing_names orig_match_expr in
       let existing_names, flattened_match_expr_std =
         ( orig_match_expr |> Flattener.flatten_expr ~existing_names ~type_ctx
