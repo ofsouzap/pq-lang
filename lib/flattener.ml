@@ -97,13 +97,15 @@ module Make
         in
         match (ps, acc) with
         | Pattern.PatName (v, xname, xt) :: ps_ts, Names acc_h :: acc_ts ->
-            Names (Nonempty_list.cons (((v, xname, xt), ps_ts), e) acc_h)
+            Names (Nonempty_list.append_one acc_h (((v, xname, xt), ps_ts), e))
             :: acc_ts
         | Pattern.PatPair (v, p1, p2) :: ps_ts, Pairs acc_h :: acc_ts ->
-            Pairs (Nonempty_list.cons (((v, p1, p2), ps_ts), e) acc_h) :: acc_ts
+            Pairs (Nonempty_list.append_one acc_h (((v, p1, p2), ps_ts), e))
+            :: acc_ts
         | ( Pattern.PatConstructor (v, cname, p1) :: ps_ts,
             Constructors acc_h :: acc_ts ) ->
-            Constructors (Nonempty_list.cons (((v, cname, p1), ps_ts), e) acc_h)
+            Constructors
+              (Nonempty_list.append_one acc_h (((v, cname, p1), ps_ts), e))
             :: acc_ts
         | [], _ ->
             (* This case shouldn't occur as this function should only be called with remaining arguments,
@@ -145,9 +147,9 @@ module Make
               Error
                 (NoDefaultCaseForMatchBranch
                    (Some (args_h |> StdExpr.to_source_code ~use_newlines:false)))
-          | partitions_h :: partitions_ts, _ ->
+          | partitions_rev_h :: partitions_rev_ts, _ ->
               Nonempty_list.fold_result_consume_init
-                (Nonempty_list.make (partitions_h, partitions_ts))
+                (Nonempty_list.make (partitions_rev_h, partitions_rev_ts))
                 ~init:def
                 ~f:(fun def ->
                   let def =
@@ -239,8 +241,7 @@ module Make
       (* For each possible constructor of the variant type, create a case for the match *)
       let create_case_for_constructor ~variant_vtype ~cname ~ct
           ~(case_queues :
-             (((Vtype.t * tag)
-              * tag StdPattern.typed_t
+             ((((Vtype.t * tag) * tag StdPattern.typed_t)
               * tag StdPattern.typed_t list)
              * (tag, tag) StdExpr.typed_t)
              list) :
@@ -257,7 +258,7 @@ module Make
         (* Create the case expression for this case *)
         compile_match ~return_t
           (new_arg_std_node :: arg_ts)
-          (List.map case_queues ~f:(fun ((_, p', ps_ts), case_e) ->
+          (List.map case_queues ~f:(fun (((_, p'), ps_ts), case_e) ->
                (p' :: ps_ts, case_e)))
           def
         >>= fun flat_case_e ->
@@ -278,7 +279,7 @@ module Make
               (case_queues |> Nonempty_list.to_list
               |> List.filter_map ~f:(fun (((v, cname2, p1), ps_ts), case_e) ->
                      if not (equal_string cname cname2) then None
-                     else Some ((v, p1, ps_ts), case_e))))
+                     else Some (((v, p1), ps_ts), case_e))))
       |> Nonempty_list.result_all
       >>= fun flat_cases ->
       (* Flatten the argument *)
