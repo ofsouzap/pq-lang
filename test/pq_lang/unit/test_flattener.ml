@@ -103,11 +103,47 @@ let sample_test_cases : (unit, unit) test_case list =
               PatName ((VTypeInt, ()), "z", VTypeInt) );
         ] );
       ("x", [], VTypeInt, [ PatName ((VTypeInt, ()), "x", VTypeInt) ]);
+      ( "A (x, B y) | B y | A (x, y)",
+        CustomType.
+          [
+            VariantType
+              ( "t",
+                [
+                  ("A", VTypePair (VTypeInt, VTypeCustom "t")); ("B", VTypeInt);
+                ] );
+          ],
+        VTypeCustom "t",
+        [
+          PatConstructor
+            ( (VTypeCustom "t", ()),
+              "A",
+              PatPair
+                ( (VTypePair (VTypeInt, VTypeCustom "t"), ()),
+                  PatName ((VTypeInt, ()), "x", VTypeInt),
+                  PatConstructor
+                    ( (VTypeCustom "t", ()),
+                      "B",
+                      PatName ((VTypeInt, ()), "y", VTypeInt) ) ) );
+          PatConstructor
+            ((VTypeCustom "t", ()), "B", PatName ((VTypeInt, ()), "y", VTypeInt));
+          PatConstructor
+            ( (VTypeCustom "t", ()),
+              "A",
+              PatPair
+                ( (VTypePair (VTypeInt, VTypeCustom "t"), ()),
+                  PatName ((VTypeInt, ()), "x", VTypeInt),
+                  PatName ((VTypeCustom "t", ()), "y", VTypeCustom "t") ) );
+        ] );
       ( "A x | B (A x, C y) | B (C x, C y) | C z | B (x, C y) | B (x, A y) | x",
         CustomType.
           [
             VariantType
-              ("t", [ ("A", VTypeInt); ("B", VTypeCustom "t"); ("C", VTypeInt) ]);
+              ( "t",
+                [
+                  ("A", VTypeInt);
+                  ("B", VTypePair (VTypeCustom "t", VTypeCustom "t"));
+                  ("C", VTypeInt);
+                ] );
           ],
         VTypeCustom "t",
         [
@@ -146,7 +182,7 @@ let sample_test_cases : (unit, unit) test_case list =
               "B",
               PatPair
                 ( (VTypePair (VTypeCustom "t", VTypeCustom "t"), ()),
-                  PatName ((VTypeInt, ()), "x", VTypeInt),
+                  PatName ((VTypeCustom "t", ()), "x", VTypeCustom "t"),
                   PatConstructor
                     ( (VTypeCustom "t", ()),
                       "C",
@@ -156,7 +192,7 @@ let sample_test_cases : (unit, unit) test_case list =
               "B",
               PatPair
                 ( (VTypePair (VTypeCustom "t", VTypeCustom "t"), ()),
-                  PatName ((VTypeInt, ()), "x", VTypeInt),
+                  PatName ((VTypeCustom "t", ()), "x", VTypeCustom "t"),
                   PatConstructor
                     ( (VTypeCustom "t", ()),
                       "A",
