@@ -41,15 +41,8 @@ let rec incr (xs : list) : list =
   match xs -> list with
   | Empty (u : unit) -> Empty u
   | Leaf (x : int) -> Leaf (x + 1)
-  | Node (p : list * list) -> (
-    let p2 =
-      match p -> list * list with
-      | ((l : list), (r : list)) ->
-        (incr l, incr r)
-      end
-    in
-      Node p2
-    end )
+  | Node ((l : list), (r : list)) ->
+    Node (incr l, incr r)
   end
 end
 
@@ -64,12 +57,11 @@ let rec head (xs : list) : int_option =
   match xs -> int_option with
   | Empty (_ : unit) -> None ()
   | Leaf (x : int) -> Some x
-  | Node (p : list * list) ->
-    match p -> int_option with
-    | ((l : list), (r : list)) ->
-      match head l -> int_option with
+  | Node ((l : list), (r : list)) ->
+    let l_head = head l in
+      match l_head -> int_option with
       | None (_ : unit) -> head r
-      | Some (h : int) -> Some h
+      | Some (_ : int) -> l_head
       end
     end
   end
