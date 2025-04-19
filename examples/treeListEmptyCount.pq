@@ -28,10 +28,7 @@ let rec empty_count (t : list) : int =
   match t -> int with
   | Empty (u : unit) -> 1
   | Leaf (x : int) -> 0
-  | Node (p : list * list) ->
-    match p -> int with
-    | ((l : list), (r : list)) ->
-      empty_count l + empty_count r
-    end
+  | Node ((l : list), (r : list)) ->
+    empty_count l + empty_count r
   end
 end

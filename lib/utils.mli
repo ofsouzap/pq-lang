@@ -73,8 +73,15 @@ module type Nonempty_list_sig = sig
   val tail : 'a t -> 'a list
   val singleton : 'a -> 'a t
   val cons : 'a -> 'a t -> 'a t
+  val append : 'a t -> 'a t -> 'a t
+  val append_one : 'a t -> 'a -> 'a t
   val map : f:('a -> 'b) -> 'a t -> 'b t
+  val mapi : f:(int -> 'a -> 'b) -> 'a t -> 'b t
   val fold : 'a t -> init:'b -> f:('b -> 'a -> 'b) -> 'b
+
+  val fold_consume_init :
+    'a t -> init:'init -> f:(('init, 'acc) Either.t -> 'a -> 'acc) -> 'acc
+
   val rev : 'a t -> 'a t
 
   (** Zip two non-empty lists together, returning None if they have unequal

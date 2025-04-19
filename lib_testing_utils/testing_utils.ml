@@ -516,8 +516,22 @@ module UnitTag = struct
   let equal = equal_unit
 end
 
+module PlainTypedTag = struct
+  type t = Vtype.t * unit [@@deriving sexp, equal]
+
+  let sexp_of_t = sexp_of_pair Vtype.sexp_of_t sexp_of_unit
+  let t_of_sexp = pair_of_sexp Vtype.t_of_sexp unit_of_sexp
+  let equal = Tuple2.equal ~eq1:Vtype.equal ~eq2:equal_unit
+end
+
 module Unit_expr_qcheck_testing = Expr.QCheck_testing (UnitTag) (UnitTag)
 module Unit_program_qcheck_testing = Program.QCheck_testing (UnitTag) (UnitTag)
+
+module Plain_typed_expr_qcheck_testing =
+  Expr.QCheck_testing (PlainTypedTag) (PlainTypedTag)
+
+module Plain_typed_program_qcheck_testing =
+  Program.QCheck_testing (PlainTypedTag) (PlainTypedTag)
 
 let _unit_program_arbitrary_with_default_options_aux ~force_has_body =
   Unit_program_qcheck_testing.arbitrary

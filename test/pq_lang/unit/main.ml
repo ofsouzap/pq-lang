@@ -9,6 +9,7 @@ let () =
       ("Program Executor", Test_programExecutor.suite);
       ("Program Executor Store", Test_programExecutor_store.suite);
       ("Type Checker", Test_typeChecker.suite);
+      ("Flat Pattern", Test_flattener.suite);
       ("Quotient Type Checker", Test_quotientTypeChecker.suite);
       ("OCaml Converter", Test_ocamlConverter.suite);
     ]

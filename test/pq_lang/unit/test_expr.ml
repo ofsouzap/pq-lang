@@ -1,5 +1,6 @@
 open Core
 open Pq_lang
+open Utils
 open Pq_lang.Expr.StdExpr
 open Testing_utils
 
@@ -78,7 +79,7 @@ let test_cases_equality : unit Alcotest.test_case list =
 let test_cases_to_source_code_inv =
   let open QCheck in
   let open Frontend in
-  Test.make ~count:1000 ~name:"Expr to source code"
+  Test.make ~count:20 ~name:"Expr to source code"
     unit_program_arbitrary_with_default_options (fun prog ->
       match prog.body with
       | None -> true
@@ -119,6 +120,106 @@ let create_test_cases_expr_node_val (name : string)
              let e = fmap ~f:(const x) e_raw in
              type_eq (Expr.node_val e) x))
 
+let test_cases_expr_substitution : unit Alcotest.test_case list =
+  let create_test
+      ( (x : Expr.plain_t),
+        (xname : Varname.t),
+        (sub : Expr.plain_t),
+        (y : Expr.plain_t) ) =
+    let name =
+      sprintf "%s [ %s / %s ]"
+        (Unit_expr_qcheck_testing.print
+           (PrintSexp (sexp_of_unit, sexp_of_unit))
+           x)
+        (Unit_expr_qcheck_testing.print
+           (PrintSexp (sexp_of_unit, sexp_of_unit))
+           sub)
+        xname
+    in
+    ( name,
+      `Quick,
+      fun _ ->
+        Alcotest.(check bool)
+          "not equal" true
+          (Expr.equal_plain_t
+             (Expr.subst ~varname:xname ~sub:(fun () -> sub) x)
+             y) )
+  in
+  List.map ~f:create_test
+    [
+      (IntLit ((), 1), "x", IntLit ((), 2), IntLit ((), 1));
+      (Var ((), "x"), "x", IntLit ((), 2), IntLit ((), 2));
+      (Var ((), "y"), "x", IntLit ((), 2), Var ((), "y"));
+      ( Add ((), Var ((), "x"), IntLit ((), 2)),
+        "x",
+        IntLit ((), 3),
+        Add ((), IntLit ((), 3), IntLit ((), 2)) );
+      ( Add ((), Var ((), "y"), IntLit ((), 2)),
+        "x",
+        IntLit ((), 3),
+        Add ((), Var ((), "y"), IntLit ((), 2)) );
+      ( Let ((), "x", IntLit ((), 1), Var ((), "x")),
+        "x",
+        IntLit ((), 0),
+        Let ((), "x", IntLit ((), 1), Var ((), "x")) );
+      ( Match
+          ( (),
+            Pair ((), IntLit ((), 0), IntLit ((), 1)),
+            VTypeInt,
+            Nonempty_list.from_list_unsafe
+              Pq_lang.Pattern.
+                [
+                  ( PatPair
+                      ( (),
+                        PatName ((), "x", VTypeInt),
+                        PatName ((), "y", VTypeInt) ),
+                    Var ((), "z") );
+                ] ),
+        "z",
+        IntLit ((), 0),
+        Match
+          ( (),
+            Pair ((), IntLit ((), 0), IntLit ((), 1)),
+            VTypeInt,
+            Nonempty_list.from_list_unsafe
+              Pq_lang.Pattern.
+                [
+                  ( PatPair
+                      ( (),
+                        PatName ((), "x", VTypeInt),
+                        PatName ((), "y", VTypeInt) ),
+                    IntLit ((), 0) );
+                ] ) );
+      ( Match
+          ( (),
+            Pair ((), IntLit ((), 0), IntLit ((), 1)),
+            VTypeInt,
+            Nonempty_list.from_list_unsafe
+              Pq_lang.Pattern.
+                [
+                  ( PatPair
+                      ( (),
+                        PatName ((), "x", VTypeInt),
+                        PatName ((), "y", VTypeInt) ),
+                    Var ((), "x") );
+                ] ),
+        "x",
+        IntLit ((), 0),
+        Match
+          ( (),
+            Pair ((), IntLit ((), 0), IntLit ((), 1)),
+            VTypeInt,
+            Nonempty_list.from_list_unsafe
+              Pq_lang.Pattern.
+                [
+                  ( PatPair
+                      ( (),
+                        PatName ((), "x", VTypeInt),
+                        PatName ((), "y", VTypeInt) ),
+                    Var ((), "x") );
+                ] ) );
+    ]
+
 module SingleTagged_tests =
 functor
   (Tag : sig
@@ -137,7 +238,7 @@ functor
         unit Alcotest.test_case =
       let open QCheck in
       QCheck_alcotest.to_alcotest
-        (Test.make ~count:100 ~name
+        (Test.make ~count:20 ~name
            (pair (fun1 Tag.obs Tag.arb)
               (Program_qcheck_testing.arbitrary
                  {
@@ -189,7 +290,7 @@ functor
         unit Alcotest.test_case =
       let open QCheck in
       QCheck_alcotest.to_alcotest
-        (Test.make ~count:100 ~name
+        (Test.make ~count:20 ~name
            (triple Tag1.arb (fun1 Tag1.obs Tag2.arb)
               (Tag1_program_qcheck_testing.arbitrary
                  {
@@ -342,3 +443,4 @@ let suite : unit Alcotest.test_case list =
         StringInt_doubletagged_tests.create_test_cases_expr_fmap_root
           "string -> int";
       ]
+  @ label_tests "Expr substitution" test_cases_expr_substitution

@@ -8,6 +8,7 @@
   test_expr
   test_program
   test_typeChecker
+  test_flattener
   test_quotientTypeChecker
   test_lexer_parser
   test_programExecutor

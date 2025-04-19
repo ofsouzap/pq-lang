@@ -578,6 +578,9 @@ module type S = sig
   (** The type of a type context that has been checked to be valid *)
   type checked_type_ctx
 
+  (* Extract the underlying type context for a checked type context *)
+  val checked_type_ctx_get_type_ctx : checked_type_ctx -> TypeCtx.t
+
   (** A checked version of the empty type context *)
   val checked_empty_type_ctx : checked_type_ctx
 
@@ -588,6 +591,16 @@ module type S = sig
   val typed_program_get_program :
     ('tag_e, 'tag_p) typed_program ->
     (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t
+
+  val typed_program_fmap_expr :
+    f:('tag_e1 -> 'tag_e2) ->
+    ('tag_e1, 'tag_p) typed_program ->
+    ('tag_e2, 'tag_p) typed_program
+
+  val typed_program_fmap_pattern :
+    f:('tag_p1 -> 'tag_p2) ->
+    ('tag_e, 'tag_p1) typed_program ->
+    ('tag_e, 'tag_p2) typed_program
 
   (** Get the checked type context from a typed program expression *)
   val typed_program_get_type_ctx_checked :
@@ -658,6 +671,9 @@ module MakeStd
 
   type checked_type_ctx = TypeCtx.t
 
+  let checked_type_ctx_get_type_ctx (ctx : checked_type_ctx) : TypeCtx.t = ctx
+
+  (** A checked version of the empty type context *)
   let checked_empty_type_ctx = TypeCtx.empty
 
   type ('tag_e, 'tag_p) typed_program =
@@ -667,6 +683,12 @@ module MakeStd
       ('tag_e, 'tag_p) typed_program ->
       (Vtype.t * 'tag_e, Vtype.t * 'tag_p) Program.t =
     fst
+
+  let typed_program_fmap_expr ~f (prog, type_ctx) =
+    (Program.fmap_expr prog ~f:(fun (t, v) -> (t, f v)), type_ctx)
+
+  let typed_program_fmap_pattern ~f (prog, type_ctx) =
+    (Program.fmap_pattern prog ~f:(fun (t, v) -> (t, f v)), type_ctx)
 
   let typed_program_get_type_ctx_checked :
       ('tag_e, 'tag_p) typed_program -> TypeCtx.t =

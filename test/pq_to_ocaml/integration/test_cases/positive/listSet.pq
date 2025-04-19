@@ -39,13 +39,10 @@ let rec filter (arg : ((int -> bool) * set)) : set =
   | ((p : int -> bool), (t : set)) ->
     match t -> set with
     | Nil (u : unit) -> Nil u
-    | Cons (x : (int * set)) ->
-      match x -> set with
-      | ((xh : int), (xts : set)) ->
-        if p xh
-        then Cons (xh, filter (p, xts))
-        else filter (p, xts)
-        end
+    | Cons ((xh : int), (xts : set)) ->
+      if p xh
+      then Cons (xh, filter (p, xts))
+      else filter (p, xts)
       end
     end
   end
@@ -54,17 +51,11 @@ end
 # Check if a set contains a value
 let rec contains (arg : (int * set)) : bool =
   match arg -> bool with
-  | ((q : int), (xs : set)) ->
-    match xs -> bool with
-    | Nil (_ : unit) -> false
-    | Cons (p : int * set) ->
-      match p -> bool with
-      | ((h : int), (ts : set)) ->
-        if q == h
-        then true
-        else contains (q, ts)
-        end
-      end
+  | ((_ : int), Nil (_2 : unit)) -> false
+  | ((q : int), Cons ((h : int), (ts : set))) ->
+    if q == h
+    then true
+    else contains (q, ts)
     end
   end
 end
@@ -75,11 +66,8 @@ let rec union (arg: (set * set)) : set =
   | ((xs : set), (ys : set)) ->
     match xs -> set with
     | Nil (_ : unit) -> ys
-    | Cons (xv : (int * set)) ->
-      match xv -> set with
-      | ((xh : int), (xts : set)) ->
-        Cons (xh, union (xts, ys))
-      end
+    | Cons ((xh : int), (xts : set)) ->
+      Cons (xh, union (xts, ys))
     end
   end
 end

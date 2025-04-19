@@ -15,9 +15,10 @@
   customType
   program
   ocamlConverter
-  flatPattern
   smtIntf
   typeChecker
+  flatPattern
+  flattener
   quotientTypeChecker
   parsing_errors
   parser

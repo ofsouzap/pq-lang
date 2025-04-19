@@ -2,9 +2,9 @@ open Core
 open Cmdliner
 open Pq_lang
 module Program = Program.StdProgram
-module QuotientTypeChecker = QuotientTypeChecker.MakeZ3
 module ProgramExecutor = ProgramExecutor.SimpleExecutor
 module TypeChecker = ProgramExecutor.TypeChecker
+module QuotientTypeChecker = QuotientTypeChecker.MakeZ3 (TypeChecker)
 
 type exit = ErrCallingSystemFunctions | ErrQuotientTypeChecking | ErrInternal
 
@@ -41,11 +41,11 @@ let run (run_frontend : unit -> Frontend.run_frontend_res) : int =
              sprintf "Typing error: %s" (TypeChecker.TypingError.print err) ))
     >>= fun tp ->
     QuotientTypeChecker.check_program
-      (TypeChecker.typed_program_get_program tp
-      |> Program.fmap_pattern ~f:(fun (t, source_pos) ->
-             ({ t; source_pos } : QuotientTypeChecker.node_tag))
-      |> Program.fmap_expr ~f:(fun (t, source_pos) ->
-             ({ t; source_pos } : QuotientTypeChecker.node_tag)))
+      ~get_expr_node_tag:(fun (t, source_pos) ->
+        ({ t; source_pos } : QuotientTypeChecker.node_tag))
+      ~get_pattern_node_tag:(fun (t, source_pos) ->
+        ({ t; source_pos } : QuotientTypeChecker.node_tag))
+      tp
     |> Result.map_error ~f:(fun err ->
            ( exit_code ErrInternal,
              sprintf "Quotient type checking error: %s"

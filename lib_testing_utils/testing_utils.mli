@@ -169,12 +169,28 @@ module UnitTag : sig
   val equal : t -> t -> bool
 end
 
+module PlainTypedTag : sig
+  type t = Vtype.t * unit [@@deriving sexp, equal]
+
+  val sexp_of_t : t -> Sexp.t
+  val t_of_sexp : Sexp.t -> t
+  val equal : t -> t -> bool
+end
+
 module Unit_expr_qcheck_testing : sig
   include module type of Expr.QCheck_testing (UnitTag) (UnitTag)
 end
 
 module Unit_program_qcheck_testing : sig
   include module type of Program.QCheck_testing (UnitTag) (UnitTag)
+end
+
+module Plain_typed_expr_qcheck_testing : sig
+  include module type of Expr.QCheck_testing (PlainTypedTag) (PlainTypedTag)
+end
+
+module Plain_typed_program_qcheck_testing : sig
+  include module type of Program.QCheck_testing (PlainTypedTag) (PlainTypedTag)
 end
 
 val unit_program_arbitrary_with_default_options :

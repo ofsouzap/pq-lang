@@ -98,6 +98,13 @@ module type S = sig
     ('tag_e, 'tag_p) t ->
     ('tag_e, 'tag_p) t
 
+  (** Perform a variable substitution in an expression *)
+  val subst :
+    varname:Varname.t ->
+    sub:('tag_e -> ('tag_e, 'tag_p) t) ->
+    ('tag_e, 'tag_p) t ->
+    ('tag_e, 'tag_p) t
+
   exception ExprConverionFixError
 
   (** Convert an Expr expression into source code that corresponds to the Expr
