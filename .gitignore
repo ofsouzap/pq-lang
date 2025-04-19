@@ -34,3 +34,6 @@ _example_code_files*/
 
 # VSCode Files
 .vscode/
+
+# Executable used for dev
+bin_run_z3/
