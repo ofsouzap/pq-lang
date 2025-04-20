@@ -233,9 +233,6 @@ let sample_test_cases : (unit, unit) test_case list =
 let create_test_expr_eval
     ({ name; custom_types; arg_t; cases } : (unit, unit) test_case) :
     unit Alcotest.test_case =
-  (* TODO - currently, since the argument of the match is generated,
-  it often includes a match statement.  I don't want this.
-  Instead, just generate a ground value expression to put as the match argument *)
   let module TypeChecker = TestingTypeChecker in
   let module TypeCtx = TypeChecker.TypeCtx in
   let module VarCtx = TypeChecker.VarCtx in
@@ -288,7 +285,10 @@ let create_test_expr_eval
         top_level_defns = [];
         v_gen = QCheck.Gen.unit;
         pat_v_gen = QCheck.Gen.unit;
-        mrd = default_max_gen_rec_depth;
+        mrd =
+          (* Using a maximum recursion depth of 0 means that only ground value expressions will be produced.
+        This is done to avoid having match statements as the argument, as this makes it harder to debug the tests *)
+          0;
       }
     >>= fun e ->
     TypeChecker.type_expr ~get_source_position:(Fn.const None)
@@ -310,9 +310,7 @@ let create_test_expr_eval
       arg_expr_gen
   in
   QCheck_alcotest.to_alcotest
-    (QCheck.Test.make
-       ~count:(* TODO - increase this count once debugging done *) 10 ~name
-       arb_inp (fun match_arg ->
+    (QCheck.Test.make ~count:100 ~name arb_inp (fun match_arg ->
          let module Executor = Pq_lang.ProgramExecutor.MakeStd (TypeChecker) in
          let match_return_t = Vtype.VTypeInt in
          let cases =
