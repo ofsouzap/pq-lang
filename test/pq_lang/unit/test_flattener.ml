@@ -134,6 +134,35 @@ let sample_test_cases : (unit, unit) test_case list =
                   PatName ((VTypeInt, ()), "x", VTypeInt),
                   PatName ((VTypeCustom "t", ()), "y", VTypeCustom "t") ) );
         ] );
+      ( "(B x, y) | (x, B y) | (A x, A y)",
+        CustomType.[ VariantType ("t", [ ("A", VTypeInt); ("B", VTypeInt) ]) ],
+        VTypePair (VTypeCustom "t", VTypeCustom "t"),
+        [
+          PatPair
+            ( (VTypePair (VTypeCustom "t", VTypeCustom "t"), ()),
+              PatConstructor
+                ( (VTypeCustom "t", ()),
+                  "B",
+                  PatName ((VTypeInt, ()), "x", VTypeInt) ),
+              PatName ((VTypeCustom "t", ()), "y", VTypeCustom "t") );
+          PatPair
+            ( (VTypePair (VTypeCustom "t", VTypeCustom "t"), ()),
+              PatName ((VTypeCustom "t", ()), "y", VTypeCustom "t"),
+              PatConstructor
+                ( (VTypeCustom "t", ()),
+                  "B",
+                  PatName ((VTypeInt, ()), "x", VTypeInt) ) );
+          PatPair
+            ( (VTypePair (VTypeCustom "t", VTypeCustom "t"), ()),
+              PatConstructor
+                ( (VTypeCustom "t", ()),
+                  "A",
+                  PatName ((VTypeInt, ()), "x", VTypeInt) ),
+              PatConstructor
+                ( (VTypeCustom "t", ()),
+                  "A",
+                  PatName ((VTypeInt, ()), "y", VTypeInt) ) );
+        ] );
       ( "A x | B (A x, C y) | B (C x, C y) | C z | B (x, C y) | B (x, A y) | x",
         CustomType.
           [
@@ -204,6 +233,9 @@ let sample_test_cases : (unit, unit) test_case list =
 let create_test_expr_eval
     ({ name; custom_types; arg_t; cases } : (unit, unit) test_case) :
     unit Alcotest.test_case =
+  (* TODO - currently, since the argument of the match is generated,
+  it often includes a match statement.  I don't want this.
+  Instead, just generate a ground value expression to put as the match argument *)
   let module TypeChecker = TestingTypeChecker in
   let module TypeCtx = TypeChecker.TypeCtx in
   let module VarCtx = TypeChecker.VarCtx in
@@ -290,38 +322,38 @@ let create_test_expr_eval
          let orig_match_expr =
            StdExpr.Match ((match_return_t, ()), match_arg, match_return_t, cases)
          in
-      let existing_names = StdExpr.existing_names orig_match_expr in
-      let existing_names, flattened_match_expr_std =
-        ( orig_match_expr |> Flattener.flatten_expr ~existing_names ~type_ctx
-        |> function
-          | Error err ->
-              Alcotest.failf "Failed to flatten expression: %s"
-                (Pq_lang.Flattener.print_flattening_error err)
-          | Ok flattened_expr -> flattened_expr )
-        |> fun (existing_names, flat_e) ->
-        (existing_names, FlatPattern.to_std_expr flat_e)
-      in
-      let get_typed_prog ~name e =
-        expr_to_prog
-          ~map_ct_val_e:(Fn.const ((), ()))
-          (e
-          |> StdExpr.fmap ~f:(Fn.const ())
-          |> StdExpr.fmap_pattern ~f:(Fn.const ()))
-        |> TypeChecker.type_program ~get_source_position:(Fn.const None)
-        |> function
-        | Error err ->
-            Alcotest.failf "Typing error when typing %s program: %s" name
-              (TypeChecker.TypingError.print err)
-        | Ok x -> x
-      in
-      let orig_typed_prog : (unit, unit) TestingTypeChecker.typed_program =
-        get_typed_prog ~name:"original" orig_match_expr
-      in
+         let existing_names = StdExpr.existing_names orig_match_expr in
+         let existing_names, flattened_match_expr_std =
+           ( orig_match_expr |> Flattener.flatten_expr ~existing_names ~type_ctx
+           |> function
+             | Error err ->
+                 Alcotest.failf "Failed to flatten expression: %s"
+                   (Pq_lang.Flattener.print_flattening_error err)
+             | Ok flattened_expr -> flattened_expr )
+           |> fun (existing_names, flat_e) ->
+           (existing_names, FlatPattern.to_std_expr flat_e)
+         in
+         let get_typed_prog ~name e =
+           expr_to_prog
+             ~map_ct_val_e:(Fn.const ((), ()))
+             (e
+             |> StdExpr.fmap ~f:(Fn.const ())
+             |> StdExpr.fmap_pattern ~f:(Fn.const ()))
+           |> TypeChecker.type_program ~get_source_position:(Fn.const None)
+           |> function
+           | Error err ->
+               Alcotest.failf "Typing error when typing %s program: %s" name
+                 (TypeChecker.TypingError.print err)
+           | Ok x -> x
+         in
+         let orig_typed_prog : (unit, unit) TestingTypeChecker.typed_program =
+           get_typed_prog ~name:"original" orig_match_expr
+         in
          let flattened_typed_prog :
              (unit, unit) TestingTypeChecker.typed_program =
-        get_typed_prog ~name:"flattened" flattened_match_expr_std
-      in
-      let _ = existing_names in
+           get_typed_prog ~name:"flattened" flattened_match_expr_std
+         in
+         let _ = existing_names in
          let orig_res = Executor.execute_program orig_typed_prog in
          let flattened_res = Executor.execute_program flattened_typed_prog in
 
