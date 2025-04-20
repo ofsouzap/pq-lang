@@ -13,7 +13,8 @@ let std_program_private_flag_to_flat_program_private_flag :
 
 type flattening_error =
   | UnknownVariantConstructor of string
-  | NoDefaultCaseForMatchBranch of StdExpr.plain_t * (Varname.t * Vtype.t) list
+  | NoDefaultCaseForMatchBranch of
+      StdExpr.plain_t * (Varname.t * FlatPattern.M.plain_t) list
 [@@deriving sexp, equal]
 
 let print_flattening_error : flattening_error -> string = function
@@ -26,7 +27,7 @@ let print_flattening_error : flattening_error -> string = function
          %s"
         (state
         |> List.map ~f:(fun (xname, xt) ->
-               sprintf "(%s : %s)" xname (Vtype.to_source_code xt))
+               sprintf "(%s = %s)" xname (FlatPattern.M.to_source_code xt))
         |> String.concat ~sep:", ")
         (StdExpr.to_source_code ~use_newlines:true match_expr)
 
@@ -410,7 +411,11 @@ module Make
                     ( orig_std_match
                       |> StdExpr.fmap ~f:(Fn.const ())
                       |> StdExpr.fmap_pattern ~f:(Fn.const ()),
-                      failwith "TODO" ))
+                      acc_state
+                      |> Map.to_alist ~key_order:`Increasing
+                      |> List.map ~f:(fun (xname, xpat) ->
+                             (xname, FlatPattern.M.fmap ~f:(Fn.const ()) xpat))
+                    ))
       | Leaf e -> Leaf e |> Ok
       | Next next ->
           translate_next ~acc_state next >>= fun next_repr ->
