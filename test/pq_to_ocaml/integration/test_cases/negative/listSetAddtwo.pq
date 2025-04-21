@@ -20,21 +20,9 @@ qtype set =
 
 let rec addtwo (arg : (set * set)) : set =
   match arg -> set with
-  | ((xs : set), (ys : set)) ->
-    match xs -> set with
-    | Nil (u : unit) -> Nil u
-    | Cons (x : int * set) ->
-      match x -> set with
-      | ((xh : int), (xts : set)) ->
-        match ys -> set with
-        | Nil (u : unit) -> Nil u
-        | Cons (y : int * set) ->
-          match y -> set with
-          | ((yh : int), (yts : set)) ->
-            Cons (xh + yh, addtwo (xts, yts))
-          end
-        end
-      end
-    end
+  | (Nil (_ : unit), (_2 : set)) -> Nil ()
+  | ((_ : set), Nil (_2 : unit)) -> Nil ()
+  | (Cons ((xh : int), (xts : set)), Cons ((yh : int), (yts : set))) ->
+    Cons (xh + yh, addtwo (xts, yts))
   end
 end

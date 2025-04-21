@@ -13,16 +13,23 @@ let std_program_private_flag_to_flat_program_private_flag :
 
 type flattening_error =
   | UnknownVariantConstructor of string
-  | NoDefaultCaseForMatchBranch of (Varname.t * Vtype.t) option
+  | NoDefaultCaseForMatchBranch of
+      StdExpr.plain_t * (Varname.t * FlatPattern.M.plain_t) list
 [@@deriving sexp, equal]
 
 let print_flattening_error : flattening_error -> string = function
   | UnknownVariantConstructor cname ->
-      Printf.sprintf "Unknown variant constructor: %s" cname
-  | NoDefaultCaseForMatchBranch None -> "No default case for match branch"
-  | NoDefaultCaseForMatchBranch (Some (xname, xt)) ->
-      Printf.sprintf "No default case for match branch for %s : %s" xname
-        (Vtype.to_source_code xt)
+      sprintf "Unknown variant constructor: %s" cname
+  | NoDefaultCaseForMatchBranch (match_expr, state) ->
+      sprintf
+        "No default case for match branch for variables, [%s], for match \
+         statement:\n\
+         %s"
+        (state
+        |> List.map ~f:(fun (xname, xt) ->
+               sprintf "(%s = %s)" xname (FlatPattern.M.to_source_code xt))
+        |> String.concat ~sep:", ")
+        (StdExpr.to_source_code ~use_newlines:true match_expr)
 
 module type S = sig
   module TypeChecker :
@@ -114,45 +121,80 @@ module Make
             failwith "Erroneous empty case queue"
         | p_h :: ps_ts, _ -> add_new ((p_h, ps_ts), e))
 
-  let flatten_expr (type tag) ~(existing_names : StringSet.t)
-      ~(type_ctx : TypeCtx.t) =
+  type ('tag_e, 'tag_p) holed_flat_match_case_val =
+    | Hole
+    | Leaf of ('tag_e, 'tag_p) StdExpr.typed_t
+    | Next of ('tag_e, 'tag_p) holed_flat_match_repr
+
+  and ('tag_e, 'tag_p) holed_flat_match_repr =
+    'tag_e
+    * ('tag_e * Varname.t * Vtype.t)
+    * Vtype.t
+    * ('tag_p FlatPattern.M.typed_t
+      * ('tag_e, 'tag_p) holed_flat_match_case_val)
+      Nonempty_list.t
+
+  type ('tag_e, 'tag_p) filled_flat_match_case_val =
+    | Leaf of ('tag_e, 'tag_p) StdExpr.typed_t
+    | Next of ('tag_e, 'tag_p) filled_flat_match_repr
+
+  and ('tag_e, 'tag_p) filled_flat_match_repr =
+    'tag_e
+    * ('tag_e * Varname.t * Vtype.t)
+    * Vtype.t
+    * ('tag_p FlatPattern.M.typed_t
+      * ('tag_e, 'tag_p) filled_flat_match_case_val)
+      Nonempty_list.t
+
+  let generate_fresh_varname_from ?(seed_name : string option)
+      (existing_names : StringSet.t) : StringSet.t * Varname.t =
+    let name_base = Option.value seed_name ~default:"x" in
+    let rec loop (i : int) : Varname.t =
+      let candidate = sprintf "%s%d" name_base i in
+      if Set.mem existing_names candidate then loop (i + 1) else candidate
+    in
+    let new_name = loop 0 in
+    let existing_names = Set.add existing_names new_name in
+    (existing_names, new_name)
+
+  let compile_match_to_repr (type tag) ~(existing_names : StringSet.t)
+      ~(type_ctx : TypeCtx.t) :
+      return_t:Vtype.t ->
+      (Varname.t * Vtype.t) list ->
+      (tag StdPattern.typed_t list * (tag, tag) StdExpr.typed_t) list ->
+      ( StringSet.t * (tag, tag) holed_flat_match_case_val,
+        flattening_error )
+      Result.t =
     let existing_names = ref existing_names in
     let generate_fresh_varname ?(seed_name : string option) () : Varname.t =
-      let name_base = Option.value seed_name ~default:"x" in
-      let rec loop (i : int) : Varname.t =
-        let candidate = sprintf "%s%d" name_base i in
-        if Set.mem !existing_names candidate then loop (i + 1) else candidate
+      let new_existing_names, new_name =
+        generate_fresh_varname_from ?seed_name !existing_names
       in
-      let new_name = loop 0 in
-      existing_names := Set.add !existing_names new_name;
+      existing_names := new_existing_names;
       new_name
     in
     let create_std_arg_node ~tag ((xname : Varname.t), (xt : Vtype.t)) :
         (tag, tag) StdExpr.typed_t =
       StdExpr.Var ((xt, tag), xname)
     in
-    let create_flat_arg_node ~tag ((xname : Varname.t), (xt : Vtype.t)) :
-        (tag, tag) FlatExpr.typed_t =
-      FlatExpr.Var ((xt, tag), xname)
-    in
     let rec compile_match ~(return_t : Vtype.t)
         (args : (Varname.t * Vtype.t) list)
         (case_queues :
           (tag StdPattern.typed_t list * (tag, tag) StdExpr.typed_t) list)
-        (def : (tag, tag) FlatExpr.typed_t option) :
-        ((tag, tag) FlatExpr.typed_t, flattening_error) Result.t =
+        (def : (tag, tag) holed_flat_match_case_val option) :
+        ((tag, tag) holed_flat_match_case_val, flattening_error) Result.t =
       (* This corresponds to the `match` function in the book *)
       match args with
       | [] -> (
           match (case_queues, def) with
-          | (_, case_e) :: _, _ -> flatten_expr case_e
-          | [], None -> Error (NoDefaultCaseForMatchBranch None)
+          | (_, case_e) :: _, _ -> Leaf case_e |> Ok
+          | [], None -> Hole |> Ok
           | [], Some def -> Ok def)
       | args_h :: args_ts -> (
           let args_nonempty = Nonempty_list.make (args_h, args_ts) in
           match (partition_cases_rev case_queues, def) with
           | [], Some def -> Ok def
-          | [], None -> Error (NoDefaultCaseForMatchBranch (Some args_h))
+          | [], None -> Hole |> Ok
           | partitions_rev_h :: partitions_rev_ts, _ ->
               Nonempty_list.fold_result_consume_init
                 (Nonempty_list.make (partitions_rev_h, partitions_rev_ts))
@@ -203,7 +245,7 @@ module Make
               * tag StdPattern.typed_t list)
              * (tag, tag) StdExpr.typed_t)
              list) :
-          ( tag FlatPattern.M.typed_t * (tag, tag) FlatExpr.typed_t,
+          ( tag FlatPattern.M.typed_t * (tag, tag) holed_flat_match_case_val,
             flattening_error )
           Result.t =
         let fresh_arg_names : Varname.t * Varname.t =
@@ -215,21 +257,20 @@ module Make
           (List.map case_queues ~f:(fun (((_, p1, p2), ps_ts), case_e) ->
                (p1 :: p2 :: ps_ts, case_e)))
           def
-        >>= fun flat_case_e ->
+        >>= fun flat_case_val ->
         ( FlatPattern.FlatPatPair
             ( (pair_t, tag),
               ((t1, tag), fst fresh_arg_names, t1),
               ((t2, tag), snd fresh_arg_names, t2) ),
-          flat_case_e )
+          flat_case_val )
         |> Ok
       in
       create_case ~tag ~case_queues:(Nonempty_list.to_list case_queues)
       >>= fun flat_case ->
       flat_case |> Nonempty_list.singleton |> fun flat_cases ->
-      (* Flatten the argument *)
-      let flat_arg_node = create_flat_arg_node ~tag curr_arg in
       (* Create the output flat match expression *)
-      FlatExpr.Match ((return_t, tag), flat_arg_node, return_t, flat_cases)
+      (Next (tag, (tag, fst curr_arg, snd curr_arg), return_t, flat_cases)
+        : (tag, tag) holed_flat_match_case_val)
       |> Ok
     and compile_constructors ~(return_t : Vtype.t) (curr_arg, arg_ts)
         case_queues def =
@@ -248,7 +289,7 @@ module Make
               * tag StdPattern.typed_t list)
              * (tag, tag) StdExpr.typed_t)
              list) :
-          ( tag FlatPattern.M.typed_t * (tag, tag) FlatExpr.typed_t,
+          ( tag FlatPattern.M.typed_t * (tag, tag) holed_flat_match_case_val,
             flattening_error )
           Result.t =
         (* Create the fresh name for the argument, and the corresponding expr nodes *)
@@ -282,12 +323,157 @@ module Make
                      else Some (((v, p1), ps_ts), case_e))))
       |> Nonempty_list.result_all
       >>= fun flat_cases ->
-      (* Flatten the argument *)
-      let flat_arg_node = create_flat_arg_node ~tag curr_arg in
       (* Create the output flat match expression *)
-      FlatExpr.Match ((return_t, tag), flat_arg_node, return_t, flat_cases)
+      (Next (tag, (tag, fst curr_arg, snd curr_arg), return_t, flat_cases)
+        : (tag, tag) holed_flat_match_case_val)
       |> Ok
-    and flatten_expr :
+    in
+    fun ~return_t args case_queues ->
+      let open Result in
+      compile_match ~return_t args case_queues None >>= fun res ->
+      (!existing_names, res) |> Ok
+
+  let fill_flat_match_case_val_holes (type tag_e tag_p)
+      ~(orig_std_match : ('a, 'b) StdExpr.t)
+      (orig_case_val : (tag_e, tag_p) holed_flat_match_case_val) :
+      ((tag_e, tag_p) filled_flat_match_case_val, flattening_error) Result.t =
+    let try_find_hole_filler :
+        _ FlatPattern.M.t StringMap.t ->
+        (tag_e, tag_p) holed_flat_match_case_val ->
+        (tag_e, tag_p) filled_flat_match_case_val option =
+      let rec fill_case_val (state : _ FlatPattern.M.t StringMap.t) :
+          (tag_e, tag_p) holed_flat_match_case_val ->
+          (tag_e, tag_p) filled_flat_match_case_val option = function
+        | Hole -> None
+        | Leaf x -> Some (Leaf x)
+        | Next next -> fill_next state next
+      and fill_next (state : _ FlatPattern.M.t StringMap.t)
+          ((_, (_, arg_name, _), _, cases) :
+            (tag_e, tag_p) holed_flat_match_repr) :
+          (tag_e, tag_p) filled_flat_match_case_val option =
+        let match_state_to_flat_pat (pat : _ FlatPattern.M.t) :
+            _ FlatPattern.M.t StringMap.t option =
+          Map.find state arg_name |> function
+          | None ->
+              failwith
+                "TODO - some error. I think this shouldn't happen but I'm not \
+                 sure"
+          | Some arg_pat -> (
+              let open FlatPattern in
+              let set_if_exists (pat_xname : string) (arg_xname : string)
+                  (state : _ FlatPattern.M.t StringMap.t) :
+                  _ FlatPattern.M.t StringMap.t =
+                Map.find state arg_xname
+                |> Option.value_map ~default:state ~f:(fun arg_xpat ->
+                       Map.set state ~key:pat_xname ~data:arg_xpat)
+              in
+              match (pat, arg_pat) with
+              (* Note, since everything is already type-checked, we ignore types here *)
+              | FlatPatName (_, pat_xname, _), FlatPatName (_, arg_xname, _) ->
+                  set_if_exists pat_xname arg_xname state |> Some
+              | ( FlatPatPair (_, (_, pat_x1name, _), (_, pat_x2name, _)),
+                  FlatPatPair (_, (_, arg_x1name, _), (_, arg_x2name, _)) ) ->
+                  state
+                  |> set_if_exists pat_x1name arg_x1name
+                  |> set_if_exists pat_x2name arg_x2name
+                  |> Some
+              | ( FlatPatConstructor (_, pat_cname, (_, pat_xname, _)),
+                  FlatPatConstructor (_, arg_cname, (_, arg_xname, _)) ) ->
+                  if equal_string pat_cname arg_cname then
+                    state |> set_if_exists pat_xname arg_xname |> Some
+                  else (* When the constructor names are a mismatch *) None
+              | FlatPatName _, _ | FlatPatPair _, _ | FlatPatConstructor _, _ ->
+                  (* When it is a mismatch *)
+                  None)
+        in
+        Nonempty_list.fold_result cases ~init:()
+          ~f:(fun () (case_p, case_val) ->
+            (* Note, the "Result.t" type is here just used for shortcircuiting, and doesn't actually represent an "Ok" or "Error" result *)
+            match match_state_to_flat_pat case_p with
+            | None -> Ok ()
+            | Some state' -> fill_case_val state' case_val |> Error)
+        |> function
+        | Error res -> res
+        | Ok () -> None
+      in
+      fill_case_val
+    in
+    let rec translate_case_val ~(acc_state : _ FlatPattern.M.t StringMap.t) :
+        (tag_e, tag_p) holed_flat_match_case_val ->
+        ((tag_e, tag_p) filled_flat_match_case_val, flattening_error) Result.t =
+      let open Result in
+      function
+      | Hole ->
+          try_find_hole_filler acc_state orig_case_val
+          |> Result.of_option
+               ~error:
+                 (NoDefaultCaseForMatchBranch
+                    ( orig_std_match
+                      |> StdExpr.fmap ~f:(Fn.const ())
+                      |> StdExpr.fmap_pattern ~f:(Fn.const ()),
+                      acc_state
+                      |> Map.to_alist ~key_order:`Increasing
+                      |> List.map ~f:(fun (xname, xpat) ->
+                             (xname, FlatPattern.M.fmap ~f:(Fn.const ()) xpat))
+                    ))
+      | Leaf e -> Leaf e |> Ok
+      | Next next ->
+          translate_next ~acc_state next >>= fun next_repr ->
+          Next next_repr |> Ok
+    and translate_next ~(acc_state : _ FlatPattern.M.t StringMap.t)
+        ((v, ((_, arg_name, _) as arg), return_t, cases) :
+          (tag_e, tag_p) holed_flat_match_repr) :
+        ((tag_e, tag_p) filled_flat_match_repr, flattening_error) Result.t =
+      let open Result in
+      Nonempty_list.map cases ~f:(fun (case_p, case_val) ->
+          let acc_state : _ FlatPattern.M.t StringMap.t =
+            Map.set acc_state ~key:arg_name ~data:case_p
+          in
+          translate_case_val ~acc_state case_val >>= fun case_e ->
+          (case_p, case_e) |> Ok)
+      |> Nonempty_list.result_all
+      >>= fun filled_cases -> (v, arg, return_t, filled_cases) |> Ok
+    in
+
+    translate_case_val ~acc_state:StringMap.empty orig_case_val
+
+  let compile_flat_match_repr (type tag_e tag_p)
+      ~(flatten_expr :
+         (tag_e, tag_p) StdExpr.typed_t ->
+         ((tag_e, tag_p) FlatExpr.typed_t, flattening_error) Result.t) :
+      (tag_e, tag_p) filled_flat_match_case_val ->
+      ((tag_e, tag_p) FlatExpr.typed_t, flattening_error) Result.t =
+    let rec compile_case_val :
+        (tag_e, tag_p) filled_flat_match_case_val ->
+        ((tag_e, tag_p) FlatExpr.typed_t, _) Result.t = function
+      | Leaf e -> flatten_expr e
+      | Next next -> compile_next next
+    and compile_next
+        ((v, (arg_v, arg_name, arg_t), return_t, cases) :
+          (tag_e, tag_p) filled_flat_match_repr) :
+        ((tag_e, tag_p) FlatExpr.typed_t, _) Result.t =
+      let open Result in
+      let open FlatExpr in
+      Nonempty_list.map cases ~f:(fun (case_p, case_val) ->
+          compile_case_val case_val >>= fun case_e -> (case_p, case_e) |> Ok)
+      |> Nonempty_list.result_all
+      >>= fun cases ->
+      let arg_node = Var ((arg_t, arg_v), arg_name) in
+      Match ((return_t, v), arg_node, return_t, cases) |> Ok
+    in
+    compile_case_val
+
+  let flatten_expr (type tag) ~(existing_names : StringSet.t)
+      ~(type_ctx : TypeCtx.t) =
+    let existing_names = ref existing_names in
+    let generate_fresh_varname ?(seed_name : string option) () : Varname.t =
+      let new_existing_names, new_name =
+        generate_fresh_varname_from ?seed_name !existing_names
+      in
+      existing_names := new_existing_names;
+      new_name
+    in
+    let rec flatten_expr :
         (tag, tag) StdExpr.typed_t ->
         ((tag, tag) FlatExpr.typed_t, flattening_error) Result.t =
       let open Result in
@@ -332,7 +518,7 @@ module Make
       | Let (v, xname, e1, e2) ->
           binop (fun e1' e2' -> Let (v, xname, e1', e2')) e1 e2
       | App (v, e1, e2) -> binop (fun e1' e2' -> App (v, e1', e2')) e1 e2
-      | Match ((v_t, v_val), e, return_t, cases) ->
+      | Match ((v_t, v_val), e, return_t, cases) as orig_match ->
           let arg_t = e |> StdExpr.node_val |> fst in
           let new_arg_name = generate_fresh_varname ~seed_name:"arg" () in
           flatten_expr e >>= fun flattened_arg ->
@@ -341,9 +527,16 @@ module Make
                 (List.singleton case_p, case_e))
             |> Nonempty_list.to_list
           in
-          compile_match ~return_t
+          compile_match_to_repr ~existing_names:!existing_names ~type_ctx
+            ~return_t
             (List.singleton (new_arg_name, arg_t))
-            prepared_cases None
+            prepared_cases
+          >>= fun (new_existing_names, holed_match_case_val) ->
+          existing_names := new_existing_names;
+          fill_flat_match_case_val_holes ~orig_std_match:orig_match
+            holed_match_case_val
+          >>= fun filled_match_case_val ->
+          compile_flat_match_repr ~flatten_expr filled_match_case_val
           >>= fun generated_match_expr ->
           FlatExpr.Let
             ((v_t, v_val), new_arg_name, flattened_arg, generated_match_expr)
