@@ -1,12 +1,10 @@
-import time
-import pickle
 from pathlib import Path
-from dataclasses import dataclass
-from tqdm import tqdm
-import statistics
 import matplotlib.pyplot as plt
 
 from eval_lib.pq_intf import exec_pq_string
+from eval_lib.investigation import (
+    load_or_gen_results,
+)
 
 DATA_CACHE_PATH: Path = (
     Path(__file__).parent / Path("outputs") / Path("increasing_qt_count.dat")
@@ -68,87 +66,35 @@ def gen_source(n: int) -> str:
     return "\n".join(outs)
 
 
-@dataclass
-class Results:
-    results: list[float]
-    n: int
-    n_trials: int
-    avg_time: float
-    std: float
-
-
-def time_for(
-    n: int, *args, n_trials: int | None = None, n_repeats: int | None = None, **kwargs
-) -> Results:
-    n_trials_: int = n_trials or 3
-    n_repeats_: int = n_repeats or 10
-
-    results: list[float] = []
-
-    for trial in tqdm(range(n_trials_), desc=f"Trials (n={n})", leave=False):
-        source = gen_source(n)
-        start = time.time()
-        for _ in tqdm(
-            range(n_repeats_),
-            desc=f"Trial {trial+1}/{n_trials_}",
-            leave=False,
-        ):
-            exec_pq_string(source, *args, **kwargs)
-        end = time.time()
-
-        time_elapsed = (end - start) / n_repeats_
-        results.append(time_elapsed)
-
-    return Results(
-        results=results,
-        n=n,
-        n_trials=n_trials_,
-        avg_time=sum(results) / len(results),
-        std=statistics.stdev(results) if len(results) > 1 else 0.0,
-    )
-
-
-def time_for_all(n_values: list[int]) -> list[Results]:
-    results: list[Results] = []
-    for n in tqdm(n_values, desc="Testing different n values", leave=False):
-        res = time_for(n, print_errors=True)
-        results.append(res)
-    return results
-
-
-def load_or_gen_results() -> list[Results]:
+def main():
     n_values: list[int] = [5, 25, 45, 65, 85]
 
-    if DATA_CACHE_PATH.exists():
-        with open(DATA_CACHE_PATH, "rb") as f:
-            results = pickle.load(f)
-        print(f"Loaded cached results from {DATA_CACHE_PATH}")
-    else:
-        results = time_for_all(n_values)
-        print("Generated new results")
-
-        with open(DATA_CACHE_PATH, "wb+") as f:
-            pickle.dump(results, f)
-        print(f"Saved results to {DATA_CACHE_PATH}")
-
-    return results
-
-
-def main():
-    results = load_or_gen_results()
+    all_results = load_or_gen_results(
+        n_values,
+        inp_gen=gen_source,
+        exec=exec_pq_string,
+        data_cache_path=DATA_CACHE_PATH,
+    )
+    all_results_values = all_results.values.values()
 
     # Create the plot
-    plot_vals_n = [res.n for res in results]
-    plot_vals_avg = [res.avg_time for res in results]
-    plot_vals_std = [res.std for res in results]
+
+    plot_vals_n = [res.seed for res in all_results_values]
+    plot_vals_avg = [res.avg_time for res in all_results_values]
+    plot_vals_std = [res.std for res in all_results_values]
 
     fig, ax = plt.subplots()
 
     # Plot with error bars
+
     ax.errorbar(plot_vals_n, plot_vals_avg, yerr=plot_vals_std, fmt="x-")
 
     ax.set_xlabel("Number of Quotient Types and Functions")
     ax.set_ylabel("Time taken to check (s)")
+
+    ax.grid()
+
+    fig.suptitle("Time taken to check for increasing number of quotient types")
 
     # Save the plot
     fig.savefig(PLOT_OUTPUT_PATH, dpi=300, bbox_inches="tight")
