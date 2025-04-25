@@ -7,32 +7,32 @@ from eval_lib.investigation import (
 )
 
 DATA_CACHE_PATH: Path = (
-    Path(__file__).parent / Path("outputs") / Path("increasing_qt_count.dat")
+    Path(__file__).parent / Path("outputs") / Path("increasing_single_qt_fns.dat")
 )
 PLOT_OUTPUT_PATH: Path = (
-    Path(__file__).parent / Path("outputs") / Path("eval-increasing_qt_count.png")
+    Path(__file__).parent / Path("outputs") / Path("eval-increasing_single_qt_fns.png")
 )
 
 
-def qt_defn(i: int) -> str:
+def qt_defn() -> str:
     return f"""\
-type list_{i} =
-  | Nil{i} of unit
-  | Cons{i} of int * list_{i}
+type list =
+  | Nil of unit
+  | Cons of int * list
 
-qtype set_{i} =
-  list_{i}
-  |/ (x : int) -> (y : int) -> (zs : set_{i})
-    => Cons{i} ((x : int), Cons{i} ((y : int), (zs : set_{i}))) == (Cons{i} (y, Cons{i} (x, zs)))
-  |/ (h : int) -> (ts : set_{i})
-    => Cons{i} ((h : int), (ts : set_{i})) == (Cons{i} (h, Cons{i} (h, ts)))
-  |/ (h1 : int) -> (h2 : int) -> (ts : set_{i})
-    => Cons{i} ((h1 : int), Cons{i} ((h2 : int), (ts : set_{i}))) == (
+qtype set =
+  list
+  |/ (x : int) -> (y : int) -> (zs : set)
+    => Cons ((x : int), Cons ((y : int), (zs : set))) == (Cons (y, Cons (x, zs)))
+  |/ (h : int) -> (ts : set)
+    => Cons ((h : int), (ts : set)) == (Cons (h, Cons (h, ts)))
+  |/ (h1 : int) -> (h2 : int) -> (ts : set)
+    => Cons ((h1 : int), Cons ((h2 : int), (ts : set))) == (
       if h1 == h2
       then
-        Cons{i} (h1, ts)
+        Cons (h1, ts)
       else
-        Cons{i} (h1, Cons{i} (h2, ts))
+        Cons (h1, Cons (h2, ts))
       end
     )
 """
@@ -40,14 +40,14 @@ qtype set_{i} =
 
 def fun_defn(i: int) -> str:
     return f"""\
-let rec filter_{i} (arg : ((int -> bool) * set_{i})) : set_{i} =
-  match arg -> set_{i} with
-  | ((p : int -> bool), (t : set_{i})) ->
-    match t -> set_{i} with
-    | Nil{i} (u : unit) -> Nil{i} u
-    | Cons{i} ((xh : int), (xts : set_{i})) ->
+let rec filter_{i} (arg : ((int -> bool) * set)) : set =
+  match arg -> set with
+  | ((p : int -> bool), (t : set)) ->
+    match t -> set with
+    | Nil (u : unit) -> Nil u
+    | Cons ((xh : int), (xts : set)) ->
       if p xh
-      then Cons{i} (xh, filter_{i} (p, xts))
+      then Cons (xh, filter_{i} (p, xts))
       else filter_{i} (p, xts)
       end
     end
@@ -58,9 +58,9 @@ end
 
 def gen_source(n: int) -> str:
     outs: list[str] = []
+    outs.append(qt_defn())
 
     for i in range(n):
-        outs.append(qt_defn(i))
         outs.append(fun_defn(i))
 
     return "\n".join(outs)
@@ -100,12 +100,14 @@ def main():
         capsize=3,
     )
 
-    ax.set_xlabel("Number of Quotient Types and Functions")
+    ax.set_xlabel("Number of Quotient Type Functions")
     ax.set_ylabel("Time taken to check (s)")
 
     ax.grid()
 
-    fig.suptitle("Time taken to check for increasing number of quotient types")
+    fig.suptitle(
+        "Time taken to check for increasing number of functions on a single quotient types"
+    )
 
     # Save the plot
     fig.savefig(PLOT_OUTPUT_PATH, dpi=300, bbox_inches="tight")

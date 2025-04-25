@@ -63,7 +63,7 @@ def time_for(
 
 
 def load_or_gen_results(
-    seeds: List[TestGenSeed], inp_gen, exec, *, data_cache_path: Path
+    seeds: List[TestGenSeed], inp_gen, exec, *args, data_cache_path: Path, **kwargs
 ) -> AllResults:
 
     all_results: AllResults[TestGenSeed]
@@ -85,7 +85,7 @@ def load_or_gen_results(
         for seed in tqdm(
             remaining_seeds, desc="Testing different seeds values", leave=False
         ):
-            res = time_for(seed, inp_gen, exec, print_errors=True)
+            res = time_for(seed, inp_gen, exec, print_errors=True, *args, **kwargs)
             all_results.values[res.seed] = res
 
             with open(data_cache_path, "wb+") as f:
