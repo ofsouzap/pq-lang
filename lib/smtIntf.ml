@@ -339,6 +339,10 @@ module Z3Intf
           | VariantType (vt_name, _) -> Ok (Vtype.VTypeCustom vt_name)
           | CustomType.QuotientType qt ->
               find_root_base_type state (VTypeCustom qt.base_type_name))
+      | VTypePair (t1, t2) ->
+          find_root_base_type state t1 >>= fun t1 ->
+          find_root_base_type state t2 >>= fun t2 ->
+          Vtype.VTypePair (t1, t2) |> Ok
       | _ -> Ok t
 
     let pair_vtype_to_smt_custom_special_type_name : Vtype.t * Vtype.t -> string
