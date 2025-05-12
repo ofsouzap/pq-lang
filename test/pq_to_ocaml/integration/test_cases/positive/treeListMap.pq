@@ -38,3 +38,23 @@ let rec map (arg : (int -> int) * list) : list =
     end
   end
 end
+
+let succ (x : int) : int = x + 1 end
+
+# Map the successor function onto a list
+let map_succ (xs : list) : list = map (succ, xs) end
+
+# Find the first element of a list of non-negative integers, if one exists, and -1 otherwise
+let rec head (xs : list) : int =
+  match xs -> int with
+  | Empty (_ : unit) -> -1
+  | Leaf (x : int) -> x
+  | Node ((l : list), (r : list)) ->
+    let l_head = head l
+    in
+      if l_head == -1 then head r
+      else l_head
+      end
+    end
+  end
+end
